@@ -1,1 +1,3 @@
 *.tsv
+*.ipynb
+__pycache__/
