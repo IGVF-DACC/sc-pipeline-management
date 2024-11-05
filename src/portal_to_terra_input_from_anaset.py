@@ -203,7 +203,7 @@ class SingleCellInputBuilder:
     def build_input_dict(self) -> dict:
         """Build the final output report dict
         """
-        self.data['analysis_set_acc'] = self.analysis_set_acc
+        self.data['analysis_set_acc'] = ','.join(self.analysis_set_acc)     # Technically it is a list of one
         # self.data['sample accession'] = self.samp_accession
         self.data['taxa'] = self.samp_taxa
         self.get_seqfile_uris_by_assays_and_runs()
