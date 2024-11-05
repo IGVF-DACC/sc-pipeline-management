@@ -1,3 +1,4 @@
 *.tsv
-*.ipynb
+igvf_terra_api_playground.ipynb
 __pycache__/
+.ipynb_checkpoints
