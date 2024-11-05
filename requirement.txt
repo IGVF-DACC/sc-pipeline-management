@@ -1,0 +1,3 @@
+-e .
+igvf-utils == 55.0.0
+firecloud == v0.16.37
