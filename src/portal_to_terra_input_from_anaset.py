@@ -10,26 +10,31 @@ from datetime import datetime
 
 # TODO: Add proper docstring
 
-def get_igvf_auth_and_api():
+def get_igvf_auth_and_api(igvf_site: str = 'production'):
     """Set up IGVF data portal access and set up IGVF python client api.
     """
+    if igvf_site == 'production':
+        host = 'https://api.data.igvf.org'
+    elif igvf_site == 'sandbox':
+        host = 'https://api.sandbox.igvf.org'
     config = Configuration(
         access_key=os.environ["IGVF_PROD_API_KEY"],
-        secret_access_key=os.environ["IGVF_PROD_SECRET_KEY"]
+        secret_access_key=os.environ["IGVF_PROD_SECRET_KEY"],
+        host=host
     )
     client = ApiClient(config)
     return IgvfApi(client)
 
 
 #  HACK: A map that translates an assay term to either ATAC or RNA
-assay_terms_map = {
-    '/assay-terms/OBI_0003109/': 'rna',
-    '/assay-terms/OBI_0002762/': 'atac',
-    '/assay-terms/OBI_0002764/': 'atac',
-    '/assay-terms/OBI_0002631/': 'rna',
-    '/assay-terms/OBI_0003090/': 'rna',     # For test analysis set only
-    '/assay-terms/OBI_0003089/': 'atac'     # For test analysis set only
-}
+# assay_terms_map = {
+#     '/assay-terms/OBI_0003109/': 'rna',
+#     '/assay-terms/OBI_0002762/': 'atac',
+#     '/assay-terms/OBI_0002764/': 'atac',
+#     '/assay-terms/OBI_0002631/': 'rna',
+#     '/assay-terms/OBI_0003090/': 'rna',     # For test analysis set only
+#     '/assay-terms/OBI_0003089/': 'atac'     # For test analysis set only
+# }
 
 # HACK: A map that uses platform_preferred-assay-title_assay-type to inference read map for pipelines.
 read_type_by_platform_map = {
@@ -38,8 +43,29 @@ read_type_by_platform_map = {
     '/platform-terms/EFO_0022840/_10x multiome with MULTI-seq_atac': {'R1': 'read1', 'R3': 'read2'},
     '/platform-terms/EFO_0022840/_10x multiome with MULTI-seq_rna': {'R1': 'read1', 'R2': 'read2'},
     '/platform-terms/EFO_0008637/_RNA-seq_rna': {'R1': 'read1', 'R2': 'read2'},     # For test analysis set only
-    '/platform-terms/EFO_0010963/_ATAC-seq_atac': {'R1': 'read1', 'R2': 'read2'}    # For test analysis set only
+    '/platform-terms/EFO_0010963/_ATAC-seq_atac': {'R1': 'read1', 'R2': 'read2'},    # For test analysis set only
+    '/platform-terms/NTR_0000765/_10x multiome with MULTI-seq_rna': {'R1': 'read1', 'R2': 'read2'},
+    '/platform-terms/NTR_0000765/_10x multiome with MULTI-seq_atac': {'R1': 'read1', 'R3': 'read2'},
+    '/platform-terms/EFO_0010963/_Parse SPLiT-seq_rna': {'R1': 'read1', 'R2': 'read2'}
 }
+
+
+def get_assay_type_from_assay_id(assay_term_id: str, igvf_api) -> str:
+    # NOTE: This may get more complicated if the pipeline wants to distinguish sn vs. sc
+    """Infer assay type (RNA or ATAC) from the assay term summary
+
+    Args:
+        assay_term_id (str): assay term id
+        igvf_api (_type_): _description_
+
+    Returns:
+        str: rna or atac
+    """
+    assay_term_summary = igvf_api.get_by_id(assay_term_id).actual_instance.summary
+    if 'RNA' in assay_term_summary:
+        return 'rna'
+    elif 'ATAC' in assay_term_summary:
+        return 'atac'
 
 
 def get_samp_taxa_from_samp_id(sample_id: str, igvf_api) -> str:
@@ -47,7 +73,7 @@ def get_samp_taxa_from_samp_id(sample_id: str, igvf_api) -> str:
 
     Args:
         sample_id (str): e.g., /in-vitro-system/IGVFxxxxx
-        igvf_api (_type_): 
+        igvf_api (_type_): _description_
 
     Returns:
         str: e.g., Homo sapiens
@@ -70,33 +96,6 @@ def get_measet_ids_and_taxa_from_analysis_set_acc(analysis_set_accessions: list,
     measurement_ids = [measet_id for measet_id in analysis_set_objs.input_file_sets if 'measurement-sets' in measet_id]
     sample_taxa = list(set([get_samp_taxa_from_samp_id(sample_id=samp_id, igvf_api=igvf_api) for samp_id in analysis_set_objs.samples]))
     return (sample_taxa, measurement_ids)
-
-
-# def get_samp_ids_from_measets(measurement_set_accessions: list, igvf_api) -> str:
-#     """Get a sample ID (/sample-type/accession) from a measurement set accession.
-
-#     Args:
-#         measurement_set_accessions (list): ['IGVFxxxx']. It is a list of one because API for MeaSet takes a list as input.
-#         igvf_api (_type_): _description_
-
-#     Returns:
-#         str: One sample ID in /sample-type/accession format
-#     """
-#     return igvf_api.measurement_sets(accession=measurement_set_accessions).graph[0].samples[0]
-
-
-# def get_accession_files_and_taxa_from_samp(samp_id: str, igvf_api) -> tuple:
-#     """Look up the accession, taxa, and all measurement set IDs (/measurement-sets/MeaSetAcc) of a given sample.
-
-#     Args:
-#         samp_id (str): Sample ID, /sample-type/accession
-#         igvf_api (_type_): _description_
-
-#     Returns:
-#         tuple: (accession, taxa, [/measurement-sets/MeaSetAcc_1, /measurement-sets/MeaSetAcc_2])
-#     """
-#     sample_item = igvf_api.get_by_id(samp_id).actual_instance
-#     return (sample_item.accession, sample_item.taxa, [file_set for file_set in sample_item.file_sets if 'measurement-sets' in file_set])
 
 
 def get_and_sort_measurement_sets_by_assays(measurement_set_ids: list, igvf_api) -> list:
@@ -155,11 +154,21 @@ def get_seqfile_seqinfo(seqfile_item, preferred_assay_title: str, assay_type: st
         str: e.g., atac_read1, rna_read2
     """
     read_type_key = '_'.join([seqfile_item.sequencing_platform, preferred_assay_title, assay_type])
-    read_file_title = '_'.join([assay_type, read_type_by_platform_map[read_type_key][seqfile_item.illumina_read_type]])
-    return read_file_title
+    if seqfile_item.illumina_read_type in list(read_type_by_platform_map[read_type_key].keys()):
+        read_file_title = '_'.join([assay_type, read_type_by_platform_map[read_type_key][seqfile_item.illumina_read_type]])
+        return read_file_title
 
 
 def get_seqspec(seqspec_ids: list, igvf_api) -> tuple:
+    """_summary_
+
+    Args:
+        seqspec_ids (list): _description_
+        igvf_api (_type_): _description_
+
+    Returns:
+        tuple: _description_
+    """
     seqspec_accessions = set()
     seqspec_urls = set()
     for seqspec_id in seqspec_ids:
@@ -199,20 +208,24 @@ class SingleCellInputBuilder:
             # Get a list of seqfile items, preferred assay title, and linked measurement set accessions.
             seqfile_items, preferred_assay_title, assay_measet_accs = get_seqfiles_by_assays_and_pref_titles(measet_items=measet_items, igvf_api=self.igvf_api)
             # Infer assay type
-            assay_type = assay_terms_map[assay_grp]
+            assay_type = get_assay_type_from_assay_id(assay_term_id=assay_grp, igvf_api=self.igvf_api)
             # Add the linked measurement set accessions to the report dict
             self.data[f'{assay_type}_MeaSetIDs'].extend(assay_measet_accs)
             # Sort the list of seqfile items by file set acc, illumina read type, run, and lane if present, then
             # get S3 URIs and file accessions.
             for seqfile_item in sorted(seqfile_items, key=seqfile_sort_func):
-                read_file_title = get_seqfile_seqinfo(seqfile_item=seqfile_item, preferred_assay_title=preferred_assay_title, assay_type=assay_type)
-                self.data[f'{read_file_title}_accessions'].append(seqfile_item.accession)
-                self.data[read_file_title].append(urllib.parse.urljoin('https://api.data.igvf.org', seqfile_item.href))
-                # Also grab seqspec info
-                # TODO: This will fail as most seqfiles don't have a correct one linked via seqspecs
-                seqspec_accs, seqspec_urls = get_seqspec(seqspec_ids=seqfile_item.seqspecs, igvf_api=self.igvf_api)
-                self.data['seqspec_accessions'].update(seqspec_accs)
-                self.data['seqspec_urls'].update(seqspec_urls)
+                # HACK: Check if something is R read type or I read type
+                if seqfile_item.illumina_read_type.startswith('R'):
+                    read_file_title = get_seqfile_seqinfo(seqfile_item=seqfile_item, preferred_assay_title=preferred_assay_title, assay_type=assay_type)
+                    # HACK: If the read_file_title is blank (e.g., R1 and R3, but not R2), skip
+                    if read_file_title is not None:
+                        self.data[f'{read_file_title}_accessions'].append(seqfile_item.accession)
+                        self.data[read_file_title].append(urllib.parse.urljoin('https://api.data.igvf.org', seqfile_item.href))
+                        # Also grab seqspec info
+                        # TODO: This will fail as most seqfiles don't have a correct one linked via seqspecs
+                        seqspec_accs, seqspec_urls = get_seqspec(seqspec_ids=seqfile_item.seqspecs, igvf_api=self.igvf_api)
+                        self.data['seqspec_accessions'].update(seqspec_accs)
+                        self.data['seqspec_urls'].update(seqspec_urls)
 
     def build_input_dict(self) -> dict:
         """Build the final output report dict
@@ -245,6 +258,7 @@ def main(query_analysis_set_accs: list, igvf_api, save_to_file: bool = False, ou
         curr_input_builder = SingleCellInputBuilder(analysis_set_acc=[anaset_acc], igvf_api=igvf_api)
         pipeline_input_list.append(curr_input_builder.build_input_dict())
     pipeline_input_table = pd.DataFrame(pipeline_input_list)
+    # Output TSV if needed
     if save_to_file:
         curr_datetime = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         pipeline_input_table.to_csv(os.path.join(output_path, f'single-cell_uniform_pipeline_input_table_{curr_datetime}.tsv'), sep="\t")
