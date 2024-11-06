@@ -159,29 +159,38 @@ def get_seqfile_seqinfo(seqfile_item, preferred_assay_title: str, assay_type: st
     return read_file_title
 
 
+def get_seqspec(seqspec_ids: list, igvf_api) -> tuple:
+    seqspec_accessions = set()
+    seqspec_urls = set()
+    for seqspec_id in seqspec_ids:
+        curr_seqspec_item = igvf_api.get_by_id(seqspec_id).actual_instance
+        seqspec_accessions.add(curr_seqspec_item.accession)
+        seqspec_urls.add(urllib.parse.urljoin('https://api.data.igvf.org', curr_seqspec_item.href))
+    return (seqspec_accessions, seqspec_urls)
+
+
 class SingleCellInputBuilder:
     def __init__(self, analysis_set_acc: str, igvf_api):
         self.data = {'analysis_set_acc': '',
-                    #  'sample accession': '',
                      'atac_MeaSetIDs': [],
                      'rna_MeaSetIDs': [],
                      'taxa': [],
-                     'atac_read1_accession': [],
-                     'atac_read2_accession': [],
-                     'rna_read1_accession': [],
-                     'rna_read2_accession': [],
+                     'atac_read1_accessions': [],
+                     'atac_read2_accessions': [],
+                     'rna_read1_accessions': [],
+                     'rna_read2_accessions': [],
+                     'seqspec_accessions': set(),  # TODO: Need to add seqspec
                      'atac_read1': [],
                      'atac_read2': [],
                      'rna_read1': [],
-                     'rna_read2': []
+                     'rna_read2': [],
+                     'seqspec_urls': set()  # TODO: Need to add seqspec
                      }
         self.analysis_set_acc = analysis_set_acc
-        # self.sample_id = sample_id
         self.igvf_api = igvf_api
-        # self.samp_accession, self.samp_taxa, self.samp_measet_ids = get_accession_files_and_taxa_from_samp(samp_id=self.sample_id, igvf_api=self.igvf_api)
         self.samp_taxa, self.measet_ids = get_measet_ids_and_taxa_from_analysis_set_acc(analysis_set_accessions=self.analysis_set_acc, igvf_api=self.igvf_api)
 
-    def get_seqfile_uris_by_assays_and_runs(self):
+    def get_seqfile_uris_and_seqspec_by_assays_and_runs(self):
         """Get s3 uri of sequence files and add to the report dict based on their assay type and read types.
         """
         # Get a list of measurement set items sorted by the assay terms.
@@ -197,16 +206,24 @@ class SingleCellInputBuilder:
             # get S3 URIs and file accessions.
             for seqfile_item in sorted(seqfile_items, key=seqfile_sort_func):
                 read_file_title = get_seqfile_seqinfo(seqfile_item=seqfile_item, preferred_assay_title=preferred_assay_title, assay_type=assay_type)
-                self.data[f'{read_file_title}_accession'].append(seqfile_item.accession)
+                self.data[f'{read_file_title}_accessions'].append(seqfile_item.accession)
                 self.data[read_file_title].append(urllib.parse.urljoin('https://api.data.igvf.org', seqfile_item.href))
+                # Also grab seqspec info
+                # TODO: This will fail as most seqfiles don't have a correct one linked via seqspecs
+                seqspec_accs, seqspec_urls = get_seqspec(seqspec_ids=seqfile_item.seqspecs, igvf_api=self.igvf_api)
+                self.data['seqspec_accessions'].update(seqspec_accs)
+                self.data['seqspec_urls'].update(seqspec_urls)
 
     def build_input_dict(self) -> dict:
         """Build the final output report dict
         """
         self.data['analysis_set_acc'] = ','.join(self.analysis_set_acc)     # Technically it is a list of one
-        # self.data['sample accession'] = self.samp_accession
         self.data['taxa'] = self.samp_taxa
-        self.get_seqfile_uris_by_assays_and_runs()
+        # Get seqfile URLs
+        self.get_seqfile_uris_and_seqspec_by_assays_and_runs()
+        # Make unique seqspec list
+        self.data['seqspec_accessions'] = list(self.data['seqspec_accessions'])
+        self.data['seqspec_urls'] = list(self.data['seqspec_urls'])
         return self.data
 
 
@@ -240,4 +257,8 @@ if __name__ == '__main__':
     nonmultiplexed_measets = ['IGVFDS0020LQRY', 'IGVFDS7133CHRI']
     multiplexed_measets = ['IGVFDS5205JRNX', 'IGVFDS3910GBDQ']
     analysis_sets = ['IGVFDS0006MFFD', 'IGVFDS9202ZPBI']
-    main(query_analysis_set_accs=analysis_sets, igvf_api=get_igvf_auth_and_api(), save_to_file=True)
+    main(query_analysis_set_accs=analysis_sets,
+         igvf_api=get_igvf_auth_and_api(),
+         save_to_file=True,
+         output_path='/Users/zheweishen/IGVF/single_cell_fg/Portal_input_output/test_input'
+         )
