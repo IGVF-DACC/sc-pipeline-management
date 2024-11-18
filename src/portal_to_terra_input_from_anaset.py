@@ -18,8 +18,8 @@ def get_igvf_auth_and_api(igvf_site: str = 'production'):
     elif igvf_site == 'sandbox':
         host = 'https://api.sandbox.igvf.org'
     config = Configuration(
-        access_key=os.environ["IGVF_PROD_API_KEY"],
-        secret_access_key=os.environ["IGVF_PROD_SECRET_KEY"],
+        access_key=os.environ["IGVF_API_KEY"],
+        secret_access_key=os.environ["IGVF_SECRET_KEY"],
         host=host
     )
     client = ApiClient(config)

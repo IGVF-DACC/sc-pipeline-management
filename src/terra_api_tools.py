@@ -26,6 +26,10 @@ terra_output_table_columns = {
                     ]
 }
 
+
+fapi._set_session()
+
+
 def calculate_gsutil_hash(file_path: str):
     """Calculates the hash of a file using gsutil."""
     result = subprocess.run(["gsutil", "hash", '-h', file_path], capture_output=True, text=True)
@@ -54,6 +58,7 @@ def get_terra_tsv_data_table(terra_namespace: str, terra_workspace: str, terra_e
         pd.DataFrame: The Terra data table
     """
     # TSV get just seems to fail whenever firecloud mode is used.
+    # fapi._set_session()
     query_response_for_tsv = fapi.get_entities_tsv(namespace=terra_namespace, workspace=terra_workspace, etype=terra_etype, model='flexible')
     return pd.read_csv(io.StringIO(query_response_for_tsv.content.decode('utf-8')), sep='\t')
 
@@ -67,6 +72,7 @@ def upload_portal_input_tsv_to_terra(terra_namespace: str, terra_workspace: str,
         terra_etype (str): Terra entity type name
         porta_input_table (pd.DataFrame): The input table generated from IGVF portal
     """
+    # fapi._set_session()
     porta_input_table.index.name = f'entity:{terra_etype}_id'
     porta_input_table_as_string = porta_input_table.to_csv(index=True, header=True, sep='\t')
     input_table_upload = fapi.upload_entities(namespace=terra_namespace,
