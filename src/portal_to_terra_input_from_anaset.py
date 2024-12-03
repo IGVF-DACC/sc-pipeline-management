@@ -1,15 +1,14 @@
 import urllib.parse
-# from igvf_client import Configuration
-# from igvf_client import ApiClient
-# from igvf_client import IgvfApi
-from src import get_igvf_auth_and_api
+from igvf_and_terra_api_tools import get_igvf_auth_and_api
 import os
 import pandas as pd
 import itertools
 import urllib
 from datetime import datetime
+import re
 
-# TODO: Add proper docstring
+# TODO:
+# 1) Update the script to reflect the read_name (no more guessing)
 
 # def get_igvf_auth_and_api(igvf_site: str = 'production'):
 #     """Set up IGVF data portal access and set up IGVF python client api.
@@ -83,7 +82,7 @@ def get_samp_taxa_from_samp_id(sample_id: str, igvf_api) -> str:
     return sample_item.taxa
 
 
-def get_measet_ids_and_taxa_from_analysis_set_acc(analysis_set_accessions: list, igvf_api) -> tuple:
+def get_measet_ids_and_other_info_from_analysis_set_acc(analysis_set_accessions: list, igvf_api) -> tuple:
     """Get all input measurement set IDs and sample taxa from an analysis set.
 
     Args:
@@ -93,10 +92,13 @@ def get_measet_ids_and_taxa_from_analysis_set_acc(analysis_set_accessions: list,
     Returns:
         tuple: (list(taxa), list(measurement ids))
     """
-    analysis_set_objs = igvf_api.analysis_sets(accession=analysis_set_accessions).graph[0]
-    measurement_ids = [measet_id for measet_id in analysis_set_objs.input_file_sets if 'measurement-sets' in measet_id]
-    sample_taxa = list(set([get_samp_taxa_from_samp_id(sample_id=samp_id, igvf_api=igvf_api) for samp_id in analysis_set_objs.samples]))
-    return (sample_taxa, measurement_ids)
+    analysis_set_obj = igvf_api.analysis_sets(accession=analysis_set_accessions).graph[0]
+    measurement_ids = [measet_id for measet_id in analysis_set_obj.input_file_sets if 'measurement-sets' in measet_id]
+    lab_id = analysis_set_obj.lab
+    award_id = analysis_set_obj.award
+    # TODO: Are we expecting different taxa in a single Analysis set?
+    sample_taxa = list(set([get_samp_taxa_from_samp_id(sample_id=samp_id, igvf_api=igvf_api) for samp_id in analysis_set_obj.samples]))
+    return (sample_taxa, measurement_ids, lab_id, award_id)
 
 
 def get_and_sort_measurement_sets_by_assays(measurement_set_ids: list, igvf_api) -> list:
@@ -182,6 +184,9 @@ def get_seqspec(seqspec_ids: list, igvf_api) -> tuple:
 class SingleCellInputBuilder:
     def __init__(self, analysis_set_acc: str, igvf_api):
         self.data = {'analysis_set_acc': '',
+                     'lab': '',
+                     'awards': '',
+                     'controlled_access': 'false',
                      'atac_MeaSetIDs': [],
                      'rna_MeaSetIDs': [],
                      'taxa': [],
@@ -198,7 +203,7 @@ class SingleCellInputBuilder:
                      }
         self.analysis_set_acc = analysis_set_acc
         self.igvf_api = igvf_api
-        self.samp_taxa, self.measet_ids = get_measet_ids_and_taxa_from_analysis_set_acc(analysis_set_accessions=self.analysis_set_acc, igvf_api=self.igvf_api)
+        self.samp_taxa, self.measet_ids, self.lab, self.awards = get_measet_ids_and_other_info_from_analysis_set_acc(analysis_set_accessions=self.analysis_set_acc, igvf_api=self.igvf_api)
 
     def get_seqfile_uris_and_seqspec_by_assays_and_runs(self):
         """Get s3 uri of sequence files and add to the report dict based on their assay type and read types.
@@ -228,10 +233,21 @@ class SingleCellInputBuilder:
                         self.data['seqspec_accessions'].update(seqspec_accs)
                         self.data['seqspec_urls'].update(seqspec_urls)
 
+    def get_data_access_auth(self):
+        seqfile_accessions = self.data['atac_read1_accessions'] + self.data['atac_read2_accessions'] + self.data['rna_read1_accessions'] + self.data['rna_read2_accessions']
+        file_controlled_access = 0
+        for seqfile_acc in seqfile_accessions:
+            seqfile_item = self.igvf_api.sequence_files(accession=[seqfile_acc]).graph[0]
+            file_controlled_access += seqfile_item.controlled_access
+        if file_controlled_access > 0:
+            self.data['controlled_access'] = True
+
     def build_input_dict(self) -> dict:
         """Build the final output report dict
         """
         self.data['analysis_set_acc'] = ','.join(self.analysis_set_acc)     # Technically it is a list of one
+        self.data['lab'] = self.lab
+        self.data['awards'] = self.awards
         self.data['taxa'] = self.samp_taxa
         # Get seqfile URLs
         self.get_seqfile_uris_and_seqspec_by_assays_and_runs()

@@ -3,28 +3,31 @@ import subprocess
 import pandas as pd
 import io
 import dumper
+from igvf_client import Configuration
+from igvf_client import ApiClient
+from igvf_client import IgvfApi
+from igvf_utils.connection import Connection
+import os
 
 
-terra_output_table_columns = {
-    'alignment_file': ['atac_bam'],
-    'document': ['atac_bam_log',
-                 'atac_chromap_barcode_metadata',
-                 'atac_snapatac2_barcode_metadata',
-                 'csv_summary',
-                 'html_summary',
-                 'joint_barcode_metadata',
-                 'rna_barcode_metadata',
-                 'rna_kb_output',
-                 'rna_log'
-                 ],
-    'tabular_file': ['atac_filter_fragments',
-                     'atac_filter_fragments_index'
-                     ],
-    'matrix_file': ['rna_aggregated_counts_h5ad',
-                    'rna_mtx_tar',
-                    'rna_mtxs_h5ad'
-                    ]
-}
+def get_igvf_auth_and_api(igvf_site: str = 'sandbox'):
+    """Set up IGVF data portal access and set up IGVF python client api.
+    """
+    if igvf_site == 'production':
+        host = 'https://api.data.igvf.org'
+    elif igvf_site == 'sandbox':
+        host = 'https://api.sandbox.igvf.org'
+    config = Configuration(
+        access_key=os.environ["IGVF_API_KEY"],
+        secret_access_key=os.environ["IGVF_SECRET_KEY"],
+        host=host
+    )
+    client = ApiClient(config)
+    return IgvfApi(client)
+
+
+def get_igvf_utils_connection(igvf_utils_mode: str = 'sandbox'):
+    return Connection(igvf_mode=igvf_utils_mode, submission=True)
 
 
 fapi._set_session()
@@ -73,6 +76,7 @@ def upload_portal_input_tsv_to_terra(terra_namespace: str, terra_workspace: str,
         porta_input_table (pd.DataFrame): The input table generated from IGVF portal
     """
     # fapi._set_session()
+    porta_input_table.index = porta_input_table['analysis_set_acc']
     porta_input_table.index.name = f'entity:{terra_etype}_id'
     porta_input_table_as_string = porta_input_table.to_csv(index=True, header=True, sep='\t')
     input_table_upload = fapi.upload_entities(namespace=terra_namespace,
