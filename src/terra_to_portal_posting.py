@@ -90,129 +90,8 @@ def get_gspath_and_alias(terra_data_record: pd.Series, col_name: str, lab: str) 
     return (gs_cloud_link, file_alias)
 
 
-def alignment_file_payload_template(igvf_award: str,
-                                    igvf_lab: str,
-                                    igvf_aliases: list,
-                                    assembly: str,
-                                    controlled_access: str,
-                                    derived_from: list,
-                                    file_set: str,
-                                    md5sum: str,
-                                    submitted_file_name: str,
-                                    ref_files: list
-                                    ):
-    alignment_file_payload = {'award': igvf_award,
-                              'lab': igvf_lab,
-                              'aliases': igvf_aliases,
-                              'assembly': assembly,
-                              'content_type': 'aligments',
-                              'controlled_access': controlled_access,
-                              'derived_from': derived_from,     # NOTE: This is from the input sequence files
-                              'file_format': 'bam',
-                              'file_set': file_set,
-                              'md5sum': md5sum,
-                              'submitted_file_name': submitted_file_name,
-                              'reference_files': ref_files
-                              }
-    return alignment_file_payload
-
-
-def document_payload_template(igvf_award: str,
-                              igvf_aliases: list,
-                              submitted_file_name: str
-                              ):
-    document_payload = {'award': igvf_award,
-                        'aliases': igvf_aliases,
-                        'document_type': 'quality control report',
-                        'attachment': submitted_file_name
-                        }
-    return document_payload
-
-
-def index_file_payload_template(igvf_award: str,
-                                igvf_aliases: list,
-                                analysis_step_version: str,
-                                content_type: str,
-                                file_format: str,
-                                file_set: str,
-                                igvf_lab: str,
-                                md5sum: str,
-                                derived_from: list,
-                                submitted_file_name: str,
-                                ref_files: list
-                                ):
-    index_file_payload = {'award': igvf_award,
-                          'aliases': igvf_aliases,
-                          'analysis_step_version': analysis_step_version,
-                          'content_type': content_type,    # NOTE: sparse gene count matrix
-                          'derived_from': derived_from,    # TODO:this needs to be collected after alignment files are uploaded
-                          'file_format': file_format,
-                          'file_set': file_set,
-                          'lab': igvf_lab,
-                          'md5sum': md5sum,
-                          'submitted_file_name': submitted_file_name,
-                          'reference_files': ref_files
-                          }
-    return index_file_payload
-
-
-def matrix_file_payload_template(igvf_award: str,
-                                 igvf_aliases: list,
-                                #  analysis_step_version: str,
-                                 content_type: str,
-                                 file_format: str,
-                                 file_set: str,
-                                 igvf_lab: str,
-                                 md5sum: str,
-                                 derived_from: list,
-                                 submitted_file_name: str,
-                                 principle_dim: str,
-                                 secondary_dims: list
-                                 ):
-    matrix_file_payload = {'award': igvf_award,
-                           'aliases': igvf_aliases,
-                        #    'analysis_step_version': analysis_step_version,
-                           'content_type': content_type,
-                           'derived_from': derived_from,
-                           'file_format': file_format,
-                           'file_set': file_set,
-                           'lab': igvf_lab,
-                           'md5sum': md5sum,
-                           'submitted_file_name': submitted_file_name,
-                           'principle_dimension': principle_dim,   # TODO: Dependent on the output
-                           'secondary_dimensions': secondary_dims,    # TODO: Dependent on the output
-                           }
-    return matrix_file_payload
-
-
-def tabular_file_payload_template(igvf_award: str,
-                                  igvf_aliases: list,
-                                  content_type: str,
-                                  controlled_access: bool,
-                                  file_format: str,
-                                  file_set: str,
-                                  igvf_lab: str,
-                                  md5sum: str,
-                                  derived_from: list,
-                                  submitted_file_name: str,
-                                  transcriptome_annotation: str
-                                  ):
-    tab_file_payload = {'award': igvf_award,
-                        'aliases': igvf_aliases,
-                        'content_type': content_type,
-                        'controlled_access': controlled_access,
-                        'derived_from': derived_from,   # TODO:this needs to be collected after alignment files are uploaded
-                        'file_format': file_format,
-                        'file_set': file_set,
-                        'lab': igvf_lab,
-                        'md5sum': md5sum,
-                        'submitted_file_name': submitted_file_name
-                        }
-    return tab_file_payload
-
-
-def single_post_to_portal(file_type: str, igvf_data_payload: dict, igvf_utils_api, upload_file: bool = False):
-    igvf_data_payload[Connection.PROFILE_KEY] = file_type
+def single_post_to_portal(igvf_data_payload: dict, igvf_utils_api, upload_file: bool = False):
+    # igvf_data_payload[Connection.PROFILE_KEY] = file_type
     _schema_property = igvf_utils_api.get_profile_from_payload(igvf_data_payload).properties
     stdout = igvf_utils_api.post(igvf_data_payload, upload_file=upload_file, return_original_status_code=True)
     return (stdout[0]['accession'], stdout[1])
@@ -227,8 +106,12 @@ def post_all_documents_to_portal(terra_data_record: pd.Series,
     curr_post_summary = {}
     for (col_header, _curr_file_format) in terra_output_table_column_types['document']:
         curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(terra_data_record=terra_data_record, col_name=col_header, lab=lab)
-        # curr_doc_payload = document_payload_template(igvf_award=award, igvf_aliases=curr_file_alias, submitted_file_name=curr_gs_cloud_link)
-        curr_doc_payload = dict(igvf_award=award, igvf_aliases=curr_file_alias, submitted_file_name=curr_gs_cloud_link)
+        curr_doc_payload = dict(lab=lab, award=award,
+                                aliases=[curr_file_alias],
+                                attachment={'path': curr_gs_cloud_link},
+                                document_type='quality control report',
+                                description=curr_file_alias
+                                )
         curr_new_acc, curr_post_status = single_post_to_portal(file_type='document', igvf_data_payload=curr_doc_payload, igvf_utils_api=igvf_utils_api, upload_file=upload_file)
         curr_post_summary[col_header] = [curr_new_acc, curr_post_status]
     return curr_post_summary
@@ -239,34 +122,22 @@ def post_all_rna_data_to_portal(terra_data_record: pd.Series, lab: str, award: s
     for (col_header, curr_file_format) in terra_output_table_column_types['matrix_file']:
         curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(terra_data_record=terra_data_record, col_name=col_header, lab=lab)
         curr_md5sum = api_tools.calculate_gsutil_hash(file_path=curr_gs_cloud_link)
-        curr_content_type = 'sparse gene count matrix'
         curr_seqfile_accs = get_seqfile_accs_from_table(terra_data_record=terra_data_record, seqfile_acc_cols=accession_headers_by_assay_types['rna'])
-        # curr_mtx_file_payload = matrix_file_payload_template(igvf_award=award,
-        #                                                      igvf_lab=lab,
-        #                                                      igvf_aliases=curr_file_alias,
-        #                                                      content_type=curr_content_type,
-        #                                                      md5sum=curr_md5sum,
-        #                                                      file_format=curr_file_format,
-        #                                                      derived_from=curr_seqfile_accs,
-        #                                                      submitted_file_name=curr_gs_cloud_link,
-        #                                                      file_set=terra_data_record['analysis_set_acc'],
-        #                                                      principle_dims='cell',
-        #                                                      secondary_dims=['gene']
-        #                                                      )
-        curr_mtx_file_payload = dict(igvf_award=award,
-                                     igvf_lab=lab,
-                                     igvf_aliases=curr_file_alias,
-                                     content_type=curr_content_type,
+        curr_mtx_file_payload = dict(award=award,
+                                     lab=lab,
+                                     aliases=[curr_file_alias],
+                                     content_type='sparse gene count matrix',
                                      md5sum=curr_md5sum,
                                      file_format=curr_file_format,
                                      derived_from=curr_seqfile_accs,
                                      submitted_file_name=curr_gs_cloud_link,
                                      file_set=terra_data_record['analysis_set_acc'],
-                                     principle_dims='cell',
-                                     secondary_dims=['gene'],
-                                     
+                                     principal_dimension='cell',
+                                     secondary_dimensions=['gene'],
+                                     reference_files=['TSTFI36924773'],     # NOTE: This probably needs somewhere to either specify on Terra or by hard coder
+                                     _profile='matrix_file'
                                      )
-        curr_new_acc, curr_post_status = single_post_to_portal(file_type='matrix_file', igvf_data_payload=curr_mtx_file_payload, igvf_utils_api=igvf_utils_api, upload_file=upload_file)
+        curr_new_acc, curr_post_status = single_post_to_portal(igvf_data_payload=curr_mtx_file_payload, igvf_utils_api=igvf_utils_api, upload_file=upload_file)
         curr_post_summary[col_header] = [curr_new_acc, curr_post_status]
     return curr_post_summary
 
@@ -279,17 +150,6 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
         curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(terra_data_record=terra_data_record, col_name=col_header, lab=lab)
         curr_md5sum = api_tools.calculate_gsutil_hash(file_path=curr_gs_cloud_link)
         curr_alignfile_ctrl_access, curr_seqfile_accs = get_seqfile_access_lvl_and_access(terra_data_record=terra_data_record, assay_type='atac', igvf_api=igvf_api)
-        # curr_alignment_payload = alignment_file_payload_template(igvf_award=lab,
-        #                                                          igvf_lab=lab,
-        #                                                          igvf_aliases=curr_file_alias,
-        #                                                          assembly=genome_assembly_info[terra_data_record['Genome']][0],
-        #                                                          controlled_access=curr_alignfile_ctrl_access,
-        #                                                          derived_from=curr_seqfile_accs,
-        #                                                          file_set=terra_data_record['analysis_set_acc'],
-        #                                                          md5sum=curr_md5sum,
-        #                                                          submitted_file_name=curr_gs_cloud_link,
-        #                                                          ref_files=genome_assembly_info[terra_data_record['Genome']][1],
-        #                                                          )
         curr_alignment_payload = dict(igvf_award=lab,
                                       igvf_lab=lab,
                                       igvf_aliases=curr_file_alias,
