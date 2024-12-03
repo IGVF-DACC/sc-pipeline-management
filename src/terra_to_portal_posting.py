@@ -91,7 +91,6 @@ def get_gspath_and_alias(terra_data_record: pd.Series, col_name: str, lab: str) 
 
 
 def single_post_to_portal(igvf_data_payload: dict, igvf_utils_api, upload_file: bool = False):
-    # igvf_data_payload[Connection.PROFILE_KEY] = file_type
     _schema_property = igvf_utils_api.get_profile_from_payload(igvf_data_payload).properties
     stdout = igvf_utils_api.post(igvf_data_payload, upload_file=upload_file, return_original_status_code=True)
     return (stdout[0]['accession'], stdout[1])
@@ -108,9 +107,9 @@ def post_all_documents_to_portal(terra_data_record: pd.Series,
         curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(terra_data_record=terra_data_record, col_name=col_header, lab=lab)
         curr_doc_payload = dict(lab=lab, award=award,
                                 aliases=[curr_file_alias],
-                                attachment={'path': curr_gs_cloud_link},
+                                attachment={'path': curr_gs_cloud_link},    # TODO: This will fail with a non-local file path
                                 document_type='quality control report',
-                                description=curr_file_alias
+                                description=col_header
                                 )
         curr_new_acc, curr_post_status = single_post_to_portal(file_type='document', igvf_data_payload=curr_doc_payload, igvf_utils_api=igvf_utils_api, upload_file=upload_file)
         curr_post_summary[col_header] = [curr_new_acc, curr_post_status]
@@ -150,16 +149,17 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
         curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(terra_data_record=terra_data_record, col_name=col_header, lab=lab)
         curr_md5sum = api_tools.calculate_gsutil_hash(file_path=curr_gs_cloud_link)
         curr_alignfile_ctrl_access, curr_seqfile_accs = get_seqfile_access_lvl_and_access(terra_data_record=terra_data_record, assay_type='atac', igvf_api=igvf_api)
-        curr_alignment_payload = dict(igvf_award=lab,
-                                      igvf_lab=lab,
-                                      igvf_aliases=curr_file_alias,
+        curr_alignment_payload = dict(award=award,
+                                      lab=lab,
+                                      aliases=curr_file_alias,
                                       assembly=genome_assembly_info[terra_data_record['Genome']][0],
                                       controlled_access=curr_alignfile_ctrl_access,
                                       derived_from=curr_seqfile_accs,
                                       file_set=terra_data_record['analysis_set_acc'],
                                       md5sum=curr_md5sum,
                                       submitted_file_name=curr_gs_cloud_link,
-                                      ref_files=genome_assembly_info[terra_data_record['Genome']][1]
+                                      reference_files=['TSTFI36924773'],
+                                      _profile='alignment_file'
                                       )
         curr_new_acc, curr_post_status = single_post_to_portal(file_type='alignment_file', igvf_data_payload=curr_alignment_payload, igvf_utils_api=igvf_utils_api, upload_file=upload_file)
         curr_alignment_file_accs.append(curr_new_acc)
@@ -169,25 +169,34 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
     for (col_header, curr_file_format) in terra_output_table_column_types['tabular_file']:
         curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(terra_data_record=terra_data_record, col_name=col_header, lab=lab)
         curr_md5sum = api_tools.calculate_gsutil_hash(file_path=curr_gs_cloud_link)
-        # curr_tab_file_payload = tabular_file_payload_template(igvf_award=lab,
-        #                                                       igvf_lab=lab,
-        #                                                       igvf_aliases=curr_file_alias,
-        #                                                       content_type='fragments',
-        #                                                       file_format=curr_file_format,
-        #                                                       md5sum=curr_md5sum,
-        #                                                       derived_from=list(set(curr_alignment_file_accs)),
-        #                                                       submitted_file_name=curr_gs_cloud_link,
-        #                                                       transcriptome_annotation=
-        #                                                       )
-        curr_tab_file_payload = dict(igvf_award=lab,
-                                     igvf_lab=lab,
-                                     igvf_aliases=curr_file_alias,
+        curr_tab_file_payload = dict(award=award,
+                                     lab=lab,
+                                     aliases=curr_file_alias,
                                      content_type='fragments',
                                      file_format=curr_file_format,
                                      md5sum=curr_md5sum,
                                      derived_from=list(set(curr_alignment_file_accs)),
-                                     submitted_file_name=curr_gs_cloud_link
+                                     submitted_file_name=curr_gs_cloud_link,
+                                     file_set=terra_data_record['analysis_set_acc'],
+                                     _profile='tabular_file'
                                      )
         curr_new_acc, curr_post_status = single_post_to_portal(file_type='tabular_file', igvf_data_payload=curr_tab_file_payload, igvf_utils_api=igvf_utils_api, upload_file=upload_file)
         curr_post_summary[col_header] = [curr_new_acc, curr_post_status]
-        return curr_post_summary
+
+    # Post fragment index files
+    for (col_header, curr_file_format) in terra_output_table_column_types['index_file']:
+        curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(terra_data_record=terra_data_record, col_name=col_header, lab=lab)
+        curr_md5sum = api_tools.calculate_gsutil_hash(file_path=curr_gs_cloud_link)
+        curr_index_file_payload = dict(award=award,
+                                       lab=lab,
+                                       aliases=curr_file_alias,
+                                       content_type='index',
+                                       file_format=curr_file_format,
+                                       md5sum=curr_md5sum,
+                                       derived_from=list(set(curr_alignment_file_accs)),
+                                       submitted_file_name=curr_gs_cloud_link,
+                                       file_set=terra_data_record['analysis_set_acc'],
+                                       _profile='index_file'
+                                       )
+
+    return curr_post_summary
