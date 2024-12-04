@@ -3,11 +3,10 @@ from igvf_utils.connection import Connection
 from pathlib import Path
 import pandas as pd
 import igvf_and_terra_api_tools as api_tools
-import re
 
 
 # TODO: 
-# 1) build a post message parsing to get alignment file to pass into index file and tabular files as derived_from
+# 1) Figure out how to post documents from non-local options (likely need to work from a Google container)
 # 2) 
 
 
@@ -33,17 +32,12 @@ terra_output_table_column_types = {
                     ]
 }
 
-# terra_data_filename_parsers = {
-#     'rna_mtxs_h5ad': re.compile(r'\.rna\.align\.kb\.(.*)\.count\_matrix\.h5ad'),
-#     'rna_kb_output': re.compile(r'\.rna\.align\.kb\.(.*)\.tar\.gz'),
-#     'atac_bam': re.compile(r'\.atac\.align\.k4\.(genome_name)\.bam')
-# }
 
 accession_headers_by_assay_types = {'atac': ['atac_read1_accessions', 'atac_read2_accessions'],
                                     'rna': ['rna_read1_accessions', 'rna_read2_accessions']
                                     }
 
-genome_assembly_info = {'hg38': ('GRCh38', 'IGVFFI0653VCGH'), 'mm39': ('GRCm39', 'IGVFFI9282QLXO')}
+genome_assembly_info = {'hg38': 'GRCh38', 'mm39': 'GRCm39'}
 
 
 def get_lab_and_award(terra_data_record: pd.Series, igvf_api) -> tuple:
@@ -116,7 +110,7 @@ def post_all_documents_to_portal(terra_data_record: pd.Series,
     return curr_post_summary
 
 
-def post_all_rna_data_to_portal(terra_data_record: pd.Series, lab: str, award: str, seqfile_accs: list, igvf_utils_api, upload_file: bool = False):
+def post_all_rna_data_to_portal(terra_data_record: pd.Series, lab: str, award: str, igvf_utils_api, upload_file: bool = False):
     curr_post_summary = {}
     for (col_header, curr_file_format) in terra_output_table_column_types['matrix_file']:
         curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(terra_data_record=terra_data_record, col_name=col_header, lab=lab)
@@ -141,7 +135,7 @@ def post_all_rna_data_to_portal(terra_data_record: pd.Series, lab: str, award: s
     return curr_post_summary
 
 
-def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: str, seqfile_accs: list, igvf_api, igvf_utils_api, upload_file: bool = False):
+def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: str, igvf_api, igvf_utils_api, upload_file: bool = False):
     curr_post_summary = {}
     # Need to post alignment files first
     curr_alignment_file_accs = []
@@ -151,28 +145,35 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
         curr_alignfile_ctrl_access, curr_seqfile_accs = get_seqfile_access_lvl_and_access(terra_data_record=terra_data_record, assay_type='atac', igvf_api=igvf_api)
         curr_alignment_payload = dict(award=award,
                                       lab=lab,
-                                      aliases=curr_file_alias,
-                                      assembly=genome_assembly_info[terra_data_record['Genome']][0],
+                                      aliases=[curr_file_alias],
+                                      assembly=genome_assembly_info[terra_data_record['Genome']],
                                       controlled_access=curr_alignfile_ctrl_access,
+                                      file_format=curr_file_format,
+                                      content_type='alignments',
+                                      filtered=False,
                                       derived_from=curr_seqfile_accs,
                                       file_set=terra_data_record['analysis_set_acc'],
                                       md5sum=curr_md5sum,
                                       submitted_file_name=curr_gs_cloud_link,
                                       reference_files=['TSTFI36924773'],
+                                      redacted=False,   # TODO: Need to figure this one out
                                       _profile='alignment_file'
                                       )
-        curr_new_acc, curr_post_status = single_post_to_portal(file_type='alignment_file', igvf_data_payload=curr_alignment_payload, igvf_utils_api=igvf_utils_api, upload_file=upload_file)
+        curr_new_acc, curr_post_status = single_post_to_portal(igvf_data_payload=curr_alignment_payload, igvf_utils_api=igvf_utils_api, upload_file=upload_file)
         curr_alignment_file_accs.append(curr_new_acc)
         curr_post_summary[col_header] = [curr_new_acc, curr_post_status]
 
     # Post Tabular Files
+    curr_fragfile_accs = []
     for (col_header, curr_file_format) in terra_output_table_column_types['tabular_file']:
         curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(terra_data_record=terra_data_record, col_name=col_header, lab=lab)
         curr_md5sum = api_tools.calculate_gsutil_hash(file_path=curr_gs_cloud_link)
+        curr_tabfile_ctrl_access, curr_seqfile_accs = get_seqfile_access_lvl_and_access(terra_data_record=terra_data_record, assay_type='atac', igvf_api=igvf_api)
         curr_tab_file_payload = dict(award=award,
                                      lab=lab,
-                                     aliases=curr_file_alias,
+                                     aliases=[curr_file_alias],
                                      content_type='fragments',
+                                     controlled_access=curr_tabfile_ctrl_access,
                                      file_format=curr_file_format,
                                      md5sum=curr_md5sum,
                                      derived_from=list(set(curr_alignment_file_accs)),
@@ -180,7 +181,8 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
                                      file_set=terra_data_record['analysis_set_acc'],
                                      _profile='tabular_file'
                                      )
-        curr_new_acc, curr_post_status = single_post_to_portal(file_type='tabular_file', igvf_data_payload=curr_tab_file_payload, igvf_utils_api=igvf_utils_api, upload_file=upload_file)
+        curr_new_acc, curr_post_status = single_post_to_portal(igvf_data_payload=curr_tab_file_payload, igvf_utils_api=igvf_utils_api, upload_file=upload_file)
+        curr_fragfile_accs.append(curr_new_acc)
         curr_post_summary[col_header] = [curr_new_acc, curr_post_status]
 
     # Post fragment index files
@@ -189,14 +191,19 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
         curr_md5sum = api_tools.calculate_gsutil_hash(file_path=curr_gs_cloud_link)
         curr_index_file_payload = dict(award=award,
                                        lab=lab,
-                                       aliases=curr_file_alias,
+                                       aliases=[curr_file_alias],
                                        content_type='index',
                                        file_format=curr_file_format,
                                        md5sum=curr_md5sum,
-                                       derived_from=list(set(curr_alignment_file_accs)),
+                                       derived_from=list(set(curr_fragfile_accs)),
                                        submitted_file_name=curr_gs_cloud_link,
                                        file_set=terra_data_record['analysis_set_acc'],
                                        _profile='index_file'
                                        )
-
+        curr_new_acc, curr_post_status = single_post_to_portal(igvf_data_payload=curr_index_file_payload, igvf_utils_api=igvf_utils_api, upload_file=upload_file)
+        curr_post_summary[col_header] = [curr_new_acc, curr_post_status]
     return curr_post_summary
+
+
+def post_all_data(terra_data_table: pd.Series):
+    
