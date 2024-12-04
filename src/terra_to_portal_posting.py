@@ -14,22 +14,22 @@ import igvf_and_terra_api_tools as api_tools
 
 # A possbily hacky dict to match output file columns with data types and file format
 terra_output_table_column_types = {
-    'alignment_file': [('atac_bam', 'bam')],    # ATAC
-    'document': [('atac_bam_log', 'txt'),
-                 ('atac_chromap_barcode_metadata', 'tsv'),
-                 ('atac_snapatac2_barcode_metadata', 'tsv'),
-                 ('csv_summary', 'csv'),
-                 ('html_summary', 'html'),
-                 ('joint_barcode_metadata', 'csv'),
-                 ('rna_barcode_metadata', 'tsv'),
-                 ('rna_log', 'txt')
+    'alignment_file': [('atac_bam', 'bam', '[Raw] Aligned bam file from Chromap')],    # ATAC
+    'document': [('atac_bam_log', 'txt', '[Raw] Log file from aligner'),
+                 ('atac_chromap_barcode_metadata', 'tsv', '[Raw] Per barcode alignment statistics file from Chromap'),
+                 ('atac_snapatac2_barcode_metadata', 'tsv', '[Filtered] Per barcode statistics file from SnapATAC2'),
+                 ('csv_summary', 'csv', '[Filtered] CSV summary report'),
+                 ('html_summary', 'html', '[Filtered] HTML summary report'),
+                 ('joint_barcode_metadata', 'csv', '[Filtered] Joint per barcode statistics file'),
+                 ('rna_barcode_metadata', 'tsv', '[Raw] Per barcode alignment statistics file'),
+                 ('rna_log', 'txt', '[Raw] Log file from kb')
                  ],
-    'index_file': [('atac_filter_fragments_index', 'tbi')],     # ATAC
-    'tabular_file': [('atac_filter_fragments', 'tsv')],     # ATAC
-    'matrix_file': [('rna_aggregated_counts_h5ad', 'h5ad'),     # All RNA
-                    ('rna_mtx_tar', 'tar'),
-                    ('rna_mtxs_h5ad', 'h5ad'),
-                    ('rna_kb_output', 'tar')
+    'index_file': [('atac_filter_fragments_index', 'tbi', '	[Raw] Fragment file index from Chromap')],     # ATAC
+    'tabular_file': [('atac_filter_fragments', 'tsv', '[Raw] Fragment file from Chromap')],     # ATAC
+    'matrix_file': [('rna_aggregated_counts_h5ad', 'h5ad', '[Raw] Aggregated(Ambiguous+Spliced+Unspliced) count matrix in h5ad format'),
+                    ('rna_mtx_tar', 'tar', '[Raw] Tarball containing four separated count matrices in mtx format: Spliced, Unspliced, Ambiguous, and Total'),
+                    ('rna_mtxs_h5ad', 'h5ad', '[Raw] h5ad containing four separated count matrices: Spliced, Unspliced, Ambiguous, and Total'),
+                    ('rna_kb_output', 'tar', '[Raw] Tarball containing all the logs and bus files generated from kb')
                     ]
 }
 
@@ -42,7 +42,7 @@ accession_headers_by_assay_types = {'atac': ['atac_read1_accessions', 'atac_read
 genome_assembly_info = {'hg38': 'GRCh38', 'mm39': 'GRCm39'}
 
 
-def get_lab_and_award(terra_data_record: pd.Series, igvf_api) -> tuple:
+def get_award_and_lab(terra_data_record: pd.Series, igvf_api) -> tuple:
     """Get the Lab and Award info from analysis accession IDs.
 
     Args:
@@ -140,6 +140,7 @@ def single_post_to_portal(igvf_data_payload: dict, igvf_utils_api, upload_file: 
     return (stdout[0]['accession'], stdout[1])
 
 
+# TODO: Cannot post anything that is not local
 def post_all_documents_to_portal(terra_data_record: pd.Series,
                                  lab: str,
                                  award: str,
@@ -159,13 +160,13 @@ def post_all_documents_to_portal(terra_data_record: pd.Series,
         dict: {column_header: [new accession, post status]}
     """
     curr_post_summary = {}
-    for (col_header, _curr_file_format) in terra_output_table_column_types['document']:
+    for (col_header, _curr_file_format, curr_description) in terra_output_table_column_types['document']:
         curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(terra_data_record=terra_data_record, col_name=col_header, lab=lab)
         curr_doc_payload = dict(lab=lab, award=award,
                                 aliases=[curr_file_alias],
                                 attachment={'path': curr_gs_cloud_link},    # TODO: This will fail with a non-local file path
                                 document_type='quality control report',
-                                description=col_header
+                                description=curr_description
                                 )
         curr_new_acc, curr_post_status = single_post_to_portal(file_type='document', igvf_data_payload=curr_doc_payload, igvf_utils_api=igvf_utils_api, upload_file=upload_file)
         curr_post_summary[col_header] = [curr_new_acc, curr_post_status]
@@ -186,7 +187,7 @@ def post_all_rna_data_to_portal(terra_data_record: pd.Series, lab: str, award: s
         dict: {column_header: [new accession, post status]}
     """
     curr_post_summary = {}
-    for (col_header, curr_file_format) in terra_output_table_column_types['matrix_file']:
+    for (col_header, curr_file_format, curr_description) in terra_output_table_column_types['matrix_file']:
         curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(terra_data_record=terra_data_record, col_name=col_header, lab=lab)
         curr_md5sum = api_tools.calculate_gsutil_hash(file_path=curr_gs_cloud_link)
         curr_seqfile_accs = get_seqfile_accs_from_table(terra_data_record=terra_data_record, seqfile_acc_cols=accession_headers_by_assay_types['rna'])
@@ -202,6 +203,7 @@ def post_all_rna_data_to_portal(terra_data_record: pd.Series, lab: str, award: s
                                      principal_dimension='cell',
                                      secondary_dimensions=['gene'],
                                      reference_files=['TSTFI36924773'],     # NOTE: This probably needs somewhere to either specify on Terra or by hard coder
+                                     description=curr_description,
                                      _profile='matrix_file'
                                      )
         curr_new_acc, curr_post_status = single_post_to_portal(igvf_data_payload=curr_mtx_file_payload, igvf_utils_api=igvf_utils_api, upload_file=upload_file)
@@ -226,7 +228,7 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
     curr_post_summary = {}
     # Need to post alignment files first
     curr_alignment_file_accs = []
-    for (col_header, curr_file_format) in terra_output_table_column_types['alignment_file']:
+    for (col_header, curr_file_format, curr_description) in terra_output_table_column_types['alignment_file']:
         curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(terra_data_record=terra_data_record, col_name=col_header, lab=lab)
         curr_md5sum = api_tools.calculate_gsutil_hash(file_path=curr_gs_cloud_link)
         curr_alignfile_ctrl_access, curr_seqfile_accs = get_seqfile_access_lvl_and_access(terra_data_record=terra_data_record, assay_type='atac', igvf_api=igvf_api)
@@ -244,6 +246,7 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
                                       submitted_file_name=curr_gs_cloud_link,
                                       reference_files=['TSTFI36924773'],
                                       redacted=False,   # TODO: Need to figure this one out
+                                      description=curr_description,
                                       _profile='alignment_file'
                                       )
         curr_new_acc, curr_post_status = single_post_to_portal(igvf_data_payload=curr_alignment_payload, igvf_utils_api=igvf_utils_api, upload_file=upload_file)
@@ -252,7 +255,7 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
 
     # Post Tabular Files
     curr_fragfile_accs = []
-    for (col_header, curr_file_format) in terra_output_table_column_types['tabular_file']:
+    for (col_header, curr_file_format, curr_description) in terra_output_table_column_types['tabular_file']:
         curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(terra_data_record=terra_data_record, col_name=col_header, lab=lab)
         curr_md5sum = api_tools.calculate_gsutil_hash(file_path=curr_gs_cloud_link)
         curr_tabfile_ctrl_access, curr_seqfile_accs = get_seqfile_access_lvl_and_access(terra_data_record=terra_data_record, assay_type='atac', igvf_api=igvf_api)
@@ -266,6 +269,7 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
                                      derived_from=list(set(curr_alignment_file_accs)),
                                      submitted_file_name=curr_gs_cloud_link,
                                      file_set=terra_data_record['analysis_set_acc'],
+                                     description=curr_description,
                                      _profile='tabular_file'
                                      )
         curr_new_acc, curr_post_status = single_post_to_portal(igvf_data_payload=curr_tab_file_payload, igvf_utils_api=igvf_utils_api, upload_file=upload_file)
@@ -273,7 +277,7 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
         curr_post_summary[col_header] = [curr_new_acc, curr_post_status]
 
     # Post fragment index files
-    for (col_header, curr_file_format) in terra_output_table_column_types['index_file']:
+    for (col_header, curr_file_format, curr_description) in terra_output_table_column_types['index_file']:
         curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(terra_data_record=terra_data_record, col_name=col_header, lab=lab)
         curr_md5sum = api_tools.calculate_gsutil_hash(file_path=curr_gs_cloud_link)
         curr_index_file_payload = dict(award=award,
@@ -285,6 +289,7 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
                                        derived_from=list(set(curr_fragfile_accs)),
                                        submitted_file_name=curr_gs_cloud_link,
                                        file_set=terra_data_record['analysis_set_acc'],
+                                       description=curr_description,
                                        _profile='index_file'
                                        )
         curr_new_acc, curr_post_status = single_post_to_portal(igvf_data_payload=curr_index_file_payload, igvf_utils_api=igvf_utils_api, upload_file=upload_file)
@@ -292,5 +297,23 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
     return curr_post_summary
 
 
-def post_all_data(terra_data_table: pd.Series):
-    
+def post_all_data_from_one_run(terra_data_table: pd.Series, igvf_api, igvf_utils_api, upload_file):
+    output_post_log = {}
+    pipeline_data_award, pipeline_data_lab = get_award_and_lab(terra_data_record=terra_data_table, igvf_api=igvf_api)
+    rna_output_post_log = post_all_atac_data_to_portal(terra_data_record=terra_data_table,
+                                                       lab=pipeline_data_lab,
+                                                       award=pipeline_data_award,
+                                                       igvf_api=igvf_api,
+                                                       igvf_utils_api=igvf_utils_api,
+                                                       upload_file=upload_file
+                                                       )
+    output_post_log.update(rna_output_post_log)
+    atac_output_post_log = post_all_atac_data_to_portal(terra_data_record=terra_data_table,
+                                                        lab=pipeline_data_lab,
+                                                        award=pipeline_data_award,
+                                                        igvf_api=igvf_api,
+                                                        igvf_utils_api=igvf_utils_api,
+                                                        upload_file=upload_file
+                                                        )
+    output_post_log.update(atac_output_post_log)
+    return output_post_log
