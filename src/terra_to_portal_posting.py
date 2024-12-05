@@ -225,18 +225,20 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
     Returns:
         dict: {column_header: [new accession, post status]}
     """
+    # Get file access and sequence files
+    curr_ctrl_access, curr_seqfile_accs = get_seqfile_access_lvl_and_access(terra_data_record=terra_data_record, assay_type='atac', igvf_api=igvf_api)
     curr_post_summary = {}
     # Need to post alignment files first
     curr_alignment_file_accs = []
     for (col_header, curr_file_format, curr_description) in terra_output_table_column_types['alignment_file']:
         curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(terra_data_record=terra_data_record, col_name=col_header, lab=lab)
         curr_md5sum = api_tools.calculate_gsutil_hash(file_path=curr_gs_cloud_link)
-        curr_alignfile_ctrl_access, curr_seqfile_accs = get_seqfile_access_lvl_and_access(terra_data_record=terra_data_record, assay_type='atac', igvf_api=igvf_api)
+        # curr_alignfile_ctrl_access, curr_seqfile_accs = get_seqfile_access_lvl_and_access(terra_data_record=terra_data_record, assay_type='atac', igvf_api=igvf_api)
         curr_alignment_payload = dict(award=award,
                                       lab=lab,
                                       aliases=[curr_file_alias],
                                       assembly=genome_assembly_info[terra_data_record['Genome']],
-                                      controlled_access=curr_alignfile_ctrl_access,
+                                      controlled_access=curr_ctrl_access,
                                       file_format=curr_file_format,
                                       content_type='alignments',
                                       filtered=False,
@@ -258,12 +260,12 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
     for (col_header, curr_file_format, curr_description) in terra_output_table_column_types['tabular_file']:
         curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(terra_data_record=terra_data_record, col_name=col_header, lab=lab)
         curr_md5sum = api_tools.calculate_gsutil_hash(file_path=curr_gs_cloud_link)
-        curr_tabfile_ctrl_access, curr_seqfile_accs = get_seqfile_access_lvl_and_access(terra_data_record=terra_data_record, assay_type='atac', igvf_api=igvf_api)
+        # curr_tabfile_ctrl_access, curr_seqfile_accs = get_seqfile_access_lvl_and_access(terra_data_record=terra_data_record, assay_type='atac', igvf_api=igvf_api)
         curr_tab_file_payload = dict(award=award,
                                      lab=lab,
                                      aliases=[curr_file_alias],
                                      content_type='fragments',
-                                     controlled_access=curr_tabfile_ctrl_access,
+                                     controlled_access=curr_ctrl_access,
                                      file_format=curr_file_format,
                                      md5sum=curr_md5sum,
                                      derived_from=list(set(curr_alignment_file_accs)),
@@ -284,6 +286,7 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
                                        lab=lab,
                                        aliases=[curr_file_alias],
                                        content_type='index',
+                                       controlled_access=curr_ctrl_access,
                                        file_format=curr_file_format,
                                        md5sum=curr_md5sum,
                                        derived_from=list(set(curr_fragfile_accs)),
