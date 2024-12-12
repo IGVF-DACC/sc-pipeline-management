@@ -1,0 +1,9 @@
+*.tsv
+__pycache__/
+.ipynb_checkpoints
+src/.ipynb_checkpoints
+.DS_Store
+src/old_code_draft.py
+IU_Logs/
+src/Team_2_tester.tsv
+src/extra_code_draft.py
