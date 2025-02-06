@@ -11,24 +11,24 @@
 
 ## Requirement
 
-### 1. Python packages
+### 1. Key Python packages
 
 * Python 3.11
-* igvf-client==63.0.0
-* igvf-utils==1.0.0
-* firecloud==0.16.37
-* seqspec==devel
+* igvf-client
+* igvf-utils
+* firecloud
+* seqspec
 
 ### 2. Additional requirement
 
-* Google cloud (Terra) access credentials
-* IGVF portal access credentials
+* **Set up Google cloud (Terra) access credentials.** FireCloud uses the [Google Cloud SDK](https://cloud.google.com/sdk/) to manage authorization. To use the firecloud CLI or API, you must install the SDK and login locally with `gcloud auth login`.
+* **IGVF portal access credentials.** Generate API credentials under the IGVF profiles page after logging into the portal. Store the public API key and secret API key as environmental variables. See [IGVF API credential configration guide](https://github.com/IGVF-DACC/igvf_utils/wiki/Configuration) for more details.
 
 ## Run example
 
 ### Note
 
-* The `example_run_notebook.ipynb` contains plug-and-use codes for uploading.
+* The `example_run_notebook.ipynb` contains plug-in-and-use codes for generating input data tables and posting output data to the IGVF data portal.
 * The [AnalysisSet on IGVF Sandbox](https://sandbox.igvf.org/analysis-sets/TSTDS33660419/) is an example.
 
 ### Run option 1: via Python Script
