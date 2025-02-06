@@ -463,10 +463,10 @@ class SingleCellInputBuilder:
         """
         curr_onlist_method = get_onlist_methods(
             measurement_set_ids=self.measet_ids, igvf_api=self.igvf_api)
-        if curr_onlist_method.startswith('Error'):
-            self.data['atac_barcode_inclusion_list'] = curr_onlist_method
         for column in ['rna_seqspec_urls', 'atac_seqspec_urls']:
             curr_assay_type = column.split('_')[0]
+            if curr_onlist_method.startswith('Error'):
+                self.data[f'{curr_assay_type}_barcode_inclusion_list'] = curr_onlist_method
             curr_seqspec_urls = list(self.data[column])
             if curr_seqspec_urls:
                 curr_seqspec_file_paths = []
@@ -475,6 +475,8 @@ class SingleCellInputBuilder:
                         download_file_via_https(igvf_portal_href_url=seqspec_url))
                 curr_inclusion_list_path = f'./final_barcode_list/{self.analysis_set_acc}_{curr_assay_type}_final_barcode_inclusion_list.txt'
                 # Preflight onlist check and generation
+                print(curr_seqspec_file_paths[0], curr_assay_type,
+                      curr_onlist_method, curr_inclusion_list_path)
                 curr_seqspec_onlist_output = seqspec_onlist_safetychk_and_get(
                     seqspec_file_paths=curr_seqspec_file_paths, assay_type=curr_assay_type,
                     onlist_method=curr_onlist_method, final_inclusion_list_path=curr_inclusion_list_path)
