@@ -315,11 +315,20 @@ def seqspec_onlist_safetychk_and_get(seqspec_file_paths: list, assay_type: str, 
             onlist_chk_lst.append(curr_onlist_files)
         else:
             return 'Error: seqspec file command failed.'
+    # If the onlist files are different, return an error message
     if not all(set(sublist) == set(onlist_chk_lst[0]) for sublist in onlist_chk_lst):
         return 'Error: Sequence files have different onlist files in associated seqspecs.'
     else:
-        return generate_finalinclusion_list(seqspec_file_path=str(
-            seqspec_file_paths[0]), assay_type=assay_type, onlist_method=onlist_method, final_inclusion_list_path=final_inclusion_list_path)
+        # If there are multiple onlist files, return error if the onlist method is no combination.
+        if (len(onlist_chk_lst[0]) > 1) and (onlist_method == 'no combination'):
+            return 'Error: Multiple onlist files found but onlist method is no combination.'
+        # If there is only one onlist file, return error if the onlist method isn't no combination.
+        elif (len(onlist_chk_lst[0]) == 1) and (onlist_method != 'no combination'):
+            return 'Error: Only one onlist file found but onlist method is not no combination.'
+        # Otherwise, make the final barcode list
+        else:
+            return generate_finalinclusion_list(seqspec_file_path=str(
+                seqspec_file_paths[0]), assay_type=assay_type, onlist_method=onlist_method, final_inclusion_list_path=final_inclusion_list_path)
 
 
 def seqspec_index_safetychk_and_get(seqspec_file_paths: list, assay_type: str) -> str:
@@ -464,7 +473,7 @@ class SingleCellInputBuilder:
                 for seqspec_url in curr_seqspec_urls:
                     curr_seqspec_file_paths.append(
                         download_file_via_https(igvf_portal_href_url=seqspec_url))
-                curr_inclusion_list_path = f'./{self.analysis_set_acc}_{curr_assay_type}_final_barcode_inclusion_list.txt'
+                curr_inclusion_list_path = f'./final_barcode_list/{self.analysis_set_acc}_{curr_assay_type}_final_barcode_inclusion_list.txt'
                 # Preflight onlist check and generation
                 curr_seqspec_onlist_output = seqspec_onlist_safetychk_and_get(
                     seqspec_file_paths=curr_seqspec_file_paths, assay_type=curr_assay_type,
