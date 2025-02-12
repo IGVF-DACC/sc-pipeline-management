@@ -9,7 +9,6 @@ from functools import partial
 import datetime
 import igvf_utils.exceptions as iu_exceptions
 import os
-import requests
 import dataclasses
 
 
@@ -638,10 +637,10 @@ def summarize_post_status(post_results: list) -> pd.DataFrame:
     """
     post_status_summary = {}
     for result in post_results:
-        bar = post_status_summary.setdefault(
+        accession_results = post_status_summary.setdefault(
             result.analysis_set_acc, {'time_stamp': result.finish_time})
         for post_res in result.post_results:
-            bar[post_res.col_header] = post_res.Description()
+            accession_results[post_res.col_header] = post_res.Description()
     post_status_summary_table = pd.DataFrame(
         post_status_summary).transpose().fillna('')
     post_status_summary_table['post_status_fail'] = post_status_summary_table.apply(
