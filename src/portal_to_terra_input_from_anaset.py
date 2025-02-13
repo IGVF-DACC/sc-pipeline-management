@@ -12,29 +12,31 @@ import requests
 
 
 # TODO:
-# 1)
+# 1) A SeqFile may have multiple seqspec files but only one is released. Once that is sorted out, need to
+#   update the seqspec URLs to be the released one.
+# 2) Make a func for generating full hrefs
 
 
 # HACK: A map that uses platform_preferred-assay-title_assay-type to inference read map for pipelines.
-READ_TYPE_BY_PLATFORM_MAP = {
-    # Broad bone marrow shareseq
-    '/platform-terms/EFO_0008637/_SHARE-seq_atac': {'R1': ['read1'], 'R2': ['read2', 'barcode']},
-    '/platform-terms/EFO_0008637/_SHARE-seq_rna': {'R1': ['read1'], 'R2': ['read2']},
-    # Any McGinnis data
-    '/platform-terms/EFO_0022840/_10x multiome with MULTI-seq_atac': {'R1': ['read1'], 'R3': ['read2'], 'R2': ['barcode']},
-    '/platform-terms/EFO_0022840/_10x multiome with MULTI-seq_rna': {'R1': ['read1'], 'R2': ['read2']},
-    # Any McGinnis data
-    '/platform-terms/NTR_0000765/_10x multiome with MULTI-seq_rna': {'R1': ['read1'], 'R2': ['read2']},
-    '/platform-terms/NTR_0000765/_10x multiome with MULTI-seq_atac': {'R1': ['read1'], 'R3': ['read2'], 'R2': ['barcode']},
-    # Diane data
-    '/platform-terms/EFO_0010963/_Parse SPLiT-seq_rna': {'R1': ['read1'], 'R2': ['read2']},
-    # For test analysis set only
-    '/platform-terms/NTR_0000765/_SHARE-seq_rna': {'R1': ['read1'], 'R3': ['read2']},
-    '/platform-terms/NTR_0000765/_SHARE-seq_atac': {'R1': ['read1'], 'R3': ['read2'], 'R2': ['barcode']},
-    # For test analysis set only
-    '/platform-terms/EFO_0008637/_RNA-seq_rna': {'R1': ['read1'], 'R2': ['read2']},
-    '/platform-terms/EFO_0010963/_ATAC-seq_atac': {'R1': ['read1'], 'R2': ['read2', 'barcode']}
-}
+# READ_TYPE_BY_PLATFORM_MAP = {
+#     # Broad bone marrow shareseq
+#     '/platform-terms/EFO_0008637/_SHARE-seq_atac': {'R1': ['read1'], 'R2': ['read2', 'barcode']},
+#     '/platform-terms/EFO_0008637/_SHARE-seq_rna': {'R1': ['read1'], 'R2': ['read2']},
+#     # Any McGinnis data
+#     '/platform-terms/EFO_0022840/_10x multiome with MULTI-seq_atac': {'R1': ['read1'], 'R3': ['read2'], 'R2': ['barcode']},
+#     '/platform-terms/EFO_0022840/_10x multiome with MULTI-seq_rna': {'R1': ['read1'], 'R2': ['read2']},
+#     # Any McGinnis data
+#     '/platform-terms/NTR_0000765/_10x multiome with MULTI-seq_rna': {'R1': ['read1'], 'R2': ['read2']},
+#     '/platform-terms/NTR_0000765/_10x multiome with MULTI-seq_atac': {'R1': ['read1'], 'R3': ['read2'], 'R2': ['barcode']},
+#     # Diane data
+#     '/platform-terms/EFO_0010963/_Parse SPLiT-seq_rna': {'R1': ['read1'], 'R2': ['read2']},
+#     # For test analysis set only
+#     '/platform-terms/NTR_0000765/_SHARE-seq_rna': {'R1': ['read1'], 'R3': ['read2']},
+#     '/platform-terms/NTR_0000765/_SHARE-seq_atac': {'R1': ['read1'], 'R3': ['read2'], 'R2': ['barcode']},
+#     # For test analysis set only
+#     '/platform-terms/EFO_0008637/_RNA-seq_rna': {'R1': ['read1'], 'R2': ['read2']},
+#     '/platform-terms/EFO_0010963/_ATAC-seq_atac': {'R1': ['read1'], 'R2': ['read2', 'barcode']}
+# }
 
 
 # Read_names to read types
@@ -65,6 +67,19 @@ TAXA_TO_GENOME_REF_FILES = {'Homo sapiens': ['GRCh38', '<human genome tsv>'],
 
 # For URL request
 BASE_IGVF_PORTAL_URL = 'https://api.data.igvf.org'
+
+
+def construct_full_href_url(igvf_href: str, base_url: str = BASE_IGVF_PORTAL_URL) -> str:
+    """_summary_
+
+    Args:
+        igvf_href (str): _description_
+        base_url (str, optional): _description_. Defaults to BASE_IGVF_PORTAL_URL.
+
+    Returns:
+        str: _description_
+    """
+    return urllib.parse.urljoin(base=base_url, url=igvf_href)
 
 
 # Get sample level info (taxa, accession for subpool ID)
@@ -129,7 +144,7 @@ def get_and_sort_measurement_sets_by_assays(measurement_set_ids: list, igvf_api)
     return sorted([igvf_api.get_by_id(measet_id).actual_instance for measet_id in measurement_set_ids], key=lambda x: x.assay_term)
 
 
-def get_seqfiles_by_assays_and_pref_titles(measet_items: list, igvf_api) -> tuple:
+def get_seqfile_items(measet_items: list, igvf_api) -> list:
     """Get sequence file items and the preferred assay title.
 
     Args:
@@ -137,22 +152,15 @@ def get_seqfiles_by_assays_and_pref_titles(measet_items: list, igvf_api) -> tupl
         igvf_api (_type_): _description_
 
     Returns:
-        tuple: ([sequence file items], preferred_assay_title, [seqfile measurement accessions])
+        list: [sequence file items]
     """
     file_items = []
-    # Get preferred assay title which will tell if it is atac or rna
-    preferred_assay_title = set()
     # For each measurement set of the same assay type, look for seqfiles
-    measet_accs = []
     for measet_item in measet_items:
-        preferred_assay_title.add(measet_item.preferred_assay_title)
-        measet_accs.append(measet_item.accession)
         for file in measet_item.files:
             if 'sequence-files' in file:
                 file_items.append(igvf_api.get_by_id(file).actual_instance)
-    # Should be only 1 but just to be sure
-    preferred_assay_title = list(preferred_assay_title)[0]
-    return (file_items, preferred_assay_title, measet_accs)
+    return file_items
 
 
 def seqfile_sort_func(x):
@@ -161,7 +169,7 @@ def seqfile_sort_func(x):
     return (x.file_set, x.illumina_read_type, x.sequencing_run, x.lane)
 
 
-def get_seqfile_seqinfo(seqfile_item, preferred_assay_title: str, assay_type: str) -> str:
+def get_seqfile_readnames(seqfile_item, assay_type: str) -> str:
     """HACK: Use sequence file metadata to infer FASTQ file read types.
 
     Args:
@@ -172,29 +180,23 @@ def get_seqfile_seqinfo(seqfile_item, preferred_assay_title: str, assay_type: st
     Returns:
         str: e.g., atac_read1, rna_read2
     """
-    read_type_key = '_'.join(
-        [seqfile_item.sequencing_platform, preferred_assay_title, assay_type])
     read_file_titles = []
     curr_read_names = seqfile_item.read_names
-    if curr_read_names:
-        # NOTE: This works if read_names is filled out
-        for curr_read_name in curr_read_names:
-            read_file_titles.append(
-                '_'.join([assay_type, READ_NAME_TO_READ_TYPE_MAP[curr_read_name]]))
-    else:
-        # NOTE: This works if read_names is empty (HACKs)
-        if seqfile_item.illumina_read_type in list(READ_TYPE_BY_PLATFORM_MAP[read_type_key].keys()):
-            curr_read_names = READ_TYPE_BY_PLATFORM_MAP[read_type_key][seqfile_item.illumina_read_type]
-            for curr_read_name in curr_read_names:
-                read_file_titles.append('_'.join([assay_type, curr_read_name]))
+    if not curr_read_names:
+        raise Exception(
+            'Error: No read names found in the sequence file item.')
+    for curr_read_name in curr_read_names:
+        read_file_titles.append(
+            '_'.join([assay_type, READ_NAME_TO_READ_TYPE_MAP[curr_read_name]]))
     return read_file_titles
 
 
-def get_seqspec_hrefs(seqspec_ids: list, igvf_api) -> set:
-    """_summary_
+def get_seqspec_hrefs(seqspec_ids: list[str], igvf_api) -> set:
+    # NOTE: See TO-DO #1
+    """Get the seqspec URLs from the seqspec IDs.
 
     Args:
-        seqspec_ids (list): _description_
+        seqspec_ids (list[str]): A list of seqspec IDs
         igvf_api (_type_): _description_
 
     Returns:
@@ -203,12 +205,12 @@ def get_seqspec_hrefs(seqspec_ids: list, igvf_api) -> set:
     seqspec_urls = set()
     for seqspec_id in seqspec_ids:
         curr_seqspec_item = igvf_api.get_by_id(seqspec_id).actual_instance
-        seqspec_urls.add(urllib.parse.urljoin(
-            BASE_IGVF_PORTAL_URL, curr_seqspec_item.href))
+        seqspec_urls.add(construct_full_href_url(
+            igvf_href=curr_seqspec_item.href))
     return seqspec_urls
 
 
-def get_onlist_methods(measurement_set_ids: list, igvf_api) -> str:
+def get_onlist_method(measurement_set_ids: list, igvf_api) -> str:
     """Get the onlist method of the measurement set items.
 
     Args:
@@ -223,7 +225,7 @@ def get_onlist_methods(measurement_set_ids: list, igvf_api) -> str:
         curr_onlist_methods.add(curr_measet_item.onlist_method)
     if len(curr_onlist_methods) != 1:
         raise Exception(
-            'Error: Measurement sets have different onlist methods.')
+            'Error: Measurement sets of the same assay term have different onlist methods.')
     return list(curr_onlist_methods)[0]
 
 
@@ -400,7 +402,6 @@ class SingleCellInputBuilder:
                      'atac_barcode_accessions': [],
                      'rna_read1_accessions': [],
                      'rna_read2_accessions': [],
-                     'rna_barcode_accessions': [],
                      'atac_seqspec_urls': set(),  # NOTE: The seqspec here is temporary for safety check
                      'rna_seqspec_urls': set(),
                      'atac_read1': [],
@@ -408,7 +409,6 @@ class SingleCellInputBuilder:
                      'atac_barcode': [],
                      'rna_read1': [],
                      'rna_read2': [],
-                     'rna_barcode': [],
                      'atac_barcode_inclusion_list': '',  # TODO: Add codes for running seqspec
                      'atac_read_format': '',
                      'rna_barcode_inclusion_list': '',
@@ -425,44 +425,68 @@ class SingleCellInputBuilder:
         self.onlist_mapping = get_onlist_mapping_status(
             measurement_set_ids=self.measet_ids, igvf_api=self.igvf_api)
 
+    def get_measet_ids_by_assay_type(self):
+        """Get measurement set IDs by assay type.
+        """
+        measets_sorted_by_assays = get_and_sort_measurement_sets_by_assays(
+            measurement_set_ids=self.measet_ids, igvf_api=self.igvf_api)
+        # Sort the list of measurement set items by the assay term
+        for assay_grp, measet_items in itertools.groupby(measets_sorted_by_assays, key=lambda x: x.assay_term):
+            # Get a list of seqfile items, preferred assay title, and linked measurement set accessions.
+            assay_measet_accs = [
+                measet_item.accession for measet_item in measet_items]
+            # Infer assay type based on assay terms
+            assay_type = ASSAY_NAMES_CONVERSION_REF[assay_grp]
+            # Add the linked measurement set accessions to the report dict
+            self.data[f'{assay_type}_MeaSetIDs'].extend(assay_measet_accs)
+
+    def seqfile_urls_for_one_assay(self, measet_items: list, assay_type: str):
+        """Get sequence files' urls and seqspec urls from measurement sets of the same assay type.
+
+        Args:
+            measet_items (list): list of MeaSet objects
+            assay_type (str): rna or atac
+        """
+        seqfile_items = get_seqfile_items(
+            measet_items=measet_items, igvf_api=self.igvf_api)
+        # Sort the list of seqfile items by file set acc, read type, run, and lane if present, then
+        # get S3 URIs and file accessions.
+        for seqfile_item in sorted(seqfile_items, key=seqfile_sort_func):
+            if not seqfile_item.read_names:
+                continue
+            read_file_titles = get_seqfile_readnames(
+                seqfile_item=seqfile_item, assay_type=assay_type)
+            for read_file_title in read_file_titles:
+                if (assay_type == 'rna') and ('barcode' in read_file_title):
+                    continue
+                # Get FASTQ files' accessions and URLs
+                self.data[f'{read_file_title}_accessions'].append(
+                    seqfile_item.accession)
+                self.data[read_file_title].append(
+                    construct_full_href_url(seqfile_item.href))
+                # Get Seqspec YAML files' accessions and URLs
+                self.data[f'{assay_type}_seqspec_urls'].update(get_seqspec_hrefs(
+                    seqspec_ids=seqfile_item.seqspecs, igvf_api=self.igvf_api))
+
     def get_seqfile_uris_and_seqspec_by_assays_and_runs(self):
         """Get s3 uri of sequence files and add to the report dict based on their assay type and read types.
         """
         # Get a list of measurement set items sorted by the assay terms.
-        measets_sorted_by_assays = get_and_sort_measurement_sets_by_assays(
-            measurement_set_ids=self.measet_ids, igvf_api=self.igvf_api)
-        for assay_grp, measet_items in itertools.groupby(measets_sorted_by_assays, key=lambda x: x.assay_term):
-            # Get a list of seqfile items, preferred assay title, and linked measurement set accessions.
-            seqfile_items, preferred_assay_title, assay_measet_accs = get_seqfiles_by_assays_and_pref_titles(
-                measet_items=measet_items, igvf_api=self.igvf_api)
-            # Infer assay type
-            assay_type = ASSAY_NAMES_CONVERSION_REF[assay_grp]
-            # Add the linked measurement set accessions to the report dict
-            self.data[f'{assay_type}_MeaSetIDs'].extend(assay_measet_accs)
-            # Sort the list of seqfile items by file set acc, illumina read type, run, and lane if present, then
-            # get S3 URIs and file accessions.
-            for seqfile_item in sorted(seqfile_items, key=seqfile_sort_func):
-                # HACK: Check if something is R read type or I read type
-                # TODO: Will need to rewrite to go with the read_name
-                if seqfile_item.illumina_read_type.startswith('R'):
-                    # Will generate a platform-preferred_assay_title-assay_type phrase to reference read1 or read2
-                    # TODO: Need to update this so that if works with a list
-                    read_file_titles = get_seqfile_seqinfo(
-                        seqfile_item=seqfile_item, preferred_assay_title=preferred_assay_title, assay_type=assay_type)
-                    # HACK: If the read_file_title is blank (e.g., R1 and R3, but not R2), skip
-                    for read_file_title in read_file_titles:
-                        self.data[f'{read_file_title}_accessions'].append(
-                            seqfile_item.accession)
-                        self.data[read_file_title].append(urllib.parse.urljoin(
-                            BASE_IGVF_PORTAL_URL, seqfile_item.href))
-                        # Also grab seqspec info
-                        # TODO: This will fail as most seqfiles don't have a correct one linked via seqspecs
-                        seqspec_urls = get_seqspec_hrefs(
-                            seqspec_ids=seqfile_item.seqspecs, igvf_api=self.igvf_api)
-                        self.data[f'{assay_type}_seqspec_urls'].update(
-                            seqspec_urls)
+        for assay_type, measet_id in [('rna', self.data['rna_MeaSetIDs']), ('atac', self.data['atac_MeaSetIDs'])]:
+            # Get a list of measurement set items sorted by the assay terms.
+            measet_items = get_and_sort_measurement_sets_by_assays(
+                measurement_set_ids=measet_id, igvf_api=self.igvf_api)
+            # Get seqfile URLs and seqspec URLs for each assay type
+            self.seqfile_urls_for_one_assay(
+                measet_items=measet_items, assay_type=assay_type)
 
     def single_seqspec_preflight_check(self, seqspec_column: str, onlist_method: str):
+        """Check on set of seqspec URLs for the same assay type. If they are all the same, download them and generate the seqspec index and final barcode inclusion list.
+
+        Args:
+            seqspec_column (str): A column name in the input table (e.g., atac_seqspec_urls)
+            onlist_method (str): Onlist method
+        """
         curr_assay_type = seqspec_column.split('_')[0]
         curr_seqspec_urls = list(self.data[seqspec_column])
         if not curr_seqspec_urls:
@@ -478,15 +502,6 @@ class SingleCellInputBuilder:
             self.data['possible_errors'].append(
                 f'Error: {curr_assay_type} seqspec download error: {str(e)}')
             return
-        curr_inclusion_list_path = f'./final_barcode_list/{self.analysis_set_acc}_{curr_assay_type}_final_barcode_inclusion_list.txt'
-        # Preflight onlist check and generation
-        try:
-            curr_seqspec_onlist_output = seqspec_onlist_safetychk_and_get(
-                seqspec_file_paths=curr_seqspec_file_paths, assay_type=curr_assay_type,
-                onlist_method=onlist_method, final_inclusion_list_path=curr_inclusion_list_path)
-            self.data[f'{curr_assay_type}_barcode_inclusion_list'] = curr_seqspec_onlist_output
-        except Exception as e:
-            self.data['possible_errors'].append(str(e))
         # Preflight index check and generation
         try:
             curr_seqspec_index_output = seqspec_index_safetychk_and_get(
@@ -495,17 +510,26 @@ class SingleCellInputBuilder:
         except Exception as e:
             self.data['possible_errors'].append(
                 f'Error: {curr_assay_type} seqspec index generation error: {str(e)}')
+        # Preflight onlist check and generation
+        try:
+            curr_inclusion_list_path = f'./final_barcode_list/{self.analysis_set_acc}_{curr_assay_type}_final_barcode_inclusion_list.txt'
+            curr_seqspec_onlist_output = seqspec_onlist_safetychk_and_get(
+                seqspec_file_paths=curr_seqspec_file_paths, assay_type=curr_assay_type,
+                onlist_method=onlist_method, final_inclusion_list_path=curr_inclusion_list_path)
+            self.data[f'{curr_assay_type}_barcode_inclusion_list'] = curr_seqspec_onlist_output
+        except Exception as e:
+            self.data['possible_errors'].append(str(e))
 
     def seqspec_preflight_check(self):
         """Check if onlist info and read format info are consistent all across input. If so, generate the read index and final barcode inclusion list.
         """
-        atac_onlist_method = get_onlist_methods(
+        atac_onlist_method = get_onlist_method(
             measurement_set_ids=self.data['atac_MeaSetIDs'], igvf_api=self.igvf_api)
-        rna_onlist_method = get_onlist_methods(
+        rna_onlist_method = get_onlist_method(
             measurement_set_ids=self.data['rna_MeaSetIDs'], igvf_api=self.igvf_api)
         if atac_onlist_method != rna_onlist_method:
             self.data['possible_errors'].append(
-                'Error: Measurement sets have different onlist methods.')
+                'Error: RNA and ATAC Measurement sets have different onlist methods.')
         for column, curr_onlist_method in [('rna_seqspec_urls', rna_onlist_method), ('atac_seqspec_urls', atac_onlist_method)]:
             self.single_seqspec_preflight_check(
                 seqspec_column=column, onlist_method=curr_onlist_method)
@@ -533,7 +557,7 @@ class SingleCellInputBuilder:
         """Build the final output report dict
         """
         self.data['analysis_set_acc'] = self.analysis_set_acc
-        # Get seqfile URLs
+        self.get_measet_ids_by_assay_type()
         self.get_seqfile_uris_and_seqspec_by_assays_and_runs()
         self.seqspec_preflight_check()
         self.data['atac_seqspec_urls'] = list(self.data['atac_seqspec_urls'])
@@ -541,8 +565,6 @@ class SingleCellInputBuilder:
         self.get_taxa_and_subpool_info()
         self.get_genome_assembly_and_ref_info()
         self.data['onlist_mapping'] = self.onlist_mapping
-        del self.data['rna_barcode_accessions']
-        del self.data['rna_barcode']
         return self.data
 
 
