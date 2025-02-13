@@ -1,12 +1,9 @@
 import urllib.parse
-from igvf_and_terra_api_tools import get_igvf_auth_and_api
 import os
 import pandas as pd
 import itertools
 import urllib
 from datetime import datetime
-import tempfile
-from itertools import groupby
 import subprocess
 import requests
 
