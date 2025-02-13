@@ -16,29 +16,6 @@ import requests
 #   update the seqspec URLs to be the released one.
 # 2) Make a func for generating full hrefs
 
-
-# HACK: A map that uses platform_preferred-assay-title_assay-type to inference read map for pipelines.
-# READ_TYPE_BY_PLATFORM_MAP = {
-#     # Broad bone marrow shareseq
-#     '/platform-terms/EFO_0008637/_SHARE-seq_atac': {'R1': ['read1'], 'R2': ['read2', 'barcode']},
-#     '/platform-terms/EFO_0008637/_SHARE-seq_rna': {'R1': ['read1'], 'R2': ['read2']},
-#     # Any McGinnis data
-#     '/platform-terms/EFO_0022840/_10x multiome with MULTI-seq_atac': {'R1': ['read1'], 'R3': ['read2'], 'R2': ['barcode']},
-#     '/platform-terms/EFO_0022840/_10x multiome with MULTI-seq_rna': {'R1': ['read1'], 'R2': ['read2']},
-#     # Any McGinnis data
-#     '/platform-terms/NTR_0000765/_10x multiome with MULTI-seq_rna': {'R1': ['read1'], 'R2': ['read2']},
-#     '/platform-terms/NTR_0000765/_10x multiome with MULTI-seq_atac': {'R1': ['read1'], 'R3': ['read2'], 'R2': ['barcode']},
-#     # Diane data
-#     '/platform-terms/EFO_0010963/_Parse SPLiT-seq_rna': {'R1': ['read1'], 'R2': ['read2']},
-#     # For test analysis set only
-#     '/platform-terms/NTR_0000765/_SHARE-seq_rna': {'R1': ['read1'], 'R3': ['read2']},
-#     '/platform-terms/NTR_0000765/_SHARE-seq_atac': {'R1': ['read1'], 'R3': ['read2'], 'R2': ['barcode']},
-#     # For test analysis set only
-#     '/platform-terms/EFO_0008637/_RNA-seq_rna': {'R1': ['read1'], 'R2': ['read2']},
-#     '/platform-terms/EFO_0010963/_ATAC-seq_atac': {'R1': ['read1'], 'R2': ['read2', 'barcode']}
-# }
-
-
 # Read_names to read types
 READ_NAME_TO_READ_TYPE_MAP = {'Read 1': 'read1',
                               'Read 2': 'read2',
