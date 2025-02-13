@@ -217,14 +217,14 @@ def get_onlist_methods(measurement_set_ids: list, igvf_api) -> str:
     Returns:
         str: onlist method
     """
-    curr_onlist_methods = []
+    curr_onlist_methods = set()
     for measet_id in measurement_set_ids:
         curr_measet_item = igvf_api.get_by_id(measet_id).actual_instance
-        curr_onlist_methods.append(curr_measet_item.onlist_method)
-    if len(set(curr_onlist_methods)) > 1:
-        return 'Error: Measurement sets have different onlist methods.'
-    else:
-        return curr_onlist_methods[0]
+        curr_onlist_methods.add(curr_measet_item.onlist_method)
+    if len(curr_onlist_methods) != 1:
+        raise Exception(
+            'Error: Measurement sets have different onlist methods.')
+    return list(curr_onlist_methods)[0]
 
 
 def download_file_via_https(igvf_portal_href_url: str) -> str:
@@ -249,7 +249,8 @@ def download_file_via_https(igvf_portal_href_url: str) -> str:
             file.write(response.content)
         return curr_output_file
     else:
-        return f'Error: Download failed with status code: {response.status_code}'
+        raise Exception(
+            f'Error: Download failed with status code: {response.status_code}.')
 
 
 def check_emptyinclusion_list(final_inclusion_list_path: str) -> bool:
@@ -289,9 +290,9 @@ def generate_finalinclusion_list(seqspec_file_path: str, assay_type: str, onlist
         curr_run_log = subprocess.run(['seqspec', 'onlist', '-m', assay_type, '-s', 'region-type', '-i',
                                       'barcode', '-f', onlist_method, '-o', final_inclusion_list_path, seqspec_file_path], capture_output=True)
     if curr_run_log.returncode != 0:
-        return 'Error: Seqspec onlist generation command error.'
+        raise Exception('Error: Seqspec onlist generation command error.')
     if check_emptyinclusion_list(final_inclusion_list_path=final_inclusion_list_path) is False:
-        return 'Error: Empty final inclusion list file generated.'
+        raise Exception('Error: Empty final inclusion list file generated.')
     return final_inclusion_list_path
 
 
@@ -314,17 +315,20 @@ def seqspec_onlist_safetychk_and_get(seqspec_file_paths: list, assay_type: str, 
                 'utf-8').strip().split(',')
             onlist_chk_lst.append(curr_onlist_files)
         else:
-            return 'Error: seqspec file command failed.'
+            raise Exception('Error: seqspec file command failed.')
     # If the onlist files are different, return an error message
     if not all(set(sublist) == set(onlist_chk_lst[0]) for sublist in onlist_chk_lst):
-        return 'Error: Sequence files have different onlist files in associated seqspecs.'
+        raise Exception(
+            'Error: Sequence files have different onlist files in associated seqspecs.')
     else:
         # If there are multiple onlist files, return error if the onlist method is no combination.
         if (len(onlist_chk_lst[0]) > 1) and (onlist_method == 'no combination'):
-            return 'Error: Multiple onlist files found but onlist method is no combination.'
+            raise Exception(
+                'Error: Multiple onlist files found but onlist method is no combination.')
         # If there is only one onlist file, return error if the onlist method isn't no combination.
         elif (len(onlist_chk_lst[0]) == 1) and (onlist_method != 'no combination'):
-            return 'Error: Only one onlist file found but onlist method is not no combination.'
+            raise Exception(
+                'Error: Only one onlist file found but onlist method is not no combination.')
         # Otherwise, make the final barcode list
         else:
             return generate_finalinclusion_list(seqspec_file_path=str(
@@ -346,19 +350,18 @@ def seqspec_index_safetychk_and_get(seqspec_file_paths: list, assay_type: str) -
     for file in seqspec_file_paths:
         curr_run_log = subprocess.run(['seqspec', 'index', '-m', assay_type, '-t',
                                       assay_type_to_tool_format[assay_type], '-s', 'file', file], capture_output=True)
-        if curr_run_log.returncode == 0:
-            if assay_type == 'rna':
-                readformat_chk_lst.append(
-                    curr_run_log.stdout.decode('utf-8').strip())
-            elif assay_type == 'atac':
-                readformat_chk_lst.append(
-                    curr_run_log.stdout.decode('utf-8').strip().split(' ')[-1])
-        else:
-            return 'Error: seqspec index command failed.'
+        if curr_run_log.returncode != 0:
+            raise Exception('Error: seqspec index command failed.')
+        if assay_type == 'rna':
+            readformat_chk_lst.append(
+                curr_run_log.stdout.decode('utf-8').strip())
+        elif assay_type == 'atac':
+            readformat_chk_lst.append(
+                curr_run_log.stdout.decode('utf-8').strip().split(' ')[-1])
     if len(set(readformat_chk_lst)) != 1:
-        return 'Error: Sequence files have different read_format in associated seqspecs.'
-    else:
-        return readformat_chk_lst[0]
+        raise Exception(
+            'Error: Sequence files have different read_format in associated seqspecs.')
+    return readformat_chk_lst[0]
 
 
 def get_onlist_mapping_status(measurement_set_ids: list, igvf_api) -> bool:
@@ -410,7 +413,8 @@ class SingleCellInputBuilder:
                      'atac_read_format': '',
                      'rna_barcode_inclusion_list': '',
                      'rna_read_format': '',
-                     'onlist_mapping': None
+                     'onlist_mapping': None,
+                     'possible_errors': []
                      }
         self.analysis_set_acc = analysis_set_acc
         self.igvf_api = igvf_api
@@ -458,33 +462,53 @@ class SingleCellInputBuilder:
                         self.data[f'{assay_type}_seqspec_urls'].update(
                             seqspec_urls)
 
-    def seqspec_preflight_check_and_generation(self):
+    def single_seqspec_preflight_check(self, seqspec_column: str, onlist_method: str):
+        curr_assay_type = seqspec_column.split('_')[0]
+        curr_seqspec_urls = list(self.data[seqspec_column])
+        if not curr_seqspec_urls:
+            self.data['possible_errors'].append(
+                f'Error: No seqspec URLs found for {curr_assay_type} seqspecs.')
+            return
+        try:
+            curr_seqspec_file_paths = [
+                download_file_via_https(igvf_portal_href_url=seqspec_url)
+                for seqspec_url in curr_seqspec_urls
+            ]
+        except Exception as e:
+            self.data['possible_errors'].append(
+                f'Error: {curr_assay_type} seqspec download error: {str(e)}')
+            return
+        curr_inclusion_list_path = f'./final_barcode_list/{self.analysis_set_acc}_{curr_assay_type}_final_barcode_inclusion_list.txt'
+        # Preflight onlist check and generation
+        try:
+            curr_seqspec_onlist_output = seqspec_onlist_safetychk_and_get(
+                seqspec_file_paths=curr_seqspec_file_paths, assay_type=curr_assay_type,
+                onlist_method=onlist_method, final_inclusion_list_path=curr_inclusion_list_path)
+            self.data[f'{curr_assay_type}_barcode_inclusion_list'] = curr_seqspec_onlist_output
+        except Exception as e:
+            self.data['possible_errors'].append(str(e))
+        # Preflight index check and generation
+        try:
+            curr_seqspec_index_output = seqspec_index_safetychk_and_get(
+                seqspec_file_paths=curr_seqspec_file_paths, assay_type=curr_assay_type)
+            self.data[f'{curr_assay_type}_read_format'] = curr_seqspec_index_output
+        except Exception as e:
+            self.data['possible_errors'].append(
+                f'Error: {curr_assay_type} seqspec index generation error: {str(e)}')
+
+    def seqspec_preflight_check(self):
         """Check if onlist info and read format info are consistent all across input. If so, generate the read index and final barcode inclusion list.
         """
-        curr_onlist_method = get_onlist_methods(
-            measurement_set_ids=self.measet_ids, igvf_api=self.igvf_api)
-        for column in ['rna_seqspec_urls', 'atac_seqspec_urls']:
-            curr_assay_type = column.split('_')[0]
-            if curr_onlist_method.startswith('Error'):
-                self.data[f'{curr_assay_type}_barcode_inclusion_list'] = curr_onlist_method
-            curr_seqspec_urls = list(self.data[column])
-            if curr_seqspec_urls:
-                curr_seqspec_file_paths = []
-                for seqspec_url in curr_seqspec_urls:
-                    curr_seqspec_file_paths.append(
-                        download_file_via_https(igvf_portal_href_url=seqspec_url))
-                curr_inclusion_list_path = f'./final_barcode_list/{self.analysis_set_acc}_{curr_assay_type}_final_barcode_inclusion_list.txt'
-                # Preflight onlist check and generation
-                print(curr_seqspec_file_paths[0], curr_assay_type,
-                      curr_onlist_method, curr_inclusion_list_path)
-                curr_seqspec_onlist_output = seqspec_onlist_safetychk_and_get(
-                    seqspec_file_paths=curr_seqspec_file_paths, assay_type=curr_assay_type,
-                    onlist_method=curr_onlist_method, final_inclusion_list_path=curr_inclusion_list_path)
-                self.data[f'{curr_assay_type}_barcode_inclusion_list'] = curr_seqspec_onlist_output
-                # Preflight index check and generation
-                curr_seqspec_index_output = seqspec_index_safetychk_and_get(
-                    seqspec_file_paths=curr_seqspec_file_paths, assay_type=curr_assay_type)
-                self.data[f'{curr_assay_type}_read_format'] = curr_seqspec_index_output
+        atac_onlist_method = get_onlist_methods(
+            measurement_set_ids=self.data['atac_MeaSetIDs'], igvf_api=self.igvf_api)
+        rna_onlist_method = get_onlist_methods(
+            measurement_set_ids=self.data['rna_MeaSetIDs'], igvf_api=self.igvf_api)
+        if atac_onlist_method != rna_onlist_method:
+            self.data['possible_errors'].append(
+                'Error: Measurement sets have different onlist methods.')
+        for column, curr_onlist_method in [('rna_seqspec_urls', rna_onlist_method), ('atac_seqspec_urls', atac_onlist_method)]:
+            self.single_seqspec_preflight_check(
+                seqspec_column=column, onlist_method=curr_onlist_method)
 
     def get_taxa_and_subpool_info(self):
         """Add sample taxa and sample accession as the subpool ID. Assumption is that one pipeline run, one sample.
@@ -511,7 +535,7 @@ class SingleCellInputBuilder:
         self.data['analysis_set_acc'] = self.analysis_set_acc
         # Get seqfile URLs
         self.get_seqfile_uris_and_seqspec_by_assays_and_runs()
-        self.seqspec_preflight_check_and_generation()
+        self.seqspec_preflight_check()
         self.data['atac_seqspec_urls'] = list(self.data['atac_seqspec_urls'])
         self.data['rna_seqspec_urls'] = list(self.data['rna_seqspec_urls'])
         self.get_taxa_and_subpool_info()
