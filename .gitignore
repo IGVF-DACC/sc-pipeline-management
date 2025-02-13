@@ -12,3 +12,5 @@ src/igvf_terra_api_playground.ipynb
 src/DACC_tester_from_sandbox_2_merged_postres.tsv
 src/sc-pipeline_sandbox.ipynb
 temp/
+Run_logs/
+final_barcode_list/
