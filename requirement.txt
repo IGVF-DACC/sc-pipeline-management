@@ -51,7 +51,7 @@ httplib2==0.22.0
 httpx==0.27.2
 identify==2.6.5
 idna==3.10
-igvf-client==65.0.0
+igvf_client @ git+https://github.com/IGVF-DACC/igvf-python-client.git@088b33c4b84daade3321b129d2ea9e0535e7eb5b#egg=igvf_client
 igvf-utils @ git+https://github.com/IGVF-DACC/igvf_utils.git
 inflection==0.5.1
 ipykernel==6.29.5
