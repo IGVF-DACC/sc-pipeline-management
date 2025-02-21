@@ -29,8 +29,8 @@ def get_igvf_auth_and_api(igvf_site: str = 'sandbox'):
     return IgvfApi(client)
 
 
-def get_igvf_utils_connection(igvf_utils_mode: str = 'sandbox'):
-    return Connection(igvf_mode=igvf_utils_mode, submission=True)
+def get_igvf_utils_connection(igvf_utils_mode: str = 'sandbox', submission_mode: bool = False):
+    return Connection(igvf_mode=igvf_utils_mode, submission=submission_mode)
 
 
 def calculate_gsutil_hash(file_path: str):
@@ -84,7 +84,8 @@ def upload_portal_input_tsv_to_terra(terra_namespace: str, terra_workspace: str,
     input_table_upload = fapi.upload_entities(namespace=terra_namespace,
                                               workspace=terra_workspace,
                                               entity_data=portal_input_table_as_string,
-                                              model='flexible'  # Firecloud mode just seems failing
+                                              model='flexible',
+                                              delete_empty=False
                                               )
     if verbose:
         print(dumper.dump(input_table_upload))

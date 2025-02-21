@@ -16,3 +16,7 @@ Run_logs/
 final_barcode_list/
 code_draft.py
 refactor_portal_to_terra.py
+final_barcode_list/
+temp/
+Run_logs/
+report_tables/
