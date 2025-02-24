@@ -16,7 +16,7 @@ def get_parser():
                         help="""Terra workspace name for the pipeline platform.""")
     parser.add_argument('--terra_etype', type=str,
                         help="""Terra eType name for the pipeline data table.""")
-    parser.add_argument('--upload_file', type=bool,
+    parser.add_argument('--upload_file', action='store_true',
                         help="""If True, upload the file to the portal.""")
     parser.add_argument('--output_dir', type=str,
                         help="""Path to the output directory.""")
