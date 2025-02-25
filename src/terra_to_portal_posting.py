@@ -13,8 +13,7 @@ import dataclasses
 
 
 # TODO:
-# 1) Figure out how to post documents from non-local options (likely need to work from a Google container)
-# 2) Build in some filtering or quality check if a pipeline run fails, so there is no file to post.
+# 1) Build in some filtering or quality check if a pipeline run fails, so there is no file to post.
 
 
 # NOTE: File aliases will just be analysis set accession + column header name
@@ -218,67 +217,11 @@ def single_post_to_portal(igvf_data_payload: dict, igvf_utils_api, upload_file: 
         igvf_data_payload).properties
     stdout = igvf_utils_api.post(
         igvf_data_payload, upload_file=upload_file, return_original_status_code=True)
-    return stdout[0]['accession']
+    # NOTE: Some POSTs will not have accessions, so UUID is probably the best to use.
+    return stdout[0]['uuid']
 
-
-# # Post documents to the portal
-# # TODO: needs to figure out how to post documents as it is only for local files
-# def post_single_document(terra_data_record: pd.Series, col_header: str, curr_description: str, lab: str, award: str, igvf_utils_api, upload_file: bool) -> tuple:
-#     """_summary_
-
-#     Args:
-#         terra_data_record (pd.Series): _description_
-#         col_header (str): _description_
-#         curr_description (str): _description_
-#         lab (str): _description_
-#         award (str): _description_
-#         igvf_utils_api (_type_): _description_
-#         upload_file (bool): _description_
-
-#     Returns:
-#         tuple: _description_
-#     """
-#     curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(
-#         terra_data_record=terra_data_record, col_name=col_header, lab=lab)
-#     if str(curr_gs_cloud_link).startswith('gs://'):
-#         curr_doc_payload = dict(lab=lab, award=award,
-#                                 aliases=[curr_file_alias],
-#                                 attachment={'path': curr_gs_cloud_link},
-#                                 document_type='quality control report',
-#                                 description=curr_description
-#                                 )
-#         logging.info(f'Posting {curr_file_alias} to the portal.')
-#         curr_post_res, curr_post_status = single_post_to_portal(
-#             igvf_data_payload=curr_doc_payload, igvf_utils_api=igvf_utils_api, upload_file=upload_file)
-#         return col_header, curr_post_res, curr_post_status
-#     else:
-#         return col_header, 'POST failed', 'File path is not a gs cloud link.'
-
-
-# def post_all_documents_to_portal(terra_data_record: pd.Series, lab: str, award: str, igvf_utils_api, upload_file: bool) -> dict:
-#     """_summary_
-
-#     Args:
-#         terra_data_record (pd.Series): _description_
-#         lab (str): _description_
-#         award (str): _description_
-#         igvf_utils_api (_type_): _description_
-#         upload_file (bool): _description_
-
-#     Returns:
-#         dict: _description_
-#     """
-#     curr_post_summary = {}
-#     for (col_header, _curr_file_format, curr_description) in TERRA_OUTPUT_TABLE_COLUMN_TYPES['document']:
-#         if terra_data_record[col_header]:
-#             col_header, curr_post_res, curr_post_status = post_single_document(
-#                 terra_data_record, col_header, curr_description, lab, award, igvf_utils_api, upload_file)
-#             curr_post_summary[col_header] = [curr_post_res, curr_post_status]
-#     return curr_post_summary
 
 # Posting RNA data to the portal
-
-
 def single_tabular_file_post(terra_data_record: pd.Series, col_header: str, curr_file_format: str, curr_description: str, lab: str, award: str, curr_assembly: str, igvf_utils_api, upload_file: bool) -> tuple:
     """Post a single tabular file (for RNA output) to the portal.
 
@@ -592,14 +535,6 @@ def post_all_data_from_one_run(terra_data_record: pd.Series, igvf_api, igvf_util
                                                      igvf_utils_api=igvf_utils_api,
                                                      upload_file=upload_file
                                                      )
-    # TODO: Post all relevaent documents
-    # document_output_post_log = post_all_documents_to_portal(terra_data_record=terra_data_record,
-    #                                                         lab=pipeline_data_lab,
-    #                                                         award=pipeline_data_award,
-    #                                                         igvf_utils_api=igvf_utils_api,
-    #                                                         upload_file=upload_file
-    #                                                         )
-    # output_post_log.update(document_output_post_log)
     return RunResult(
         analysis_set_acc=terra_data_record['analysis_set_acc'],
         post_results=post_results,
