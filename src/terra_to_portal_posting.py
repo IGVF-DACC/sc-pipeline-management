@@ -253,7 +253,7 @@ def single_post_to_portal(igvf_data_payload: dict, igvf_utils_api, upload_file: 
 
 
 # Posting RNA data to the portal
-def single_tabular_file_post(terra_data_record: pd.Series, col_header: str, curr_file_format: str, curr_description: str, lab: str, award: str, curr_assembly: str, igvf_utils_api, upload_file: bool) -> tuple:
+def post_single_matrix_file(terra_data_record: pd.Series, col_header: str, curr_file_format: str, curr_description: str, lab: str, award: str, curr_assembly: str, igvf_utils_api, upload_file: bool) -> tuple:
     """Post a single tabular file (for RNA output) to the portal.
 
     Args:
@@ -322,7 +322,7 @@ def post_all_rna_data_to_portal(terra_data_record: pd.Series, lab: str, award: s
     """
     curr_assembly = GENOME_ASSEMBLY_INFO[terra_data_record['Genome']]
     with multiprocessing.Pool() as pool:
-        results = pool.starmap(partial(single_tabular_file_post, terra_data_record, lab=lab, award=award, curr_assembly=curr_assembly, igvf_utils_api=igvf_utils_api, upload_file=upload_file),
+        results = pool.starmap(partial(post_single_matrix_file, terra_data_record, lab=lab, award=award, curr_assembly=curr_assembly, igvf_utils_api=igvf_utils_api, upload_file=upload_file),
                                [(col_header, curr_file_format, curr_description) for col_header, curr_file_format, curr_description in TERRA_OUTPUT_TABLE_COLUMN_TYPES['matrix_file']])
     return results
 
