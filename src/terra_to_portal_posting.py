@@ -1,19 +1,18 @@
-import igvf_utils as iu
-from igvf_utils.connection import Connection
-from pathlib import Path
 import pandas as pd
 import igvf_and_terra_api_tools as api_tools
 import logging
 import multiprocessing
 from functools import partial
 import datetime
-import igvf_utils.exceptions as iu_exceptions
 import os
 import dataclasses
+import json
 
 
 # TODO:
-# 1) Build in some filtering or quality check if a pipeline run fails, so there is no file to post.
+# 1) Finish analysis_step_version
+# 2) Finish QC metric posting (need sample files)
+# 3) Figure out how to resume/fix bad post
 
 
 # NOTE: File aliases will just be analysis set accession + column header name
@@ -22,23 +21,11 @@ import dataclasses
 TERRA_OUTPUT_TABLE_COLUMN_TYPES = {
     # ATAC
     'alignment_file': [('atac_bam', 'bam', 'Raw Aligned bam file from Chromap')],
-    'document': [('atac_bam_log', 'txt', 'Raw Log file from aligner'),
-                 ('atac_chromap_barcode_metadata', 'tsv',
-                  'Raw Per barcode alignment statistics file from Chromap'),
-                 ('atac_snapatac2_barcode_metadata', 'tsv',
-                  'Filtered Per barcode statistics file from SnapATAC2'),
-                 ('csv_summary', 'csv', 'Filtered CSV summary report'),
-                 ('html_summary', 'html', 'Filtered HTML summary report'),
-                 ('joint_barcode_metadata', 'csv',
-                  'Filtered Joint per barcode statistics file'),
-                 ('rna_barcode_metadata', 'tsv',
-                  'Raw Per barcode alignment statistics file'),
-                 ('rna_log', 'txt', 'Raw Log file from kb')
-                 ],
     # ATAC
     'index_file': [('atac_filter_fragments_index', 'tbi', 'Raw Fragment file index from Chromap')],
     # ATAC
     'tabular_file': [('atac_filter_fragments', 'tsv', 'Raw Fragment file from Chromap')],
+    # RNA
     'matrix_file': [('rna_aggregated_counts_h5ad', 'h5ad', 'Raw Aggregated(Ambiguous+Spliced+Unspliced) count matrix in h5ad format'),
                     ('rna_mtx_tar', 'tar',
                      'Raw Tarball containing four separated count matrices in mtx format: Spliced, Unspliced, Ambiguous, and Total'),
@@ -67,6 +54,30 @@ GENOME_REFERENCE_FILES = {'GRCh38': {'rna': ['/reference-files/TSTFI89593580/'],
                                      }
                           }
 
+# Analysis step versions
+ANALYSIS_STEP_VERSIONS = {'atac': 'UUID atac',
+                          'rna': 'UUID RNAseq'
+                          }
+
+# QC objects conversion
+KB_QC_TO_PORTAL_MAP = {'numRecords': 'n_records',
+                       'numReads': 'n_reads',
+                       'numBarcodes': 'n_barcodes',
+                       'medianReadsPerBarcode': 'median_reads_per_barcode',
+                       'meanReadsPerBarcode': 'mean_reads_per_barcode',
+                       'numUMIs': 'total_umis',
+                       'numBarcodeUMIs': 'n_barcode_umis',
+                       'medianUMIsPerBarcode': 'median_umis_per_barcode',
+                       'meanUMIsPerBarcode': 'mean_umis_per_barcode',
+                       'gtRecords': 'gt_records',
+                       'numBarcodesOnOnlist': 'numBarcodesOnOnlist',
+                       'percentageBarcodesOnOnlist': 'percentageBarcodesOnOnlist',
+                       'numReadsOnOnlist': 'numReadsOnOnlist',
+                       'percentageReadsOnOnlist': 'percentageReadsOnOnlist'
+                       }
+
+CHROMAP_QC_TO_PORTAL_MAP = {'numReads': 'n_reads', }
+
 
 # Define how to return errors
 @dataclasses.dataclass(frozen=True)
@@ -94,6 +105,23 @@ class RunResult:
     analysis_set_acc: str
     post_results: list[PostResult]
     finish_time: str
+
+
+def get_accessions_from_post_results(post_results: list) -> list:
+    """Get accessions from post results.
+
+    Args:
+        post_results (list): The POST results
+    Returns:
+        list: A list of accessions
+    """
+    accessions = [res.accession for res in post_results if not res.Description(
+    ).startswith('POST fail')]
+    if all(accession is None for accession in accessions):
+        raise Exception('No accession to link to a QC metric.')
+    # NOTE: If one of a list is None, it means one POST failed. Should let all others plus QC post.
+    else:
+        return accessions
 
 
 # Helper util functions
@@ -218,7 +246,10 @@ def single_post_to_portal(igvf_data_payload: dict, igvf_utils_api, upload_file: 
     stdout = igvf_utils_api.post(
         igvf_data_payload, upload_file=upload_file, return_original_status_code=True)
     # NOTE: Some POSTs will not have accessions, so UUID is probably the best to use.
-    return stdout[0]['uuid']
+    if 'accession' in stdout[0]:
+        return stdout[0]['accession']
+    else:
+        return stdout[0]['uuid']
 
 
 # Posting RNA data to the portal
@@ -495,6 +526,75 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
     return curr_post_summary
 
 
+def read_json_file(json_file_path: str) -> dict:
+    """Read a JSON file and return its content as a dictionary.
+    Args:
+        json_file_path (str): The path to the JSON file.
+    Returns:
+        dict: The content of the JSON file as a dictionary.
+    """
+    with open(json_file_path, 'r') as file:
+        return json.load(file)
+
+
+# NOTE: Cannot post without analysis_step_version
+def convert_json_to_portal_qc_payload(qc_json: dict, json_remapping_ref: dict, qc_obj_type: str, qc_of_file_accs: list, lab: str, award: str, aliases: list, analysis_step_version: str) -> dict:
+    portal_qc_payload = dict(_profile=qc_obj_type,
+                             quality_metric_of=qc_of_file_accs,
+                             lab=lab,
+                             award=award,
+                             aliases=aliases,
+                             analysis_step_version=analysis_step_version
+                             )
+    for key, value in qc_json.items():
+        portal_qc_payload[json_remapping_ref[key]] = value
+    return portal_qc_payload
+
+
+def post_single_qc_metric_to_portal(terra_data_record: pd.Series, col_header: str, json_remapping_ref: dict, qc_obj_type: str, qc_of_file_accs: list, lab: str, award: str, analysis_step_version: str, igvf_utils_api) -> PostResult:
+    """Post a single QC metric to the portal.
+
+    Args:
+        terra_data_record (pd.Series): One Terra pipeline (i.e., one row in the data table)
+        col_header (str): A data table column header, which is the qc file name
+        json_remapping_ref (dict): The JSON remapping reference
+        qc_obj_type (str): The QC object type
+        qc_of_file_accs (list): The QC file accessions
+        lab (str): The data submitter lab
+        award (str): The data submitter lab's award
+        analysis_step_version (str): The analysis step version
+        igvf_utils_api (_type_): IGVF python client api
+
+    Returns:
+        PostResult: The POST result
+    """
+    try:
+        qc_aliases = [
+            f'{lab.split("/")[-2]}:{terra_data_record["analysis_set_acc"]}_{qc_obj_type}_uniform-pipeline']
+        # TODO: Need a ref for qc_header
+        curr_gs_cloud_link = terra_data_record[col_header]
+        if not str(curr_gs_cloud_link).startswith('gs://'):
+            raise Exception('File path is not a gs cloud link.')
+        qc_json_parsed = read_json_file(json_file_path=curr_gs_cloud_link)
+        qc_payload = convert_json_to_portal_qc_payload(qc_json=qc_json_parsed,
+                                                       json_remapping_ref=json_remapping_ref,
+                                                       qc_obj_type=qc_obj_type,
+                                                       qc_of_file_accs=qc_of_file_accs,
+                                                       lab=lab,
+                                                       award=award,
+                                                       aliases=qc_aliases,
+                                                       analysis_step_version=analysis_step_version
+                                                       )
+        # TODO: May need to build in codes for uploading attachment
+        curr_post_res = single_post_to_portal(igvf_data_payload=qc_payload,
+                                              igvf_utils_api=igvf_utils_api,
+                                              upload_file=False
+                                              )
+        return PostResult.Success(col_header=col_header, accession=curr_post_res)
+    except Exception as e:
+        return PostResult.Failure(col_header=col_header, error=e)
+
+
 # Full data posting from a single pipeline run
 def post_all_data_from_one_run(terra_data_record: pd.Series, igvf_api, igvf_utils_api, upload_file: bool) -> dict:
     """Post all single cell uniform pipeline output to the portal from Terra.
@@ -518,6 +618,7 @@ def post_all_data_from_one_run(terra_data_record: pd.Series, igvf_api, igvf_util
     # Get lab and award
     pipeline_data_award, pipeline_data_lab = get_award_and_lab(
         terra_data_record=terra_data_record, igvf_api=igvf_api)
+    # TODO: May need to assign a var for each post group, so QC can have reference
     # If RNAseq results are present, post them
     if 'RNAseq' in pipeline_run_output:
         post_results += post_all_rna_data_to_portal(terra_data_record=terra_data_record,
