@@ -82,7 +82,8 @@ portal2terra_transfer.save_pipeline_input_table(pipeline_input_table=portal_to_t
 portal_to_terra_entity_type = 'DACC_single_cell_run_1'
 api_tools.upload_portal_input_tsv_to_terra(terra_namespace=terra_namespace,
                                             terra_workspace=terra_workspace,
-                                            terra_etype=portal_to_terra_entity_type, porta_input_table=portal_to_terra_input_table,
+                                            terra_etype=portal_to_terra_entity_type,
+                                            porta_input_table=portal_to_terra_input_table,
                                             verbose=True
                                             )
 ```
@@ -123,12 +124,19 @@ terra_to_portal_post_datatable = api_tools.get_terra_tsv_data_table(terra_namesp
                                                                    )
 
 # Post all rows in the data table to IGVF portal
-posting_all_data_report = terra2portal_transfer.add_post_status_summary_to_output_data_table(full_terra_data_table=terra_to_portal_post_datatable, igvf_api=igvf_api_sandbox, igvf_utils_api=iu_conn_sandbox, upload_file=True)
+# Run all posting jobs
+terra_to_portal_post_runs = terra2portal_transfer.post_all_successful_runs(igvf_api=igvf_api_sandbox, igvf_utils_api=iu_conn_sandbox, upload_file=False, full_terra_data_table=terra_to_portal_post_datatable)
+
+# Get the full post success summary
+terra_to_portal_post_summary = terra2portal_transfer.summarize_post_status(post_results=terra_to_portal_post_runs)
+
+# Update the original output table with brief post summary
+terra_to_portal_post_summary = terra2portal_transfer.add_post_status_summary_to_output_data_table(full_terra_data_table=terra_to_portal_post_datatable, post_status_df=terra_to_portal_post_summary)
 
 # Optional, if want to output the post results table locally
 terra2portal_transfer.save_pipeline_postres_table(pipeline_postres_table=posting_all_data_report, output_dir='./')
 
-# Upload the run results to Terra
+# Optional, upload the run results to Terra
 api_tools.upload_output_post_res_to_terra(terra_namespace=terra_namespace,
                                           terra_workspace=terra_workspace,
                                           terra_etype=terra_to_portal_postres_etype,
