@@ -189,40 +189,45 @@ def get_seqspec_hrefs(seqspec_ids: list[str], igvf_api) -> set:
     return seqspec_urls
 
 
-def get_onlist_method(measurement_set_ids: list, igvf_api) -> str:
+def get_onlist_method(measurement_set_accs: list, igvf_api) -> str:
     """Get the onlist method of the measurement set items.
 
     Args:
-        measurement_set_ids (list): _description_
+        measurement_set_accs (list): _description_
 
     Returns:
         str: onlist method
     """
     curr_onlist_methods = set()
-    for measet_id in measurement_set_ids:
-        curr_measet_item = igvf_api.get_by_id(measet_id).actual_instance
+    for measet_acc in measurement_set_accs:
+        curr_measet_item = igvf_api.measurement_sets(
+            accession=[measet_acc]).graph[0]
         curr_onlist_methods.add(curr_measet_item.onlist_method)
     # TODO: Delete this once the audit is up on the portal
-    if len(curr_onlist_methods) != 1:
-        raise BadDataException(
-            f'Error: Measurement sets of the same assay term have different onlist methods. {measurement_set_ids}')
+    # if len(curr_onlist_methods) != 1:
+    #     raise BadDataException(
+    #         f'Error: Measurement sets of the same assay term have different onlist methods. {measurement_set_accs}')
     return list(curr_onlist_methods)[0]
 
 
-def get_onlist_files_from_measet(measurement_set_ids: list, igvf_api) -> list:
+def get_onlist_files_from_measet(measurement_set_accs: list, igvf_api) -> list:
     """Get the onlist files from the measurement sets.
 
     Args:
-        measurement_set_ids (list): _description_
+        measurement_set_accs (list): _description_
 
     Returns:
-        list: _description_
+        list: ['/tabular-files/IGVFxxxxx', '/tabular-files/IGVFxxxxx']
     """
-    curr_onlist_files = []
-    for measet_id in measurement_set_ids:
-        curr_measet_item = igvf_api.get_by_id(measet_id).actual_instance
-        curr_onlist_files.extend(curr_measet_item.onlist_files)
-    return curr_onlist_files
+    onlist_file_urls = []
+    for measet_acc in measurement_set_accs:
+        curr_measet_item = igvf_api.measurement_sets(measet_acc).graph[0]
+        for onlist_file_id in curr_measet_item.onlist_files:
+            onlist_file_item = igvf_api.get_by_id(
+                onlist_file_id).actual_instance
+            onlist_file_urls.append(
+                construct_full_href_url(onlist_file_item.href))
+    return onlist_file_urls
     # TODO: Delete this once the audit is up on the portal
     # if not all(set(sublist) == set(curr_onlist_files[0]) for sublist in curr_onlist_files):
     #     raise BadDataException(
@@ -240,6 +245,8 @@ def download_file_via_https(igvf_portal_href_url: str, output_dir: str = './temp
     Returns:
         str: _description_
     """
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
     username = os.getenv('IGVF_API_KEY')
     password = os.getenv('IGVF_SECRET_KEY')
     session = requests.Session()
@@ -322,7 +329,7 @@ def seqspec_onlist_safetychk_and_get(seqspec_file_paths: list, assay_type: str, 
         # If the onlist files are different from the portal metadata, return an error message
         if set(curr_onlist_files) != set(measet_onlist_files):
             raise BadDataException(
-                'Error: Seqspec onlist files are different from the measurement set onlist files.')
+                f'Error: Seqspec onlist files are different from the {assay_type} measurement set onlist files.')
 
     # If there are multiple onlist files, return error if the onlist method is no combination.
     if (len(curr_onlist_files) > 1) and (onlist_method == 'no combination'):
@@ -410,10 +417,10 @@ class SingleCellInputBuilder:
                      'atac_barcode': [],
                      'rna_read1': [],
                      'rna_read2': [],
-                     'atac_barcode_inclusion_list': '',  # TODO: Add codes for running seqspec
-                     'atac_read_format': '',
-                     'rna_barcode_inclusion_list': '',
-                     'rna_read_format': '',
+                     'atac_barcode_inclusion_list': None,  # TODO: Add codes for running seqspec
+                     'atac_read_format': None,
+                     'rna_barcode_inclusion_list': None,
+                     'rna_read_format': None,
                      'onlist_mapping': None,
                      'possible_errors': []
                      }
@@ -481,7 +488,7 @@ class SingleCellInputBuilder:
             self.seqfile_urls_for_one_assay(
                 measet_items=measet_items, assay_type=assay_type)
 
-    def single_seqspec_preflight_check(self, seqspec_column: str, onlist_method: str, measurement_set_ids: list):
+    def single_seqspec_preflight_check(self, seqspec_column: str, onlist_method: str, measurement_set_accs: list):
         """Check on set of seqspec URLs for the same assay type. If they are all the same, download them and generate the seqspec index and final barcode inclusion list.
 
         Args:
@@ -514,12 +521,16 @@ class SingleCellInputBuilder:
         # Preflight onlist check and generation
         try:
             curr_measet_onlist_files = get_onlist_files_from_measet(
-                measurement_set_ids=measurement_set_ids, igvf_api=self.igvf_api)
+                measurement_set_accs=measurement_set_accs, igvf_api=self.igvf_api)
         except BadDataException as e:
             self.data['possible_errors'].append(str(e))
             return
         try:
-            curr_inclusion_list_path = f'./final_barcode_list/{self.analysis_set_acc}_{curr_assay_type}_final_barcode_inclusion_list.txt'
+            final_inclusion_list_dir = 'final_barcode_list'
+            if not os.path.exists(final_inclusion_list_dir):
+                os.makedirs(final_inclusion_list_dir)
+            curr_inclusion_list_path = os.path.join(
+                final_inclusion_list_dir, f'{self.analysis_set_acc}_{curr_assay_type}_final_barcode_inclusion_list.txt')
             curr_seqspec_onlist_output = seqspec_onlist_safetychk_and_get(
                 seqspec_file_paths=curr_seqspec_file_paths, assay_type=curr_assay_type, measet_onlist_files=curr_measet_onlist_files,
                 onlist_method=onlist_method, final_inclusion_list_path=curr_inclusion_list_path)
@@ -534,9 +545,9 @@ class SingleCellInputBuilder:
             if not curr_measet_ids:
                 continue
             onlist_method = get_onlist_method(
-                measurement_set_ids=curr_measet_ids, igvf_api=self.igvf_api)
+                measurement_set_accs=curr_measet_ids, igvf_api=self.igvf_api)
             self.single_seqspec_preflight_check(
-                seqspec_column=column, onlist_method=onlist_method, measurement_set_ids=curr_measet_ids)
+                seqspec_column=column, onlist_method=onlist_method, measurement_set_accs=curr_measet_ids)
 
     def get_taxa_and_subpool_info(self):
         """Add sample taxa and sample accession as the subpool ID. Assumption is that one pipeline run, one sample.
