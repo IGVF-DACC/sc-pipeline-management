@@ -200,13 +200,9 @@ def get_onlist_method(measurement_set_accs: list, igvf_api) -> str:
     """
     curr_onlist_methods = set()
     for measet_acc in measurement_set_accs:
-        curr_measet_item = igvf_api.measurement_sets(
-            accession=[measet_acc]).graph[0]
+        curr_measet_item = igvf_api.get_by_id(
+            f'/measurement-sets/{measet_acc}').actual_instance
         curr_onlist_methods.add(curr_measet_item.onlist_method)
-    # TODO: Delete this once the audit is up on the portal
-    # if len(curr_onlist_methods) != 1:
-    #     raise BadDataException(
-    #         f'Error: Measurement sets of the same assay term have different onlist methods. {measurement_set_accs}')
     return list(curr_onlist_methods)[0]
 
 
@@ -217,22 +213,18 @@ def get_onlist_files_from_measet(measurement_set_accs: list, igvf_api) -> list:
         measurement_set_accs (list): _description_
 
     Returns:
-        list: ['/tabular-files/IGVFxxxxx', '/tabular-files/IGVFxxxxx']
+        list: [onlist file URLs]
     """
     onlist_file_urls = []
     for measet_acc in measurement_set_accs:
-        curr_measet_item = igvf_api.measurement_sets(measet_acc).graph[0]
+        curr_measet_item = igvf_api.get_by_id(
+            f'/measurement-sets/{measet_acc}').actual_instance
         for onlist_file_id in curr_measet_item.onlist_files:
             onlist_file_item = igvf_api.get_by_id(
                 onlist_file_id).actual_instance
             onlist_file_urls.append(
                 construct_full_href_url(onlist_file_item.href))
     return onlist_file_urls
-    # TODO: Delete this once the audit is up on the portal
-    # if not all(set(sublist) == set(curr_onlist_files[0]) for sublist in curr_onlist_files):
-    #     raise BadDataException(
-    #         'Error: Measurement sets of the same assay term have different onlist files.')
-    # return sorted(curr_onlist_files)
 
 
 def download_file_via_https(igvf_portal_href_url: str, output_dir: str = './temp') -> str:
