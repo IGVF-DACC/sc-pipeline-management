@@ -10,10 +10,25 @@ from igvf_utils.connection import Connection
 import os
 
 
-from sc_pipe_management.portal_to_terra_input_from_anaset import mod_input_table_for_terra
-
-
 fapi._set_session()
+
+
+# API keys for IGVF portal (staging uses a snapshot of production)
+API_KEYS_BY_SITES = {
+    'prod': {'public': 'IGVF_API_KEY_PROD', 'secret': 'IGVF_SECRET_KEY_PROD'},
+    'sandbox': {'public': 'IGVF_API_KEY_SANDBOX', 'secret': 'IGVF_SECRET_KEY_SANDBOX'},
+    'staging': {'public': 'IGVF_API_KEY_PROD', 'secret': 'IGVF_SECRET_KEY_PROD'}
+}
+
+# If somehow the above keys are not set, use the backup keys
+BACKUP_API_KEYS = {'public': 'IGVF_API_KEY', 'secret': 'IGVF_SECRET_KEY'}
+
+# URLs for IGVF portal endpoints
+SITE_URLS_BY_ENDPOINTS = {
+    'prod': 'https://api.data.igvf.org',
+    'sandbox': 'https://api.sandbox.igvf.org',
+    'staging': 'https://api.staging.igvf.org'
+}
 
 
 def set_up_api_keys(igvf_endpoint: str = 'sandbox') -> dict:
@@ -25,26 +40,20 @@ def set_up_api_keys(igvf_endpoint: str = 'sandbox') -> dict:
     Returns:
         dict: A dictionary containing the public and secret API keys.
     """
-    api_keys_by_sites = {
-        'production': {'public': 'IGVF_API_KEY_PROD', 'secret': 'IGVF_SECRET_KEY_PROD'},
-        'sandbox': {'public': 'IGVF_API_KEY_SANDBOX', 'secret': 'IGVF_SECRET_KEY_SANDBOX'}
-    }
-    backup_api_keys = {'public': 'IGVF_API_KEY', 'secret': 'IGVF_SECRET_KEY'}
-
     api_keys = {}
     # If any of the 2 keys are missing from the pair
-    if any(env_key not in os.environ.keys() for env_key in api_keys_by_sites[igvf_endpoint].values()):
+    if any(env_key not in os.environ.keys() for env_key in API_KEYS_BY_SITES[igvf_endpoint].values()):
         # If no backup generic IGVF API keys are set, raise an exception
-        if any(env_key not in os.environ.keys() for env_key in backup_api_keys.values()):
+        if any(env_key not in os.environ.keys() for env_key in BACKUP_API_KEYS.values()):
             raise Exception(
                 'Environment variables for IGVF public and secret keys are not set.')
         # If backup generic IGVF API keys are set, use them
-        elif all(env_key in os.environ.keys() for env_key in backup_api_keys.values()):
-            for purpose, env_key in backup_api_keys.items():
+        elif all(env_key in os.environ.keys() for env_key in BACKUP_API_KEYS.values()):
+            for purpose, env_key in BACKUP_API_KEYS.items():
                 api_keys[purpose] = os.environ[env_key]
     # If both keys are in the environment variables, use them
-    elif all(env_key in os.environ.keys() for env_key in api_keys_by_sites[igvf_endpoint].values()):
-        for purpose, env_key in api_keys_by_sites[igvf_endpoint].items():
+    elif all(env_key in os.environ.keys() for env_key in API_KEYS_BY_SITES[igvf_endpoint].values()):
+        for purpose, env_key in API_KEYS_BY_SITES[igvf_endpoint].items():
             api_keys[purpose] = os.environ[env_key]
     return api_keys
 
@@ -59,14 +68,10 @@ def get_igvf_client_auth(igvf_api_keys: dict, igvf_site: str = 'sandbox'):
     Returns:
         IgvfApi: An instance of the IgvfApi client.
     """
-    site_urls_by_endpoints = {
-        'production': 'https://api.data.igvf.org',
-        'sandbox': 'https://api.sandbox.igvf.org'
-    }
     config = Configuration(
         access_key=igvf_api_keys['public'],
         secret_access_key=igvf_api_keys['secret'],
-        host=site_urls_by_endpoints[igvf_site],
+        host=SITE_URLS_BY_ENDPOINTS[igvf_site],
     )
     client = ApiClient(config)
     return IgvfApi(client)
@@ -129,23 +134,16 @@ def get_terra_tsv_data_table(terra_namespace: str, terra_workspace: str, terra_e
     return pd.read_csv(io.StringIO(query_response_for_tsv.content.decode('utf-8')), sep='\t')
 
 
-def upload_portal_input_tsv_to_terra(terra_namespace: str, terra_workspace: str, terra_etype: str, portal_input_table: pd.DataFrame, local_barcode_file_dir: str, gs_barcode_list_bucket: str, verbose: bool = False):
+def upload_portal_input_tsv_to_terra(terra_namespace: str, terra_workspace: str, portal_input_table: pd.DataFrame, verbose: bool = False):
     """Reformat input data table to Terra format. Upload this table to Terra workspace with user specified entity type name.
 
     Args:
         terra_namespace (str): DACC_ANVIL
         terra_workspace (str): workspace name
-        terra_etype (str): Terra entity type name
-        portal_input_table (pd.DataFrame): The input table generated from IGVF portal without any modification
-        local_barcode_file_dir (str): Final barcode file directory
-        gs_barcode_list_bucket (str): Where the barcode list files will be on gcloud
+        portal_input_table (pd.DataFrame): The input table generated from IGVF portal ready for Terra upload
         verbose (bool, optional): Whether to show detailed log. Defaults to False.
     """
-    portal_input_table_terra_format = mod_input_table_for_terra(pipeline_input_table=portal_input_table,
-                                                                terra_etype=terra_etype,
-                                                                local_barcode_file_dir=local_barcode_file_dir, gs_barcode_list_bucke=gs_barcode_list_bucket
-                                                                )
-    portal_input_table_as_string = portal_input_table_terra_format.to_csv(
+    portal_input_table_as_string = portal_input_table.to_csv(
         index=True, header=True, sep='\t')
     input_table_upload = fapi.upload_entities(namespace=terra_namespace,
                                               workspace=terra_workspace,

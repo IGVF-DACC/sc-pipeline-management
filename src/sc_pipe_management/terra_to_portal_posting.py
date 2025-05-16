@@ -1,5 +1,5 @@
 import pandas as pd
-import sc_pipe_management.igvf_and_terra_api_tools as api_tools
+import igvf_and_terra_api_tools as api_tools
 import logging
 import multiprocessing
 from functools import partial
@@ -200,24 +200,9 @@ def parse_workflow_uuids_from_gs_path(gs_path: str, gs_path_regex: re.Pattern = 
     matches = re.search(gs_path_regex, gs_path)
     if matches:
         uuids = matches.groups()
-    return '_'.join(uuids)
-
-
-def get_accessions_from_post_results(post_results: list) -> list:
-    """Get accessions from post results.
-
-    Args:
-        post_results (list): The POST results
-    Returns:
-        list: A list of accessions
-    """
-    accessions = [res.accession for res in post_results if not res.Description(
-    ).startswith('POST fail')]
-    if all(accession is None for accession in accessions):
-        raise Exception('No accession to link to a QC metric.')
-    # NOTE: If one of a list is None, it means one POST failed. Should let all others plus QC post.
+        return '_'.join(uuids)
     else:
-        return accessions
+        raise ValueError(f'Unable to parse workflow UUIDs from file GCP path.')
 
 
 def parse_terra_str_list(terra_str_lists: list[str]) -> list:

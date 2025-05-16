@@ -113,30 +113,6 @@ def get_sample_obj(sample_id: str, igvf_api):
     return igvf_api.get_by_id(sample_id).actual_instance
 
 
-def get_sample_taxa(sample_object) -> str:
-    """Get sample taxa from the sample object.
-
-    Args:
-        sample_object (_type_): Sample object
-
-    Returns:
-        str: Homo sapiens, Mus musculus, etc.
-    """
-    return sample_object.taxa
-
-
-def get_sample_accession(sample_object) -> str:
-    """Get sample accession.
-
-    Args:
-        sample_object (_type_): Sample object
-
-    Returns:
-        str: IGVFxxxx
-    """
-    return sample_object.accession
-
-
 # Get analysis set level info
 def get_analysis_set_obj(analysis_set_accessions: list, igvf_api):
     """Get the analysis set object from the IGVF API."""
@@ -765,7 +741,7 @@ class SingleCellInputBuilder:
         for curr_sample_id in curr_sample_ids:
             curr_sample_obj = get_sample_obj(
                 sample_id=curr_sample_id, igvf_api=self.igvf_api)
-            sample_taxa.add(get_sample_taxa(sample_object=curr_sample_obj))
+            sample_taxa.add(curr_sample_obj.taxa)
             sample_subpools.add(curr_sample_obj.accession)
         # Assumption is that one pipeline run, one taxa
         if len(sample_taxa) > 1:

@@ -127,7 +127,7 @@ def test_generate_pipeline_input_table() -> pd.DataFrame:
 
 
 # API tool
-IGVF_ENDPOINT = 'production'  # or 'sandbox'
+IGVF_ENDPOINT = 'prod'  # or 'sandbox'
 IGVF_PROD_API_KEYS = set_up_api_keys(igvf_endpoint=IGVF_ENDPOINT)
 IGVF_PROD_CLIENT_API = get_igvf_client_auth(igvf_api_keys=IGVF_PROD_API_KEYS,
                                             igvf_site=IGVF_ENDPOINT)

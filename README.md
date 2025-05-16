@@ -56,13 +56,13 @@ See `requirement.txt` for package details.
 
 ```bash
 # Output the input data table for Terra to a local path using analysis set IDs from an input string
-python3 src/run_portal_to_terra_input_generation.py --igvf_endpoint=production --input_analysis_set=IGVFDS5316CVFR --terra_etype=pipeline_test_run --local_barcode_file_dir="$(pwd)/final_barcode_list/" --gs_barcode_list_bucket=gs://gs-bucket/final_barcode_list --output_dir="$(pwd)/terra_input_datatables"
+python3 src/run_portal_to_terra_input_generation.py --igvf_endpoint=prod --input_analysis_set=IGVFDS5316CVFR --terra_etype=pipeline_test_run
 
 # Output the input data table for Terra to a local path using a txt file with one analysis file per line
-python3 src/run_portal_to_terra_input_generation.py --igvf_endpoint=production --input_analysis_set_file=/local_dirs/analysis_set_accessions.txt --terra_etype=pipeline_test_run --local_barcode_file_dir="$(pwd)/final_barcode_list/" --gs_barcode_list_bucket=gs://gs-bucket/final_barcode_list --output_dir="$(pwd)/terra_input_datatables"
+python3 src/run_portal_to_terra_input_generation.py --igvf_endpoint=prod --input_analysis_set_file=/local_dirs/analysis_set_accessions.txt --terra_etype=pipeline_test_run
 
 # post terra output data to IGVF portal and output a post result table to a local path
-python3 src/run_terra_to_portal_data_post.py --post_endpoint=production --terra_namespace=DACC_ANVIL --terra_workspace='Playground for IGVF Single-Cell Data Processing' --terra_etype=DACC_single_cell_run_1 --upload_file=True --output_dir="$(pwd)/terra_input_datatables"
+python3 src/run_terra_to_portal_data_post.py --post_endpoint=prod --terra_namespace=DACC_ANVIL --terra_workspace='Playground for IGVF Single-Cell Data Processing' --terra_etype=DACC_single_cell_run_1 --upload_file=True --output_dir="$(pwd)/terra_input_datatables"
 ```
 
 ### Run option 2: via Jupyter Notebook
