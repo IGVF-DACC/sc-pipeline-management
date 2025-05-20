@@ -125,27 +125,32 @@ def main():
         pipeline_input_table=table, output_dir=os.path.join(args.output_dir, args.terra_etype))
     logging.info("Pipeline input table saved to local folder.")
 
-    try:
-        # Upload the pipeline input table to Terra
-        api_tools.upload_portal_input_tsv_to_terra(
-            terra_namespace=args.terra_namespace,
-            terra_workspace=args.terra_workspace,
-            portal_input_table=table,
-            verbose=True
-        )
-        logging.info("Pipeline input table uploaded to Terra.")
+    # If input generation has errors, log a warning and do not upload to Terra
+    if table['possible_errors'].values:
+        logging.warning(
+            'The pipeline input table has possible errors in parameter generation. Will not upload to Terra. Check the locally saved datable for details.')
+    else:
+        try:
+            # Upload the pipeline input table to Terra
+            api_tools.upload_portal_input_tsv_to_terra(
+                terra_namespace=args.terra_namespace,
+                terra_workspace=args.terra_workspace,
+                portal_input_table=table,
+                verbose=True
+            )
+            logging.error("Pipeline input table uploaded to Terra.")
 
-        # Copy barcode files to GCP bucket
-        subprocess.run(
-            ['gcloud', 'storage', 'cp', '-r',
-                args.local_barcode_file_dir, args.gs_barcode_list_bucket],
-            check=True
-        )
-        logging.info("Pipeline barcode files copied to GCP bucket.")
-    except Exception as e:
-        logging.error(str(e))
-        raise Exception(
-            "Error uploading to Terra or copying to GCP bucket: %s" % str(e))
+            # Copy barcode files to GCP bucket
+            subprocess.run(
+                ['gcloud', 'storage', 'cp', '-r',
+                    args.local_barcode_file_dir, args.gs_barcode_list_bucket],
+                check=True
+            )
+            logging.info("Pipeline barcode files copied to GCP bucket.")
+        except Exception as e:
+            logging.error(str(e))
+            raise Exception(
+                "Error uploading to Terra or copying to GCP bucket: %s" % str(e))
 
 
 if __name__ == '__main__':
