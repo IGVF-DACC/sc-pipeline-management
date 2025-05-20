@@ -2,8 +2,16 @@
 
 ## Current status
 
-* Runs in a Jupyter Notebook on local machines
-* Runs in command line via Python script
+* Runs in command line via Python script.
+  * **Pipeline input**: `run_portal_to_terra_input_generation.py` script will perform the following tasks:
+    1. Fetch, generate, and output all the input parameters using a placeholder Analysis Set accession as a TSV file.
+    2. Automatically upload this TSV file onto Terra workspace.
+    3. Automatically upload the generated final barcode inclusion lists onto Terra workspace disk.
+    4. **NOTE**: The starting of the workflow is still manually triggered at this moment on Terra.
+  * **IGVF accessioning**: `run_terra_to_portal_data_post.py` script will perform the following taskss:
+    1. Post and create the data objects for RNAseq data, ATACseq data, and QC metric data to the same placeholder Analysis Set that generated the input parameters.
+    2. Upload the pipeline output files to the associated data objects.
+* Runs in a Jupyter Notebook.
 
 ## Purpose
 
