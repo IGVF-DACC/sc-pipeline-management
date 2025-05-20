@@ -60,7 +60,7 @@ TERRA_OUTPUT_TABLE_COLUMN_TYPES = {
         'rna_kb_output_folder_tar_gz': {
             'file_format': 'tar',
             'description': 'Raw Tarball containing all the matrices, logs, and bus files generated from kb',
-            'content_type': 'comprehensive gene count matrix',
+            'content_type': 'kallisto single cell RNAseq output',
             'file_format_specifications': ['buenrostro-bernstein:igvf-sc-pipeline-matrix-tar-specification',
                                            'igvf:igvf-sc-pipeline-rna-tar-mtx-per-file-specification']
         },
@@ -83,6 +83,7 @@ ACCESSION_HEADERS_BY_ASSAY_TYPES = {'atac': ['atac_read1_accessions', 'atac_read
 GENOME_ASSEMBLY_INFO = {'Homo sapiens': 'GRCh38', 'Mus musculus': 'GRCm39'}
 
 # Analysis step versions
+# TODO: RNA analysis step version will be updated soon to be v1.1.0
 ANALYSIS_STEP_VERSIONS_BY_ASSAY_TYPES = {'atac': 'igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1',
                                          'rna': 'igvf:single-cell-uniform-pipeline-kalliso-bustools-rnaseq-step-v1'
                                          }
@@ -219,6 +220,8 @@ def parse_terra_str_list(terra_str_lists: list[str]) -> list:
         if str(value) == 'nan':
             continue
         if str(value) == '[]':
+            continue
+        if str(value) == '[""]':
             continue
         if str(value).startswith("[") and str(value).endswith("]"):
             parse_list_of_strs.extend([ele.strip("'")
