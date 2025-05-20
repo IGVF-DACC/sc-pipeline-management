@@ -122,7 +122,7 @@ def main():
 
     # Output the table to local folder as a Copy
     portal2terra_transfer.save_pipeline_input_table(
-        pipeline_input_table=table, output_dir=os.path.join(args.output_dir, today))
+        pipeline_input_table=table, output_dir=os.path.join(args.output_dir, args.terra_etype))
     logging.info("Pipeline input table saved to local folder.")
 
     try:
