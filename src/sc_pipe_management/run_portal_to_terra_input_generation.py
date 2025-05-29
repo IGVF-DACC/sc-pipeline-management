@@ -126,7 +126,7 @@ def main():
     logging.info("Pipeline input table saved to local folder.")
 
     # If input generation has errors, log a warning and do not upload to Terra
-    if table['possible_errors'].values:
+    if any(x != 'None' for x in table['possible_errors'].values):
         logging.warning(
             'The pipeline input table has possible errors in parameter generation. Will not upload to Terra. Check the locally saved datable for details.')
     else:
