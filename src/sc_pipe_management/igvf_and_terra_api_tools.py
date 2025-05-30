@@ -1,4 +1,5 @@
 import firecloud.api as fapi
+import firecloud.errors as FireCloudServerError
 import subprocess
 import pandas as pd
 import io
@@ -177,58 +178,34 @@ def upload_output_post_res_to_terra(terra_namespace: str, terra_workspace: str, 
         print(dumper.dump(input_table_upload))
 
 
-def get_terra_workflows_per_submission(terra_namespace: str, terra_workspace: str, submission_id: str) -> dict:
-    """_summary_
+def get_workflow_input_config(terra_namespace: str, terra_workspace: str, submission_id: str, workflow_id: str) -> dict:
+    """Get the workflow input configuration for a given submission and workflow ID in a Terra workspace.
 
     Args:
-        terra_namespace (str): _description_
-        terra_workspace (str): _description_
-        submission_id (str): _description_
+        terra_namespace (str): Terra namespace (e.g., DACC_ANVIL)
+        terra_workspace (str): Terra workspace name
+        submission_id (str): submission ID for the full set of pipeline runs in the Terra workspace
+        workflow_id (str): workflow ID (i.e., the ID per pipeline run)
 
     Raises:
-        Exception: _description_
-        Exception: _description_
-        Exception: _description_
+        FireCloudServerError: If submission ID is not found or if workflow ID is not found in the submission.
+        FireCloudServerError: Workflow input config is not found.
 
     Returns:
-        dict: _description_
+        dict: Workflow input configuration as a dictionary.
     """
-    submission_info_request = fapi.get_submission(
-        namespace=terra_namespace, workspace=terra_workspace, submission_id=submission_id)
-    if submission_info_request.status_code != 200:
-        raise Exception(f'Error fetching submission info: {submission_id}.')
-    submission_info_res = submission_info_request.json()
-    try:
-        all_workflows = submission_info_res.get('workflows', [])
-    except KeyError:
-        raise Exception(f'No workflows found for submission: {submission_id}.')
-    try:
-        trimmed_workflow_ids = {}
-        if all_workflows:
-            for workflow_info in all_workflows:
-                analysis_set_accession = workflow_info.get(
-                    'workflowEntity').get('entityName')
-                trimmed_workflow_ids[analysis_set_accession] = workflow_info.get(
-                    'workflowId')
-        return trimmed_workflow_ids.get('workflows', [])
-    except KeyError:
-        raise Exception(
-            f'Error parsing workflows for submission: {submission_id}. No workflows found.')
-
-
-def get_workflow_input_config(terra_namespace: str, terra_workspace: str, submission_id: str, workflow_id: str) -> dict:
     workflow_data_request = fapi.get_workflow_metadata(namespace=terra_namespace,
                                                        workspace=terra_workspace,
                                                        submission_id=submission_id,
                                                        workflow_id=workflow_id
                                                        )
     if workflow_data_request.status_code != 200:
-        raise Exception(
-            f'Error fetching workflow data: {workflow_id} for submission: {submission_id}.')
+        raise FireCloudServerError(code=workflow_data_request.status_code,
+                                   message=f'Error fetching workflow data: {workflow_id} for submission: {submission_id}.')
     workflow_data_res = workflow_data_request.json()
     try:
         workflow_input_config = workflow_data_res.get('inputs')
         return workflow_input_config
     except KeyError:
-        raise Exception(
-            f'Error parsing workflow input config for workflow: {workflow_id} in submission: {submission_id}. No inputs found.')
+        raise FireCloudServerError(code=workflow_data_request.status_code,
+                                   message=f'Error parsing workflow input config for workflow: {workflow_id} in submission: {submission_id}. No inputs found.')

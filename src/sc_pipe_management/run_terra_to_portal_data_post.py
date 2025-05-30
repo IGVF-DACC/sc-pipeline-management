@@ -63,7 +63,7 @@ def main():
                                                                          igvf_api=igvf_client_api,
                                                                          igvf_utils_api=igvf_utils_api,
                                                                          upload_file=args.upload_file,
-                                                                         output_dir=args.output_dir)
+                                                                         output_root_dir=args.output_dir)
 
     # Summarize into a table
     portal_post_summary = terra2portal_transfer.summarize_post_status(
@@ -73,7 +73,7 @@ def main():
 
     # Save the updated terra table
     terra2portal_transfer.save_pipeline_postres_tables(
-        pipeline_postres_table=portal_post_summary, updated_full_data_table=updated_terra_table, output_dir=args.output_dir)
+        pipeline_postres_table=portal_post_summary, updated_full_data_table=updated_terra_table, output_root_dir=args.output_dir)
 
 
 if __name__ == '__main__':
