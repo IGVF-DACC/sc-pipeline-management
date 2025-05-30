@@ -42,17 +42,28 @@ def main():
                                                          submission_mode=True)
 
     # Set up igvf client connection
-    igvf_client_api = api_tools.get_igvf_client_auth(igvf_api_keys=igvf_api_keys,
-                                                     igvf_site=args.post_endpoint)
+    if args.post_endpoint == 'staging':
+        igvf_client_api = api_tools.get_igvf_client_auth(igvf_api_keys=igvf_api_keys,
+                                                         igvf_site=api_tools.IGVF_STAGING_SITE['staging'])
+    else:
+        igvf_client_api = api_tools.get_igvf_client_auth(igvf_api_keys=igvf_api_keys,
+                                                         igvf_site=args.post_endpoint)
 
     # Refresh firecloud API
     fapi._set_session()
+
+    # Set up local output directory
+    today = datetime.now().strftime("%m%d%Y")
+    if args.output_dir is None:
+        args.output_dir = os.path.join(
+            os.getcwd(), "terra_datatables", "output", today)
 
     # Will return a list of Postres
     portal_post_results = terra2portal_transfer.post_all_successful_runs(full_terra_data_table=terra_table,
                                                                          igvf_api=igvf_client_api,
                                                                          igvf_utils_api=igvf_utils_api,
-                                                                         upload_file=args.upload_file)
+                                                                         upload_file=args.upload_file,
+                                                                         output_dir=args.output_dir)
 
     # Summarize into a table
     portal_post_summary = terra2portal_transfer.summarize_post_status(
@@ -61,10 +72,6 @@ def main():
         full_terra_data_table=terra_table, post_status_df=portal_post_summary)
 
     # Save the updated terra table
-    today = datetime.now().strftime("%m%d%Y")
-    if args.output_dir is None:
-        args.output_dir = os.path.join(
-            os.getcwd(), "terra_datatables", "output", today)
     terra2portal_transfer.save_pipeline_postres_tables(
         pipeline_postres_table=portal_post_summary, updated_full_data_table=updated_terra_table, output_dir=args.output_dir)
 

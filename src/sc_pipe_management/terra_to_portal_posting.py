@@ -12,7 +12,8 @@ from itertools import chain
 import subprocess
 
 
-# TODO:
+# TODO:\
+# fapi._session() can time out, how to handle that?
 # Figure out how to resume/fix bad posts
 
 
@@ -84,13 +85,14 @@ GENOME_ASSEMBLY_INFO = {'Homo sapiens': 'GRCh38', 'Mus musculus': 'GRCm39'}
 
 # Analysis step versions
 # TODO: RNA analysis step version will be updated soon to be v1.1.0
-ANALYSIS_STEP_VERSIONS_BY_ASSAY_TYPES = {'atac': 'igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1',
-                                         'rna': 'igvf:single-cell-uniform-pipeline-kalliso-bustools-rnaseq-step-v1'
+ANALYSIS_STEP_VERSIONS_BY_ASSAY_TYPES = {'atac': 'igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0',
+                                         'rna': 'igvf:single-cell-uniform-pipeline-kalliso-bustools-rnaseq-step-v1.1.0'
                                          }
 
 # QC objects
 # Metadata: Table column names
 # Attachment: keys are portal properties and values are column IDs
+# Metadata: keys are JSON keys, values are portal properties
 TERRA_QC_OUTPUTS = {'rnaseq': {'gene_count': {'metadata': ['rna_kb_library_qc_metrics_json', 'rna_kb_run_info_json'],
                                               'description': 'RNAseq Kallisto Bustools QC metric',
                                               'attachment': {'rnaseq_kb_info': 'rna_kb_parameters_json'},
@@ -105,10 +107,10 @@ TERRA_QC_OUTPUTS = {'rnaseq': {'gene_count': {'metadata': ['rna_kb_library_qc_me
                                                                'medianUMIsPerBarcode': 'median_umis_per_barcode',
                                                                'meanUMIsPerBarcode': 'mean_umis_per_barcode',
                                                                'gtRecords': 'gt_records',
-                                                               'numBarcodesOnOnlist': 'numBarcodesOnOnlist',
-                                                               'percentageBarcodesOnOnlist': 'percentageBarcodesOnOnlist',
-                                                               'numReadsOnOnlist': 'numReadsOnOnlist',
-                                                               'percentageReadsOnOnlist': 'percentageReadsOnOnlist',
+                                                               'numBarcodesOnOnlist': 'num_barcodes_on_onlist',
+                                                               'percentageBarcodesOnOnlist': 'percentage_barcodes_on_onlist',
+                                                               'numReadsOnOnlist': 'num_reads_on_onlist',
+                                                               'percentageReadsOnOnlist': 'percentage_reads_on_onlist',
                                                                'n_targets': 'n_targets',    # starting here is run_info.json
                                                                'n_bootstraps': 'n_bootstraps',
                                                                'n_processed': 'n_processed',
@@ -117,17 +119,17 @@ TERRA_QC_OUTPUTS = {'rnaseq': {'gene_count': {'metadata': ['rna_kb_library_qc_me
                                                                'p_pseudoaligned': 'p_pseudoaligned',
                                                                'p_unique': 'p_unique',
                                                                'index_version': 'index_version',
-                                                               'k-mer length': 'k-mer length'
+                                                               'k-mer length': 'kmer_length'
                                                                }
                                               }
                                },
                     'atacseq': {'alignment': {'metadata': None,
-                                              'description': 'ATACseq chromap QC metric',
+                                              'description': 'ATACseq chromap alignment QC metric',
                                               'attachment': {'atac_bam_summary_stats': 'atac_bam_summary_stats'},
                                               'object_type': 'single_cell_atac_seq_quality_metric'
                                               },
                                 'fragment': {'metadata': ['atac_fragments_metrics'],
-                                             'description': 'ATACseq chromap QC metric',
+                                             'description': 'ATACseq chromap fragments QC metric',
                                              'attachment': {'atac_fragment_summary_stats': 'atac_fragments_barcode_summary',
                                                             'atac_fragments_alignment_stats': 'atac_fragments_alignment_stats',
                                                             },
@@ -158,7 +160,7 @@ IGVF_URL_PATH_REGEX = re.compile(
 
 # GS file path regex
 GS_FILE_PATH_REGEX = re.compile(
-    r'gs://([a-z0-9\-]+)/submissions/final-outputs/([a-z0-9\-]+)/single_cell_pipeline/([a-z0-9\-]+)/.*/.*/([a-z0-9\-]+)/.*')
+    r'gs://([a-z0-9\-]+)/submissions/final-outputs/([a-z0-9\-]+)/single_cell_pipeline/([a-z0-9\-]+)/[a-z\-]+/[a-z\_]+/([a-z0-9\-]+)/.*')
 
 
 # Define how to return errors
@@ -189,11 +191,13 @@ class RunResult:
     finish_time: str
 
 
-def parse_workflow_uuids_from_gs_path(gs_path: str, gs_path_regex: re.Pattern = GS_FILE_PATH_REGEX) -> str:
+def parse_workflow_uuids_from_gs_path(gs_path: str, output_format: str = 'aliases', gs_path_regex: re.Pattern = GS_FILE_PATH_REGEX) -> str | dict:
     """Parse workflow UUID from a gs path.
 
     Args:
         gs_path (str): The gs path to the workflow
+        output_format (str, optional): The output format. Defaults to 'aliases'. Aliases option returns a string of the form submissionID_workflowID_subworkflowID, while ids option returns a dict with submission_id and workflow_id.
+        gs_path_regex (re.Pattern, optional): The regex pattern to match the gs path. Defaults to GS_FILE_PATH_REGEX.
 
     Returns:
         str: gsbucket-submission-workflow-subworkflow
@@ -201,9 +205,13 @@ def parse_workflow_uuids_from_gs_path(gs_path: str, gs_path_regex: re.Pattern = 
     matches = re.search(gs_path_regex, gs_path)
     if matches:
         uuids = matches.groups()
-        return '_'.join(uuids)
+        if output_format == 'aliases':
+            # Return as aliases
+            return '_'.join(uuids)
+        elif output_format == 'ids':
+            return {'submission_id': uuids[1], 'workflow_id': uuids[2]}
     else:
-        raise ValueError(f'Unable to parse workflow UUIDs from file GCP path.')
+        raise ValueError('Unable to parse workflow UUIDs from file GCP path.')
 
 
 def parse_terra_str_list(terra_str_lists: list[str]) -> list:
@@ -341,7 +349,8 @@ def get_gspath_and_alias(terra_data_record: pd.Series, col_name: str, lab: str) 
         tuple: (gs cloud link, portal alias)
     """
     gs_cloud_link = terra_data_record[col_name]
-    terra_uuids = parse_workflow_uuids_from_gs_path(gs_path=gs_cloud_link)
+    terra_uuids = parse_workflow_uuids_from_gs_path(
+        gs_path=gs_cloud_link, output_format='aliases')
     file_alias = f'{lab.split("/")[-2]}:{terra_data_record["analysis_set_acc"]}_{terra_uuids}_{col_name}_uniform-pipeline'
     return (gs_cloud_link, file_alias)
 
@@ -368,6 +377,14 @@ def single_post_to_portal(igvf_data_payload: dict, igvf_utils_api, upload_file: 
         return stdout[0]['accession']
     else:
         return stdout[0]['uuid']
+
+
+def single_patch_to_portal(patching_payload: dict, igvf_utils_api) -> str:
+    try:
+        igvf_utils_api.patch(patching_payload)
+    except Exception as e:
+        logging.error(f'Error patching data object: {e}')
+        raise Exception(f'Error patching data object: {e}')
 
 
 def download_qc_file_from_gcp(gs_file_path: str, downloaded_dir: str) -> str:
@@ -415,7 +432,100 @@ def read_json_file(json_file_paths: str) -> dict:
     return json_dict
 
 
-def post_single_qc_metric_to_portal(terra_data_record: pd.Series, qc_data_info: dict, qc_of_file_accs: list, lab: str, award: str, analysis_step_version: str, qc_prefix: str, igvf_utils_api) -> list[PostResult]:
+def dump_json(input_json: dict, analysis_set_acc: str, output_dir: str = './run_config') -> str:
+    """Save a JSON object to a file in the specified output directory.
+
+    Args:
+        input_json (dict): The JSON object to save (workflow config json)
+        analysis_set_acc (str): Analysis set accession, used to name the output file
+        output_dir (str, optional): Where the file will be saved to. Defaults to './run_config'.
+
+    Returns:
+        str: path to the saved JSON file
+    """
+    file_dir = os.path.join(
+        output_dir, datetime.datetime.now().strftime("%m%d%Y"))
+    if not os.path.exists(file_dir):
+        os.makedirs(file_dir)
+    output_file_path = os.path.join(
+        file_dir, f'{analysis_set_acc}_run_config.json')
+    with open(output_file_path, 'w') as file:
+        json.dump(input_json, file)
+    return output_file_path
+
+
+def post_single_document_to_portal(terra_data_record: pd.Series, lab: str, award: str, terra_namespace: str, terra_workspace: str, igvf_utils_api, output_dir: str = '/igvf/data/') -> list[PostResult]:
+    """Post workflow configuration document to the portal and link it to the analysis set.
+
+    Args:
+        terra_data_record (pd.Series): One Terra pipeline (i.e., one row in the data table)
+        lab (str): The data submitter lab
+        award (str): The data submitter lab's award
+        terra_namespace (str): Terra project namespace, e.g., DACC_ANVIL
+        terra_workspace (str): Terra workspace name, e.g., IGVF Single-Cell Data Processing
+        igvf_utils_api (_type_): igvf utils API client
+        output_dir (str, optional): Where the file will be saved to. Defaults to './run_config'.
+
+    Returns:
+        list[PostResult]: list(PostResult(col_header='workflow_config_document', accession=IGVF UUID, error=error if any))
+    """
+    workflow_config_post_results = []
+    # All about posting the workflow config document
+    try:
+        # NOTE: A bit of hack here to get submission ID (RNA data will always be available)
+        terra_job_ids = parse_workflow_uuids_from_gs_path(
+            gs_path=terra_data_record['rna_kb_h5ad'], output_format='ids')
+        curr_workflow_config = api_tools.get_workflow_input_config(
+            terra_namespace=terra_namespace, terra_workspace=terra_workspace, submission_id=terra_job_ids['submission_id'], workflow_id=terra_job_ids['workflow_id'])
+        # Remove credential file path
+        curr_workflow_config['igvf_credentials'] = 'Google cloud path to a txt file with credentials to access the IGVF data portal.'
+        # Save config to a local file
+        json_output_dir = os.path.join(
+            output_dir, 'workflow_configs', terra_data_record['analysis_set_acc'])
+        local_file_path = dump_json(
+            input_json=curr_workflow_config, analysis_set_acc=terra_data_record['analysis_set_acc'], output_dir=json_output_dir)
+        # Make a document object payload
+        doc_aliases = f"igvf-dacc-processing-pipeline:{'_'.join(terra_job_ids.values())}_pipeline_config"
+        doc_payload = dict(
+            aliases=[
+                f"igvf-dacc-processing-pipeline:{'_'.join(terra_job_ids.values())}_pipeline_config"],
+            lab=lab,
+            award=award,
+            document_type='computational protocol',  # TODO: need a proper enum
+            description='Terra workflow configuration for the single-cell pipeline run',
+            attachment={'path': local_file_path},
+            _profile='document'
+        )
+        # Post the document to the portal
+        curr_post_res = single_post_to_portal(igvf_data_payload=doc_payload,
+                                              igvf_utils_api=igvf_utils_api,
+                                              upload_file=False)
+        workflow_config_post_results.append(PostResult.Success(
+            col_header='workflow_config_document', accession=curr_post_res))
+        # Patch the analysis set with the document accession
+        try:
+            anaset_patching_payload = {
+                'documents': [doc_aliases],
+                igvf_utils_api.IGVFID_KEY: f"/analysis-sets/{terra_data_record['analysis_set_acc']}/",
+                '_profile': 'analysis_set'
+            }
+            single_patch_to_portal(patching_payload=anaset_patching_payload,
+                                   igvf_utils_api=igvf_utils_api)
+            workflow_config_post_results.append(PostResult.Success(
+                col_header='analysis_set_workflow_config_patch', accession=terra_data_record["analysis_set_acc"]))
+        # Log error of patching analysis set with workflow config document
+        except Exception as e:
+            workflow_config_post_results.append(PostResult.Failure(
+                col_header='analysis_set_workflow_config_patch', error=e))
+    # Log error of posting workflow config document
+    except Exception as e:
+        workflow_config_post_results.append(PostResult.Failure(
+            col_header='workflow_config_document', error=e))
+    # Return the post results
+    return workflow_config_post_results
+
+
+def post_single_qc_metric_to_portal(terra_data_record: pd.Series, qc_data_info: dict, qc_of_file_accs: list, lab: str, award: str, analysis_step_version: str, qc_prefix: str, igvf_utils_api, output_dir: str = '/igvf/data/') -> list[PostResult]:
     """Post a single QC metric to the portal.
 
     Args:
@@ -427,6 +537,7 @@ def post_single_qc_metric_to_portal(terra_data_record: pd.Series, qc_data_info: 
         analysis_step_version (str): The analysis step version
         qc_prefix (str): The prefix for the QC object type (fragment, gene count, etc.)
         igvf_utils_api (_type_): IGVF python client api
+        output_dir (str, optional): The output directory to download the QC files to. Defaults to '/igvf/data/'.
 
     Returns:
         PostResult: list(PostResult(col_header=qc_obj_type, accession=..., error=...))
@@ -437,7 +548,9 @@ def post_single_qc_metric_to_portal(terra_data_record: pd.Series, qc_data_info: 
             f'{lab.split("/")[-2]}:{terra_data_record["analysis_set_acc"]}_{qc_data_info["object_type"]}_{qc_prefix}_uniform-pipeline']
         # NOTE: GCP VM persistent disk is /igvf/data
         curr_qc_file_dir = os.path.join(
-            '/', 'igvf', 'data', 'qc_files', terra_data_record['analysis_set_acc'])
+            output_dir, 'qc_metrics', terra_data_record['analysis_set_acc'])
+        if not os.path.exists(curr_qc_file_dir):
+            os.makedirs(curr_qc_file_dir)
         # Base QC object payload
         qc_payload = dict(lab=lab,
                           award=award,
@@ -537,7 +650,7 @@ def post_single_matrix_file(terra_data_record: pd.Series, col_header: str, curr_
         return PostResult.Failure(col_header=col_header, error=e)
 
 
-def post_all_rna_data_to_portal(terra_data_record: pd.Series, lab: str, award: str, igvf_utils_api, upload_file: bool) -> list[PostResult]:
+def post_all_rna_data_to_portal(terra_data_record: pd.Series, lab: str, award: str, igvf_utils_api, upload_file: bool, output_dir: str = '/igvf/data/') -> list[PostResult]:
     """POST all RNA data as matrix files to the portal (H5AD, tarball, and QC metrics).
 
     Args:
@@ -546,6 +659,7 @@ def post_all_rna_data_to_portal(terra_data_record: pd.Series, lab: str, award: s
         award (str): The data submitter lab's award
         igvf_utils_api (_type_): _description_
         upload_file (bool): Whether to upload the file to the portal
+        output_dir (str, optional): The output directory to download the QC files to. Defaults to '/igvf/data/'.
 
     Returns:
         list[PostResult]: list[PostResult], e.g., [PostResult(col_header='rna_kb_output_folder_tar_gz', accession='TSTFI00286528', error=None)]
@@ -596,7 +710,9 @@ def post_all_rna_data_to_portal(terra_data_record: pd.Series, lab: str, award: s
                                                             analysis_step_version=ANALYSIS_STEP_VERSIONS_BY_ASSAY_TYPES[
                                                                 'rna'],
                                                             qc_prefix='gene_count',
-                                                            igvf_utils_api=igvf_utils_api)
+                                                            igvf_utils_api=igvf_utils_api,
+                                                            output_dir=output_dir
+                                                            )
     # Add QC post report
     results.append(qc_metric_post_result)
     return results
@@ -646,7 +762,6 @@ def post_single_alignment_file(terra_data_record: pd.Series, col_header: str, cu
                                       file_set=terra_data_record['analysis_set_acc'],
                                       md5sum=curr_md5sum,
                                       submitted_file_name=curr_gs_cloud_link,
-                                      # TODO: need a proper way to look this up
                                       reference_files=reference_files,
                                       redacted=False,
                                       description=curr_description,
@@ -774,7 +889,7 @@ def post_single_index_file(terra_data_record: pd.Series, col_header: str, curr_f
         return PostResult.Failure(col_header=col_header, error=e)
 
 
-def post_all_atac_alignment_data_to_portal(terra_data_record: pd.Series, lab: str, award: str, curr_assembly: str, curr_ctrl_access: bool, curr_derived_from: list, igvf_utils_api, upload_file: bool) -> list[PostResult]:
+def post_all_atac_alignment_data_to_portal(terra_data_record: pd.Series, lab: str, award: str, curr_assembly: str, curr_ctrl_access: bool, curr_derived_from: list, igvf_utils_api, upload_file: bool, output_dir: str = '/igvf/data/') -> list[PostResult]:
     """Post all ATAC alignment data to the portal (alignment, bam index files, and QC).
 
     Args:
@@ -786,6 +901,7 @@ def post_all_atac_alignment_data_to_portal(terra_data_record: pd.Series, lab: st
         award (str): The data submitter lab's award
         igvf_utils_api (_type_): IGVF utils api
         upload_file (bool): Whether to upload the file to the portal
+        output_dir (str, optional): The output directory to download the QC files to. Defaults to '/igvf/data/'.
 
     Returns:
         list[PostResult]: [PostResult(
@@ -838,14 +954,16 @@ def post_all_atac_alignment_data_to_portal(terra_data_record: pd.Series, lab: st
                                                                    analysis_step_version=ANALYSIS_STEP_VERSIONS_BY_ASSAY_TYPES[
                                                                        'atac'],
                                                                    qc_prefix='alignment',
-                                                                   igvf_utils_api=igvf_utils_api)
+                                                                   igvf_utils_api=igvf_utils_api,
+                                                                   output_dir=output_dir
+                                                                   )
     # Add QC post report
     curr_post_summary.append(alignment_metric_post_result)
     # Return all post res
     return curr_post_summary
 
 
-def post_all_atac_fragment_data_to_portal(terra_data_record: pd.Series, lab: str, award: str, curr_assembly: str, curr_derived_from: list, curr_file_specification: list, igvf_utils_api, upload_file: bool) -> list[PostResult]:
+def post_all_atac_fragment_data_to_portal(terra_data_record: pd.Series, lab: str, award: str, curr_assembly: str, curr_derived_from: list, igvf_utils_api, upload_file: bool, output_dir: str = '/igvf/data/') -> list[PostResult]:
     """Post all ATAC fragment data to the portal (fragment files, index files, and QC).
 
     Args:
@@ -858,6 +976,7 @@ def post_all_atac_fragment_data_to_portal(terra_data_record: pd.Series, lab: str
         igvf_api (_type_): IGVF python client api
         igvf_utils_api (_type_): IGVF utils api
         upload_file (bool): Whether to upload a file or not
+        output_dir (str, optional): The output directory to download the QC files to. Defaults to '/igvf/data/'.
 
     Returns:
         list[PostResult]: [PostResult(
@@ -897,7 +1016,8 @@ def post_all_atac_fragment_data_to_portal(terra_data_record: pd.Series, lab: str
                                                         curr_derived_from=[
                                                             res.Description() for res in curr_post_summary],
                                                         igvf_utils_api=igvf_utils_api,
-                                                        upload_file=upload_file)
+                                                        upload_file=upload_file
+                                                        )
     curr_post_summary.append(fragment_index_file_result)
     # Post Fragment QC
     posted_fragment_accs = [
@@ -910,7 +1030,9 @@ def post_all_atac_fragment_data_to_portal(terra_data_record: pd.Series, lab: str
                                                                   analysis_step_version=ANALYSIS_STEP_VERSIONS_BY_ASSAY_TYPES[
                                                                       'atac'],
                                                                   qc_prefix='fragment',
-                                                                  igvf_utils_api=igvf_utils_api)
+                                                                  igvf_utils_api=igvf_utils_api,
+                                                                  output_dir=output_dir
+                                                                  )
     # Add QC post report
     curr_post_summary.append(fragment_metric_post_result)
     # Return results
@@ -922,7 +1044,7 @@ def execute_partial_function(func):
     return func()
 
 
-def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: str, igvf_api, igvf_utils_api, upload_file: bool) -> list[PostResult]:
+def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: str, igvf_api, igvf_utils_api, upload_file: bool, output_dir: str = '/igvf/data/') -> list[PostResult]:
     """Post all ATAC data to the portal (alignment, fragment, and index files).
 
     Args:
@@ -932,6 +1054,7 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
         igvf_api (_type_): IGVF utils api
         igvf_utils_api (_type_): IGVF python client api
         upload_file (bool): Whether to upload the file to the portal
+        output_dir (str, optional): The output directory to download the QC files to. Defaults to '/igvf/data/'.
 
     Returns:
         list[PostResult]: list[PostResult], e.g., [PostResult(col_header='rna_kb_output_folder_tar_gz', accession='TSTFI00286528', error=None)]
@@ -960,17 +1083,17 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
                 curr_ctrl_access=curr_ctrl_access,
                 curr_derived_from=all_derived_from,
                 igvf_utils_api=igvf_utils_api,
-                upload_file=upload_file),
+                upload_file=upload_file,
+                output_dir=output_dir),
         partial(post_all_atac_fragment_data_to_portal,
                 terra_data_record=terra_data_record,
                 lab=lab,
                 award=award,
                 curr_assembly=curr_assembly,
                 curr_derived_from=all_derived_from,
-                curr_file_specification=TERRA_OUTPUT_TABLE_COLUMN_TYPES[
-                    'tabular_file']['atac_fragments'],
                 igvf_utils_api=igvf_utils_api,
-                upload_file=upload_file)
+                upload_file=upload_file,
+                output_dir=output_dir)
     ]
 
     # Use multiprocessing to execute tasks
@@ -983,7 +1106,7 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
 
 
 # Full data posting from a single pipeline run
-def post_all_data_from_one_run(terra_data_record: pd.Series, igvf_api, igvf_utils_api, upload_file: bool, pipeline_data_lab: str = POSTING_LAB, pipeline_data_award: str = POSTING_AWARD) -> RunResult:
+def post_all_data_from_one_run(terra_data_record: pd.Series, igvf_api, igvf_utils_api, upload_file: bool, terra_namespace: str, terra_workspace: str, pipeline_data_lab: str = POSTING_LAB, pipeline_data_award: str = POSTING_AWARD, output_dir: str = '/igvf/data/') -> RunResult:
     """Post all single cell uniform pipeline output to the portal from Terra.
 
     Args:
@@ -1011,7 +1134,8 @@ def post_all_data_from_one_run(terra_data_record: pd.Series, igvf_api, igvf_util
                                                     lab=pipeline_data_lab,
                                                     award=pipeline_data_award,
                                                     igvf_utils_api=igvf_utils_api,
-                                                    upload_file=upload_file
+                                                    upload_file=upload_file,
+                                                    output_dir=output_dir
                                                     )
     # If ATACseq results are present, post them
     if 'ATACseq' in pipeline_run_output:
@@ -1020,8 +1144,20 @@ def post_all_data_from_one_run(terra_data_record: pd.Series, igvf_api, igvf_util
                                                      award=pipeline_data_award,
                                                      igvf_api=igvf_api,
                                                      igvf_utils_api=igvf_utils_api,
-                                                     upload_file=upload_file
+                                                     upload_file=upload_file,
+                                                     output_dir=output_dir
                                                      )
+
+    # Add posting run config document
+    post_results += post_single_document_to_portal(terra_data_record=terra_data_record,
+                                                   lab=pipeline_data_lab,
+                                                   award=pipeline_data_award,
+                                                   terra_namespace=terra_namespace,
+                                                   terra_workspace=terra_workspace,
+                                                   igvf_utils_api=igvf_utils_api,
+                                                   output_dir=output_dir)
+
+    # Return full post res
     return RunResult(
         analysis_set_acc=terra_data_record['analysis_set_acc'],
         post_results=post_results,
@@ -1030,7 +1166,7 @@ def post_all_data_from_one_run(terra_data_record: pd.Series, igvf_api, igvf_util
 
 # Post the entire batch of pipeline outputs to the portal
 # TODO: Eventually write this into posting rows in parallel
-def post_all_successful_runs(full_terra_data_table: pd.DataFrame, igvf_api, igvf_utils_api, upload_file: bool) -> list[PostResult]:
+def post_all_successful_runs(full_terra_data_table: pd.DataFrame, igvf_api, igvf_utils_api, upload_file: bool, terra_namespace: str, terra_workspace: str, output_dir: str = '/igvf/data/') -> list[PostResult]:
     """Post all successful runs from a Terra data table to the portal.
 
     Args:
@@ -1038,6 +1174,7 @@ def post_all_successful_runs(full_terra_data_table: pd.DataFrame, igvf_api, igvf
         igvf_api (_type_): IGVF utils api
         igvf_utils_api (_type_): IGVF python client api
         upload_file (bool): Whether to upload the file to the portal
+        output_dir (str, optional): The output directory to download the QC files to. Defaults to '/igvf/data/'.
 
     Returns:
         list[PostResult]: PostResult objects
@@ -1045,7 +1182,7 @@ def post_all_successful_runs(full_terra_data_table: pd.DataFrame, igvf_api, igvf
     results = []
     for _, curr_pipeline in full_terra_data_table.iterrows():
         results.append(post_all_data_from_one_run(
-            terra_data_record=curr_pipeline, igvf_api=igvf_api, igvf_utils_api=igvf_utils_api, upload_file=upload_file))
+            terra_data_record=curr_pipeline, igvf_api=igvf_api, igvf_utils_api=igvf_utils_api, upload_file=upload_file, terra_namespace=terra_namespace, terra_workspace=terra_workspace, output_dir=output_dir))
     return results
 
 

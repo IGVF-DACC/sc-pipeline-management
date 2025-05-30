@@ -8,6 +8,9 @@ report_tables/
 Run_logs/
 src/data/*
 src/.ipynb_checkpoints
+src/sc_pipe_management/qc_metrics/
+src/sc_pipe_management/run_config/
+src/sc_pipe_management/workflow_configs/
 src/sc_pipe_management/sc-pipeline_sandbox.ipynb
 src/sc_pipe_management/setup_analysis_set.ipynb
 src/test_data/test_files/parse\ splitseq_rna_final_barcode_list.txt
