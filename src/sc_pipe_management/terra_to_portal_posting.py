@@ -351,22 +351,19 @@ def get_seqfile_access_lvl_and_accessions(terra_data_record: pd.Series, assay_ty
     return (output_data_controlled_access, seqfile_accessions)
 
 
-def get_gspath_and_alias(terra_data_record: pd.Series, col_name: str, lab: str) -> tuple:
-    """Get an output file's Google cloud address and generate a portal alias
+def get_file_alias(col_header: str, lab: str, terra_data_record: pd.Series, terra_uuids: str) -> str:
+    """ Generate a file alias based on the output data name, lab, analysis set accession, and Terra UUIDs.
 
     Args:
+        col_header (str): A data table column header, which is the output file name
+        lab (str): The data submitter lab
         terra_data_record (pd.Series): One Terra pipeline (i.e., one row in the data table)
-        col_name (str): Output file column header
-        lab (str): data generator/submitter lab
+        terra_uuids (str): A string of the form GCPbucket_submissionID_workflowID_subworkflowID
 
     Returns:
-        tuple: (gs cloud link, portal alias)
+        str: A file alias in the form of lab:analysis-set-acc_terra-uuids_col-header_uniform-pipeline
     """
-    gs_cloud_link = terra_data_record[col_name]
-    terra_uuids = parse_workflow_uuids_from_gs_path(
-        gs_path=gs_cloud_link).aliases()
-    file_alias = f'{lab.split("/")[-2]}:{terra_data_record["analysis_set_acc"]}_{terra_uuids}_{col_name}_uniform-pipeline'
-    return (gs_cloud_link, file_alias)
+    return f'{lab.split("/")[-2]}:{terra_data_record["analysis_set_acc"]}_{terra_uuids}_{col_header}_uniform-pipeline'
 
 
 # Helper function to post data object via IGVF utils
@@ -664,10 +661,17 @@ def post_single_matrix_file(terra_data_record: pd.Series, col_header: str, curr_
         PostResult: PostResult(col_header=col_header, accession=..., error=...)
     """
     try:
-        curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(
-            terra_data_record=terra_data_record, col_name=col_header, lab=lab)
+        # Get the gs cloud link
+        curr_gs_cloud_link = terra_data_record[col_header]
         if not str(curr_gs_cloud_link).startswith('gs://'):
             raise Exception('File path is not a gs cloud link.')
+        # Parse gs cloud link to get file alias
+        curr_file_alias = get_file_alias(col_header=col_header,
+                                         lab=lab,
+                                         terra_data_record=terra_data_record,
+                                         terra_uuids=parse_workflow_uuids_from_gs_path(
+                                             gs_path=curr_gs_cloud_link).aliases()
+                                         )
         # Calculate md5sum
         curr_md5sum = api_tools.calculate_gsutil_hash(
             file_path=curr_gs_cloud_link)
@@ -792,10 +796,17 @@ def post_single_alignment_file(terra_data_record: pd.Series, col_header: str, cu
         PostResult: e.g., PostResult(col_header='rna_kb_output_folder_tar_gz', accession='TSTFI00286528', error=None)
     """
     try:
-        curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(
-            terra_data_record=terra_data_record, col_name=col_header, lab=lab)
+        # Get the gs cloud link
+        curr_gs_cloud_link = terra_data_record[col_header]
         if not str(curr_gs_cloud_link).startswith('gs://'):
             raise Exception('File path is not a gs cloud link.')
+        # Parse gs cloud link to get file alias
+        curr_file_alias = get_file_alias(col_header=col_header,
+                                         lab=lab,
+                                         terra_data_record=terra_data_record,
+                                         terra_uuids=parse_workflow_uuids_from_gs_path(
+                                             gs_path=curr_gs_cloud_link).aliases()
+                                         )
         curr_md5sum = api_tools.calculate_gsutil_hash(
             file_path=curr_gs_cloud_link)
         # Get reference files
@@ -852,10 +863,17 @@ def post_single_tabular_file(terra_data_record: pd.Series, col_header: str, curr
         PostResult: e.g., PostResult(col_header='rna_kb_output_folder_tar_gz', accession='TSTFI00286528', error=None)
     """
     try:
-        curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(
-            terra_data_record=terra_data_record, col_name=col_header, lab=lab)
+        # Get the gs cloud link
+        curr_gs_cloud_link = terra_data_record[col_header]
         if not str(curr_gs_cloud_link).startswith('gs://'):
             raise Exception('File path is not a gs cloud link.')
+        # Parse gs cloud link to get file alias
+        curr_file_alias = get_file_alias(col_header=col_header,
+                                         lab=lab,
+                                         terra_data_record=terra_data_record,
+                                         terra_uuids=parse_workflow_uuids_from_gs_path(
+                                             gs_path=curr_gs_cloud_link).aliases()
+                                         )
         curr_md5sum = api_tools.calculate_gsutil_hash(
             file_path=curr_gs_cloud_link)
         curr_tab_file_payload = dict(award=award,
@@ -909,10 +927,17 @@ def post_single_index_file(terra_data_record: pd.Series, col_header: str, curr_f
         PostResult: e.g., PostResult(col_header='rna_kb_output_folder_tar_gz', accession='TSTFI00286528', error=None)
     """
     try:
-        curr_gs_cloud_link, curr_file_alias = get_gspath_and_alias(
-            terra_data_record=terra_data_record, col_name=col_header, lab=lab)
+        # Get the gs cloud link
+        curr_gs_cloud_link = terra_data_record[col_header]
         if not str(curr_gs_cloud_link).startswith('gs://'):
             raise Exception('File path is not a gs cloud link.')
+        # Parse gs cloud link to get file alias
+        curr_file_alias = get_file_alias(col_header=col_header,
+                                         lab=lab,
+                                         terra_data_record=terra_data_record,
+                                         terra_uuids=parse_workflow_uuids_from_gs_path(
+                                             gs_path=curr_gs_cloud_link).aliases()
+                                         )
         curr_md5sum = api_tools.calculate_gsutil_hash(
             file_path=curr_gs_cloud_link)
         curr_index_file_payload = dict(award=award,
