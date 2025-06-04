@@ -59,12 +59,12 @@ def set_up_api_keys(igvf_endpoint: str = 'sandbox') -> dict:
     return api_keys
 
 
-def get_igvf_client_auth(igvf_api_keys: dict, igvf_site: str = 'sandbox'):
+def get_igvf_client_auth(igvf_api_keys: dict, igvf_endpoint: str = 'sandbox'):
     """Set up IGVF data portal access and set up IGVF python client api.
 
     Args:
         igvf_api_keys (dict): A dictionary containing the public and secret API keys.
-        igvf_site (str, optional): The IGVF site to use. Defaults to 'sandbox'.
+        igvf_endpoint (str, optional): The IGVF site to use. Defaults to 'sandbox'.
 
     Returns:
         IgvfApi: An instance of the IgvfApi client.
@@ -72,7 +72,7 @@ def get_igvf_client_auth(igvf_api_keys: dict, igvf_site: str = 'sandbox'):
     config = Configuration(
         access_key=igvf_api_keys['public'],
         secret_access_key=igvf_api_keys['secret'],
-        host=SITE_URLS_BY_ENDPOINTS[igvf_site],
+        host=SITE_URLS_BY_ENDPOINTS[igvf_endpoint],
     )
     client = ApiClient(config)
     return IgvfApi(client)

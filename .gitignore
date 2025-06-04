@@ -20,4 +20,5 @@ src/tests/test_files/IGVFFI2264BQQD.yaml.gz
 src/terra_datatable/
 temp/
 terra_datatables/
+terra_post_report_tables/
 .vscode/
