@@ -36,18 +36,20 @@ def main():
     igvf_api_keys = api_tools.set_up_api_keys(
         igvf_endpoint=args.post_endpoint)
 
-    # Set up igvf utils connection
-    igvf_utils_api = api_tools.get_igvf_utils_connection(igvf_api_keys=igvf_api_keys,
-                                                         igvf_utils_mode=args.post_endpoint,
-                                                         submission_mode=True)
+    # Set up igvf utils connection (staging requires using the site URL)
+    if args.post_endpoint != 'staging':
+        igvf_utils_api = api_tools.get_igvf_utils_connection(igvf_api_keys=igvf_api_keys,
+                                                             igvf_utils_mode=args.post_endpoint,
+                                                             submission_mode=True)
+    else:
+        igvf_utils_api = api_tools.get_igvf_utils_connection(igvf_api_keys=igvf_api_keys,
+                                                             igvf_utils_mode=api_tools.SITE_URLS_BY_ENDPOINTS[
+                                                                 args.post_endpoint],
+                                                             submission_mode=False)
 
     # Set up igvf client connection
-    if args.post_endpoint == 'staging':
-        igvf_client_api = api_tools.get_igvf_client_auth(igvf_api_keys=igvf_api_keys,
-                                                         igvf_site=api_tools.IGVF_STAGING_SITE['staging'])
-    else:
-        igvf_client_api = api_tools.get_igvf_client_auth(igvf_api_keys=igvf_api_keys,
-                                                         igvf_site=args.post_endpoint)
+    igvf_client_api = api_tools.get_igvf_client_auth(igvf_api_keys=igvf_api_keys,
+                                                     igvf_endpoint=args.post_endpoint)
 
     # Refresh firecloud API
     fapi._set_session()
@@ -60,6 +62,8 @@ def main():
 
     # Will return a list of Postres
     portal_post_results = terra2portal_transfer.post_all_successful_runs(full_terra_data_table=terra_table,
+                                                                         terra_namespace=args.terra_namespace,
+                                                                         terra_workspace=args.terra_workspace,
                                                                          igvf_api=igvf_client_api,
                                                                          igvf_utils_api=igvf_utils_api,
                                                                          upload_file=args.upload_file,

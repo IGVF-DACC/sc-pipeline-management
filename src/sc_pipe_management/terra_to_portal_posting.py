@@ -85,7 +85,6 @@ ACCESSION_HEADERS_BY_ASSAY_TYPES = {'atac': ['atac_read1_accessions', 'atac_read
 GENOME_ASSEMBLY_INFO = {'Homo sapiens': 'GRCh38', 'Mus musculus': 'GRCm39'}
 
 # Analysis step versions
-# TODO: RNA analysis step version will be updated soon to be v1.1.0
 ANALYSIS_STEP_VERSIONS_BY_ASSAY_TYPES = {'atac': 'igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0',
                                          'rna': 'igvf:single-cell-uniform-pipeline-kalliso-bustools-rnaseq-step-v1.1.0'
                                          }
@@ -485,7 +484,7 @@ def mk_doc_payload(lab: str, award: str, doc_aliases: list, local_file_path: str
         aliases=doc_aliases,
         lab=lab,
         award=award,
-        document_type='computational protocol',  # TODO: need a proper enum
+        document_type='pipeline parameters',
         description='Terra workflow configuration for the single-cell pipeline run',
         attachment={'path': local_file_path},
         _profile='document'
@@ -730,8 +729,8 @@ def post_all_rna_data_to_portal(terra_data_record: pd.Series, lab: str, award: s
         igvf_file_urls=[terra_data_record['rna_seqspec_urls'], terra_data_record['barcode_replacement_file']])
 
     # Combine seqfile and seqspec into one list as derived_from
-    all_derived_from = list(
-        chain(curr_seqfile_accs, curr_seqspec_and_barcode_replacement))
+    all_derived_from = list(set(
+        chain(curr_seqfile_accs, curr_seqspec_and_barcode_replacement)))
 
     # Prepare arguments for multiprocessing
     tasks = [
@@ -1145,11 +1144,12 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
         terra_data_record=terra_data_record, assay_type='atac', igvf_api=igvf_api)
 
     # Get seqspec file accessions
-    curr_seqspec_accss = parse_igvf_accessions_from_urls(
+    curr_seqspec_accs = parse_igvf_accessions_from_urls(
         igvf_file_urls=[terra_data_record['atac_seqspec_urls']])
 
     # Derived from will be a combination of seqfile, seqspec accessions, and barcode replacement file
-    all_derived_from = list(chain(curr_seqfile_accs, curr_seqspec_accss))
+    # Beware that some assays will have ATAC barcodes and Read2 concatenated into one fastq
+    all_derived_from = list(set(chain(curr_seqfile_accs, curr_seqspec_accs)))
 
     # Multiprocessing tasks for posting ATAC data
     tasks = [
@@ -1244,7 +1244,6 @@ def post_all_data_from_one_run(terra_data_record: pd.Series, igvf_api, igvf_util
 
 
 # Post the entire batch of pipeline outputs to the portal
-# TODO: Eventually write this into posting rows in parallel
 def post_all_successful_runs(full_terra_data_table: pd.DataFrame, igvf_api, igvf_utils_api, upload_file: bool, terra_namespace: str, terra_workspace: str, output_root_dir: str = '/igvf/data/') -> list[PostResult]:
     """Post all successful runs from a Terra data table to the portal.
 
