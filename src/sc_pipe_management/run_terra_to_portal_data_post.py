@@ -60,13 +60,20 @@ def main():
         args.output_dir = os.path.join(
             os.getcwd(), "terra_datatables", "output", today)
 
+    # Download all workflow configs first (firecloud times out)
+    config_file_collection = terra2portal_transfer.download_all_workflow_config_jsons(
+        terra_namespace=args.terra_namespace,
+        terra_workspace=args.terra_workspace,
+        terra_data_table=terra_table,
+        output_root_dir=os.path.join(args.output_dir, 'workflow_configs'))
+    print(f'>>>>>>>>>>>>>> {len(config_file_collection)} configs downloaded')
+
     # Will return a list of Postres
     portal_post_results = terra2portal_transfer.post_all_successful_runs(full_terra_data_table=terra_table,
-                                                                         terra_namespace=args.terra_namespace,
-                                                                         terra_workspace=args.terra_workspace,
                                                                          igvf_api=igvf_client_api,
                                                                          igvf_utils_api=igvf_utils_api,
                                                                          upload_file=args.upload_file,
+                                                                         config_file_collection=config_file_collection,
                                                                          output_root_dir=args.output_dir)
 
     # Summarize into a table

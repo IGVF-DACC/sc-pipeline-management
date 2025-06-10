@@ -11,6 +11,8 @@ import re
 from itertools import chain
 import subprocess
 import requests
+import firecloud.api as fapi
+import time
 
 
 # TODO:\
@@ -205,6 +207,12 @@ class PipelineOutputIds:
     def config_aliases(self) -> str:
         """Generate a string of the form submissionID_workflowID."""
         return f'{self.submission_id}_{self.workflow_id}'
+
+
+@dataclasses.dataclass(frozen=True)
+class WorkflowConfigInfo:
+    doc_aliases: list[str]
+    download_path: str
 
 
 def parse_workflow_uuids_from_gs_path(gs_path: str, gs_path_regex: re.Pattern = GS_FILE_PATH_REGEX) -> PipelineOutputIds:
@@ -456,6 +464,59 @@ def dump_json(input_json: dict, analysis_set_acc: str, output_root_dir: str = '.
     return output_file_path
 
 
+def download_workflow_config_json(terra_data_record: pd.Series, terra_namespace: str, terra_workspace: str, output_root_dir: str = '/igvf/data/') -> str:
+    """Download the workflow configuration JSON file for a given Terra data record.
+
+    Args:
+        terra_data_record (pd.Series): One Terra pipeline (i.e., one row in the data table)
+        terra_namespace (str): Terra project namespace, e.g., DACC_ANVIL
+        terra_workspace (str): Terra workspace name, e.g., IGVF Single-Cell Data Processing
+        output_root_dir (str, optional): Where the file will be saved to. Defaults to '/igvf/data/'.
+
+    Returns:
+        str: path to the saved JSON file
+    """
+    # NOTE: A bit of hack here to get submission ID (RNA data will always be available)
+    terra_ids = parse_workflow_uuids_from_gs_path(
+        gs_path=terra_data_record['rna_kb_h5ad'])
+    curr_workflow_config = api_tools.get_workflow_input_config(terra_namespace=terra_namespace,
+                                                               terra_workspace=terra_workspace,
+                                                               submission_id=terra_ids.submission_id,
+                                                               workflow_id=terra_ids.workflow_id)
+    curr_workflow_config['igvf_credentials'] = 'Google cloud path to a txt file with credentials to access the IGVF data portal.'
+    json_output_dir = os.path.join(
+        output_root_dir, terra_data_record['analysis_set_acc'])
+    local_file_path = dump_json(input_json=curr_workflow_config,
+                                analysis_set_acc=terra_data_record['analysis_set_acc'],
+                                output_root_dir=json_output_dir)
+    return WorkflowConfigInfo(doc_aliases=mk_doc_aliases(curr_workflow_config=terra_ids),
+                              download_path=local_file_path)
+
+
+def download_all_workflow_config_jsons(terra_data_table: pd.DataFrame, terra_namespace: str, terra_workspace: str, output_root_dir: str = '/igvf/data/workflow_configs') -> list[str]:
+    """Download all workflow configuration JSON files for a given Terra data table.
+
+    Args:
+        terra_data_table (pd.DataFrame): The Terra data table containing pipeline runs
+        terra_namespace (str): Terra project namespace, e.g., DACC_ANVIL
+        terra_workspace (str): Terra workspace name, e.g., IGVF Single-Cell Data Processing
+        output_root_dir (str, optional): Where the file will be saved to. Defaults to '/igvf/data/workflow_configs'.
+
+    Returns:
+        list[str]: A list of paths to the saved JSON files
+    """
+    workflow_config_download_paths = {}
+    for _, row in terra_data_table.iterrows():
+        fapi._set_session()  # Refresh the session for each row
+        curr_config_file_info = download_workflow_config_json(terra_data_record=row,
+                                                              terra_namespace=terra_namespace,
+                                                              terra_workspace=terra_workspace,
+                                                              output_root_dir=output_root_dir)
+        workflow_config_download_paths[row['analysis_set_acc']
+                                       ] = curr_config_file_info
+    return workflow_config_download_paths
+
+
 def mk_doc_aliases(curr_workflow_config: PipelineOutputIds) -> list:
     """Create a list of document aliases for the workflow configuration.
 
@@ -509,43 +570,27 @@ def mk_anaset_docs_patching_payload(doc_aliases: list, analysis_set_acc: str, ig
     }
 
 
-def post_single_document_to_portal(terra_data_record: pd.Series, lab: str, award: str, terra_namespace: str, terra_workspace: str, igvf_utils_api, output_root_dir: str = '/igvf/data/') -> list[PostResult]:
+def post_single_document_to_portal(terra_data_record: pd.Series, lab: str, award: str, config_file_path: str, doc_aliases: list, igvf_utils_api) -> list[PostResult]:
     """Post workflow configuration document to the portal and link it to the analysis set.
 
     Args:
         terra_data_record (pd.Series): One Terra pipeline (i.e., one row in the data table)
         lab (str): The data submitter lab
         award (str): The data submitter lab's award
-        terra_namespace (str): Terra project namespace, e.g., DACC_ANVIL
-        terra_workspace (str): Terra workspace name, e.g., IGVF Single-Cell Data Processing
         igvf_utils_api (_type_): igvf utils API client
-        output_root_dir (str, optional): Where the file will be saved to. Defaults to './run_config'.
+        config_file_path (str): Path to the workflow configuration file
 
     Returns:
         list[PostResult]: list(PostResult(col_header='workflow_config_document', accession=IGVF UUID, error=error if any))
     """
     workflow_config_post_results = []
-    # All about posting the workflow config document
     try:
-        # NOTE: A bit of hack here to get submission ID (RNA data will always be available)
-        terra_ids = parse_workflow_uuids_from_gs_path(
-            gs_path=terra_data_record['rna_kb_h5ad'])
-        curr_workflow_config = api_tools.get_workflow_input_config(
-            terra_namespace=terra_namespace, terra_workspace=terra_workspace, submission_id=terra_ids.submission_id, workflow_id=terra_ids.workflow_id)
-        # Remove credential file path
-        curr_workflow_config['igvf_credentials'] = 'Google cloud path to a txt file with credentials to access the IGVF data portal.'
-        # Save config to a local file
-        json_output_dir = os.path.join(
-            output_root_dir, 'workflow_configs', terra_data_record['analysis_set_acc'])
-        local_file_path = dump_json(
-            input_json=curr_workflow_config, analysis_set_acc=terra_data_record['analysis_set_acc'], output_root_dir=json_output_dir)
         # Make a document object payload
-        doc_aliases = mk_doc_aliases(curr_workflow_config=terra_ids)
         doc_payload = mk_doc_payload(
             lab=lab,
             award=award,
             doc_aliases=doc_aliases,
-            local_file_path=local_file_path
+            local_file_path=config_file_path
         )
         # Post the document to the portal
         curr_post_res = single_post_to_portal(igvf_data_payload=doc_payload,
@@ -1184,7 +1229,7 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
 
 
 # Full data posting from a single pipeline run
-def post_all_data_from_one_run(terra_data_record: pd.Series, igvf_api, igvf_utils_api, upload_file: bool, terra_namespace: str, terra_workspace: str, pipeline_data_lab: str = POSTING_LAB, pipeline_data_award: str = POSTING_AWARD, output_root_dir: str = '/igvf/data/') -> RunResult:
+def post_all_data_from_one_run(terra_data_record: pd.Series, igvf_api, igvf_utils_api, upload_file: bool, config_file_path: str, doc_aliases: list, pipeline_data_lab: str = POSTING_LAB, pipeline_data_award: str = POSTING_AWARD, output_root_dir: str = '/igvf/data/') -> RunResult:
     """Post all single cell uniform pipeline output to the portal from Terra.
 
     Args:
@@ -1192,6 +1237,8 @@ def post_all_data_from_one_run(terra_data_record: pd.Series, igvf_api, igvf_util
         igvf_api (_type_): IGVF utils api
         igvf_utils_api (_type_): IGVF python client api
         upload_file (bool): Whether to upload the file to the portal
+        config_file_path (str): The path to the pipeline run config file
+        doc_aliases (list): The aliases for the config file
         pipeline_data_lab (str): The data submitter lab, default IGVF pipeline processing lab
         pipeline_data_award (str): The data submitter lab's award, default IGVF DACC award
         output_root_dir (str, optional): The output directory to download the QC files to. Defaults to '/igvf/data/'.
@@ -1231,10 +1278,9 @@ def post_all_data_from_one_run(terra_data_record: pd.Series, igvf_api, igvf_util
     post_results += post_single_document_to_portal(terra_data_record=terra_data_record,
                                                    lab=pipeline_data_lab,
                                                    award=pipeline_data_award,
-                                                   terra_namespace=terra_namespace,
-                                                   terra_workspace=terra_workspace,
-                                                   igvf_utils_api=igvf_utils_api,
-                                                   output_root_dir=output_root_dir)
+                                                   config_file_path=config_file_path,
+                                                   doc_aliases=doc_aliases,
+                                                   igvf_utils_api=igvf_utils_api)
 
     # Return full post res
     return RunResult(
@@ -1244,7 +1290,7 @@ def post_all_data_from_one_run(terra_data_record: pd.Series, igvf_api, igvf_util
 
 
 # Post the entire batch of pipeline outputs to the portal
-def post_all_successful_runs(full_terra_data_table: pd.DataFrame, igvf_api, igvf_utils_api, upload_file: bool, terra_namespace: str, terra_workspace: str, output_root_dir: str = '/igvf/data/') -> list[PostResult]:
+def post_all_successful_runs(full_terra_data_table: pd.DataFrame, igvf_api, igvf_utils_api, upload_file: bool, config_file_collection: dict, output_root_dir: str = '/igvf/data/') -> list[PostResult]:
     """Post all successful runs from a Terra data table to the portal.
 
     Args:
@@ -1252,6 +1298,7 @@ def post_all_successful_runs(full_terra_data_table: pd.DataFrame, igvf_api, igvf
         igvf_api (_type_): IGVF utils api
         igvf_utils_api (_type_): IGVF python client api
         upload_file (bool): Whether to upload the file to the portal
+        config_file_collection (dict): A dictionary of config file paths and doc aliases for each pipeline run
         output_root_dir (str, optional): The output directory to download the QC files to. Defaults to '/igvf/data/'.
 
     Returns:
@@ -1259,8 +1306,16 @@ def post_all_successful_runs(full_terra_data_table: pd.DataFrame, igvf_api, igvf
     """
     results = []
     for _, curr_pipeline in full_terra_data_table.iterrows():
+        curr_config_file_info = config_file_collection[curr_pipeline['analysis_set_acc']]
         results.append(post_all_data_from_one_run(
-            terra_data_record=curr_pipeline, igvf_api=igvf_api, igvf_utils_api=igvf_utils_api, upload_file=upload_file, terra_namespace=terra_namespace, terra_workspace=terra_workspace, output_root_dir=output_root_dir))
+            terra_data_record=curr_pipeline,
+            igvf_api=igvf_api,
+            igvf_utils_api=igvf_utils_api,
+            upload_file=upload_file,
+            config_file_path=curr_config_file_info.download_path,
+            doc_aliases=curr_config_file_info.doc_aliases,
+            output_root_dir=output_root_dir))
+        time.sleep(0.1)  # Sleep to avoid hitting API rate limits
     return results
 
 
