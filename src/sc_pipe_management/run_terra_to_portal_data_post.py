@@ -36,23 +36,45 @@ def main():
     igvf_api_keys = api_tools.set_up_api_keys(
         igvf_endpoint=args.post_endpoint)
 
-    # Set up igvf utils connection
-    igvf_utils_api = api_tools.get_igvf_utils_connection(igvf_api_keys=igvf_api_keys,
-                                                         igvf_utils_mode=args.post_endpoint,
-                                                         submission_mode=True)
+    # Set up igvf utils connection (staging requires using the site URL)
+    if args.post_endpoint != 'staging':
+        igvf_utils_api = api_tools.get_igvf_utils_connection(igvf_api_keys=igvf_api_keys,
+                                                             igvf_utils_mode=args.post_endpoint,
+                                                             submission_mode=True)
+    else:
+        igvf_utils_api = api_tools.get_igvf_utils_connection(igvf_api_keys=igvf_api_keys,
+                                                             igvf_utils_mode=api_tools.SITE_URLS_BY_ENDPOINTS[
+                                                                 args.post_endpoint],
+                                                             submission_mode=False)
 
     # Set up igvf client connection
     igvf_client_api = api_tools.get_igvf_client_auth(igvf_api_keys=igvf_api_keys,
-                                                     igvf_site=args.post_endpoint)
+                                                     igvf_endpoint=args.post_endpoint)
 
     # Refresh firecloud API
     fapi._set_session()
+
+    # Set up local output directory
+    today = datetime.now().strftime("%m%d%Y")
+    if args.output_dir is None:
+        args.output_dir = os.path.join(
+            os.getcwd(), "terra_datatables", "output", today)
+
+    # Download all workflow configs first (firecloud times out)
+    config_file_collection = terra2portal_transfer.download_all_workflow_config_jsons(
+        terra_namespace=args.terra_namespace,
+        terra_workspace=args.terra_workspace,
+        terra_data_table=terra_table,
+        output_root_dir=os.path.join(args.output_dir, 'workflow_configs'))
+    print(f'>>>>>>>>>>>>>> {len(config_file_collection)} configs downloaded')
 
     # Will return a list of Postres
     portal_post_results = terra2portal_transfer.post_all_successful_runs(full_terra_data_table=terra_table,
                                                                          igvf_api=igvf_client_api,
                                                                          igvf_utils_api=igvf_utils_api,
-                                                                         upload_file=args.upload_file)
+                                                                         upload_file=args.upload_file,
+                                                                         config_file_collection=config_file_collection,
+                                                                         output_root_dir=args.output_dir)
 
     # Summarize into a table
     portal_post_summary = terra2portal_transfer.summarize_post_status(
@@ -61,12 +83,8 @@ def main():
         full_terra_data_table=terra_table, post_status_df=portal_post_summary)
 
     # Save the updated terra table
-    today = datetime.now().strftime("%m%d%Y")
-    if args.output_dir is None:
-        args.output_dir = os.path.join(
-            os.getcwd(), "terra_datatables", "output", today)
     terra2portal_transfer.save_pipeline_postres_tables(
-        pipeline_postres_table=portal_post_summary, updated_full_data_table=updated_terra_table, output_dir=args.output_dir)
+        pipeline_postres_table=portal_post_summary, updated_full_data_table=updated_terra_table, output_root_dir=args.output_dir)
 
 
 if __name__ == '__main__':

@@ -78,7 +78,7 @@ def main():
 
     # Set up IGVF client API
     igvf_portal_api = api_tools.get_igvf_client_auth(igvf_api_keys=igvf_api_keys,
-                                                     igvf_site=args.igvf_endpoint)
+                                                     igvf_endpoint=args.igvf_endpoint)
     # Refresh Firecloud API
     fapi._set_session()
 

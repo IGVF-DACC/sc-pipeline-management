@@ -1,4 +1,5 @@
 import firecloud.api as fapi
+import firecloud.errors as FireCloudServerError
 import subprocess
 import pandas as pd
 import io
@@ -58,12 +59,12 @@ def set_up_api_keys(igvf_endpoint: str = 'sandbox') -> dict:
     return api_keys
 
 
-def get_igvf_client_auth(igvf_api_keys: dict, igvf_site: str = 'sandbox'):
+def get_igvf_client_auth(igvf_api_keys: dict, igvf_endpoint: str = 'sandbox'):
     """Set up IGVF data portal access and set up IGVF python client api.
 
     Args:
         igvf_api_keys (dict): A dictionary containing the public and secret API keys.
-        igvf_site (str, optional): The IGVF site to use. Defaults to 'sandbox'.
+        igvf_endpoint (str, optional): The IGVF site to use. Defaults to 'sandbox'.
 
     Returns:
         IgvfApi: An instance of the IgvfApi client.
@@ -71,7 +72,7 @@ def get_igvf_client_auth(igvf_api_keys: dict, igvf_site: str = 'sandbox'):
     config = Configuration(
         access_key=igvf_api_keys['public'],
         secret_access_key=igvf_api_keys['secret'],
-        host=SITE_URLS_BY_ENDPOINTS[igvf_site],
+        host=SITE_URLS_BY_ENDPOINTS[igvf_endpoint],
     )
     client = ApiClient(config)
     return IgvfApi(client)
@@ -175,3 +176,36 @@ def upload_output_post_res_to_terra(terra_namespace: str, terra_workspace: str, 
                                               )
     if verbose:
         print(dumper.dump(input_table_upload))
+
+
+def get_workflow_input_config(terra_namespace: str, terra_workspace: str, submission_id: str, workflow_id: str) -> dict:
+    """Get the workflow input configuration for a given submission and workflow ID in a Terra workspace.
+
+    Args:
+        terra_namespace (str): Terra namespace (e.g., DACC_ANVIL)
+        terra_workspace (str): Terra workspace name
+        submission_id (str): submission ID for the full set of pipeline runs in the Terra workspace
+        workflow_id (str): workflow ID (i.e., the ID per pipeline run)
+
+    Raises:
+        FireCloudServerError: If submission ID is not found or if workflow ID is not found in the submission.
+        FireCloudServerError: Workflow input config is not found.
+
+    Returns:
+        dict: Workflow input configuration as a dictionary.
+    """
+    workflow_data_request = fapi.get_workflow_metadata(namespace=terra_namespace,
+                                                       workspace=terra_workspace,
+                                                       submission_id=submission_id,
+                                                       workflow_id=workflow_id
+                                                       )
+    if workflow_data_request.status_code != 200:
+        raise FireCloudServerError(code=workflow_data_request.status_code,
+                                   message=f'Error fetching workflow data: {workflow_id} for submission: {submission_id}.')
+    workflow_data_res = workflow_data_request.json()
+    try:
+        workflow_input_config = workflow_data_res.get('inputs')
+        return workflow_input_config
+    except KeyError:
+        raise FireCloudServerError(code=workflow_data_request.status_code,
+                                   message=f'Error parsing workflow input config for workflow: {workflow_id} in submission: {submission_id}. No inputs found.')
