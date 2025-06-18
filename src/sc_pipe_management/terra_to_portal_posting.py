@@ -552,6 +552,26 @@ def mk_doc_payload(lab: str, award: str, doc_aliases: list, local_file_path: str
     )
 
 
+def get_existing_analysis_set_docs(analysis_set_acc: str, igvf_utils_api) -> list:
+    """Get existing document aliases linked to the analysis set.
+
+    Args:
+        analysis_set_acc (str): Analysis set accession
+        igvf_utils_api (_type_): igvf utils API client
+
+    Returns:
+        list: A list of existing document aliases
+    """
+    analysis_set_obj = igvf_utils_api.get(f'/analysis-sets/{analysis_set_acc}')
+    existing_doc_ids = analysis_set_obj['documents']
+    all_existing_doc_aliases = set()
+    for doc_id in existing_doc_ids:
+        doc_obj = igvf_utils_api.get(doc_id)
+        if 'aliases' in doc_obj:
+            all_existing_doc_aliases.update(doc_obj['aliases'])
+    return sorted(all_existing_doc_aliases)
+
+
 def mk_anaset_docs_patching_payload(doc_aliases: list, analysis_set_acc: str, igvf_utils_api) -> dict:
     """Create a payload for patching the analysis set with the document accession.
 
@@ -563,8 +583,13 @@ def mk_anaset_docs_patching_payload(doc_aliases: list, analysis_set_acc: str, ig
     Returns:
         dict: Payload for patching the analysis set
     """
+    existing_docs = get_existing_analysis_set_docs(analysis_set_acc=analysis_set_acc,
+                                                   igvf_utils_api=igvf_utils_api)
+    if set(doc_aliases).issubset(set(existing_docs)):
+        return {}
+    new_docs_aliases = list(set(doc_aliases).union(set(existing_docs)))
     return {
-        'documents': doc_aliases,
+        'documents': new_docs_aliases,
         igvf_utils_api.IGVFID_KEY: f"/analysis-sets/{analysis_set_acc}/",
         '_profile': 'analysis_set'
     }
@@ -600,13 +625,24 @@ def post_single_document_to_portal(terra_data_record: pd.Series, lab: str, award
             col_header='workflow_config_document', accession=curr_post_res))
         # Patch the analysis set with the document accession
         try:
-            igvf_utils_api.patch(mk_anaset_docs_patching_payload(
+            analysis_set_doc_patch_payload = mk_anaset_docs_patching_payload(
                 doc_aliases=doc_aliases,
                 analysis_set_acc=terra_data_record['analysis_set_acc'],
                 igvf_utils_api=igvf_utils_api
-            ))
-            workflow_config_post_results.append(PostResult.Success(
-                col_header='analysis_set_workflow_config_patch', accession=terra_data_record["analysis_set_acc"]))
+            )
+            if analysis_set_doc_patch_payload:
+                igvf_utils_api.patch(mk_anaset_docs_patching_payload(
+                    doc_aliases=doc_aliases,
+                    analysis_set_acc=terra_data_record['analysis_set_acc'],
+                    igvf_utils_api=igvf_utils_api
+                ))
+                workflow_config_post_results.append(PostResult.Success(
+                    col_header='analysis_set_workflow_config_patch', accession=terra_data_record["analysis_set_acc"]))
+            else:
+                print(
+                    '>>>> No update needed for analysis set with workflow config document.')
+                workflow_config_post_results.append(PostResult.Success(
+                    col_header='analysis_set_workflow_config_patch', accession='No update needed'))
         # Log error of patching analysis set with workflow config document
         except requests.exceptions.HTTPError as e:
             workflow_config_post_results.append(PostResult.Failure(
