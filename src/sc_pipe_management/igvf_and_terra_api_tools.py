@@ -78,18 +78,20 @@ def get_igvf_client_auth(igvf_api_keys: dict, igvf_endpoint: str = 'sandbox'):
     return IgvfApi(client)
 
 
-def get_igvf_utils_connection(igvf_api_keys: dict, igvf_utils_mode: str = 'sandbox', submission_mode: bool = False):
+def get_igvf_utils_connection(igvf_api_keys: dict, igvf_utils_mode: str = 'sandbox', submission_mode: bool = False, dry_run: bool = False):
     """Set up IGVF utils connection.
 
     Args:
         igvf_api_keys (dict): A dictionary containing the public and secret API keys.
         igvf_utils_mode (str, optional): IGVF utils endpoint. Defaults to 'sandbox'.
         submission_mode (bool, optional): IGVF utils submission mode. Defaults to False, not submitting.
+        dry_run (bool, optional): IGVF utils dry run mode. Defaults to False, not a dry run.
 
     Returns:
        igvf_utils.Connection: An instance of the IGVF utils connection.
     """
-    iu_conn = Connection(igvf_mode=igvf_utils_mode, submission=submission_mode)
+    iu_conn = Connection(igvf_mode=igvf_utils_mode,
+                         submission=submission_mode, dry_run=dry_run)
     iu_conn._auth = (igvf_api_keys['public'], igvf_api_keys['secret'])
     return iu_conn
 

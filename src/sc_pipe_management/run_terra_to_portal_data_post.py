@@ -23,6 +23,8 @@ def get_parser():
                         help="""If True, upload the file to the portal.""")
     parser.add_argument('--output_dir', type=str, default=None,
                         help="""Path to the output directory. Defaults to $(pwd)/terra_datatables/output/$(date +%m%d%Y)""")
+    parser.add_argument('--dry_run', action='store_true',
+                        help="""If True, do not actually post to the portal.""")
     parser.add_argument('--tries', type=int, default=3,
                         help="""Number of tries to attempt the API calls. Default is 3.""")
     parser.add_argument('--delay', type=int, default=5,
@@ -76,18 +78,22 @@ def main():
     backoff = args.backoff
 
     @retry(tries, delay, backoff)
-    def do_igvf_utils_api(igvf_api_keys, post_endpoint):
+    def do_igvf_utils_api(igvf_api_keys, post_endpoint, dry_run):
         """Set up IGVF utils API connection
         """
         if post_endpoint != 'staging':
             return api_tools.get_igvf_utils_connection(igvf_api_keys=igvf_api_keys,
                                                        igvf_utils_mode=post_endpoint,
-                                                       submission_mode=True)
+                                                       submission_mode=True,
+                                                       dry_run=dry_run
+                                                       )
         else:
             return api_tools.get_igvf_utils_connection(igvf_api_keys=igvf_api_keys,
                                                        igvf_utils_mode=api_tools.SITE_URLS_BY_ENDPOINTS[
                                                            post_endpoint],
-                                                       submission_mode=True)
+                                                       submission_mode=True,
+                                                       dry_run=dry_run
+                                                       )
 
     # Set up igvf client connection
     @retry(tries, delay, backoff)
@@ -134,7 +140,7 @@ def main():
     igvf_client_api = do_igvf_client_api(
         igvf_api_keys=igvf_api_keys, post_endpoint=args.post_endpoint)
     igvf_utils_api = do_igvf_utils_api(
-        igvf_api_keys=igvf_api_keys, post_endpoint=args.post_endpoint)
+        igvf_api_keys=igvf_api_keys, post_endpoint=args.post_endpoint, dry_run=args.dry_run)
 
     # Will return a list of Postres
     portal_post_results = terra2portal_transfer.post_all_successful_runs(full_terra_data_table=terra_table,
