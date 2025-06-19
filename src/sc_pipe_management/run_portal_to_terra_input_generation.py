@@ -96,17 +96,21 @@ def main():
 
     # Get default barcode file directory if not provided
     if args.local_barcode_file_dir is None:
-        args.local_barcode_file_dir = os.path.join(
-            os.getcwd(), "final_barcode_list", today)
+        local_barcode_file_dir = os.path.join(
+            os.getcwd(), "final_barcode_list", today, args.terra_etype)
+    else:
+        local_barcode_file_dir = args.local_barcode_file_dir
 
-    # Get default GCP bucket if not provided
+    # Get default GCP bucket if not provided (make sure it doesn't end with a /)
     if args.gs_barcode_list_bucket is None:
-        args.gs_barcode_list_bucket = f"gs://fc-secure-de19fd29-2253-41cd-9751-1788cf7ad1a5/submissions/final_barcode_onlist/{today}"
+        gs_barcode_list_bucket = f"gs://fc-secure-de19fd29-2253-41cd-9751-1788cf7ad1a5/submissions/final_barcode_onlist/{today}/{args.terra_etype}"
+    else:
+        gs_barcode_list_bucket = args.gs_barcode_list_bucket.rstrip('/')
 
     # Get default input parameter table dir
     if args.output_dir is None:
         args.output_dir = os.path.join(
-            os.getcwd(), "terra_datatables", "input", today)
+            os.getcwd(), "terra_datatables", "input", today, args.terra_etype)
 
     # Log all input args
     logging.info("Command-line arguments: %s", vars(args))
@@ -115,14 +119,14 @@ def main():
     table = portal2terra_transfer.generate_pipeline_input_table(
         query_analysis_set_accs=final_input_analysis_sets.split(','),
         terra_etype=args.terra_etype,
-        local_barcode_file_dir=args.local_barcode_file_dir,
-        gs_barcode_list_bucket=args.gs_barcode_list_bucket,
+        local_barcode_file_dir=local_barcode_file_dir,
+        gs_barcode_list_bucket=gs_barcode_list_bucket,
         igvf_api=igvf_portal_api)
     logging.info("Pipeline input table generated.")
 
     # Output the table to local folder as a Copy
     portal2terra_transfer.save_pipeline_input_table(
-        pipeline_input_table=table, output_dir=os.path.join(args.output_dir, args.terra_etype))
+        pipeline_input_table=table, output_dir=args.output_dir)
     logging.info("Pipeline input table saved to local folder.")
 
     # If input generation has errors, log a warning and do not upload to Terra
@@ -142,8 +146,8 @@ def main():
 
             # Copy barcode files to GCP bucket
             subprocess.run(
-                ['gcloud', 'storage', 'cp', '-r',
-                    args.local_barcode_file_dir, args.gs_barcode_list_bucket],
+                ['gcloud', 'storage', 'rsync',
+                    local_barcode_file_dir, gs_barcode_list_bucket],
                 check=True
             )
             logging.info("Pipeline barcode files copied to GCP bucket.")
