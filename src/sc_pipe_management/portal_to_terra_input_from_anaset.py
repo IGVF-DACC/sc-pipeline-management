@@ -667,12 +667,14 @@ class SingleCellInputBuilder:
             self.seqfile_urls_for_one_assay(
                 measet_items=measet_items, assay_type=assay_type)
 
-    def single_seqspec_preflight_check(self, seqspec_column: str, onlist_method: str, measurement_set_accs: list):
+    def single_seqspec_preflight_check(self, seqspec_column: str, onlist_method: str, measurement_set_accs: list, local_barcode_file_dir: str):
         """Check on set of seqspec URLs for the same assay type. If they are all the same, download them and generate the seqspec index and final barcode inclusion list.
 
         Args:
             seqspec_column (str): A column name in the input table (e.g., atac_seqspec_urls)
             onlist_method (str): Onlist method
+            measurement_set_accs (list): A list of measurement set accessions
+            local_barcode_file_dir (str, optional): Directory to save the final inclusion list.
         """
         curr_assay_type = seqspec_column.split('_')[0]
         curr_seqspec_urls = list(self.data[seqspec_column])
@@ -705,12 +707,12 @@ class SingleCellInputBuilder:
             return
         try:
             # Dir will be a fixed place with a date folder under the current working directory
-            final_inclusion_list_dir = os.path.join(
-                os.getcwd(), 'final_barcode_list', get_today_mmddyyyy())
-            if not os.path.exists(final_inclusion_list_dir):
-                os.makedirs(final_inclusion_list_dir)
+            # final_inclusion_list_dir = os.path.join(
+            #     os.getcwd(), 'final_barcode_list', get_today_mmddyyyy())
+            if not os.path.exists(local_barcode_file_dir):
+                os.makedirs(local_barcode_file_dir)
             curr_inclusion_list_path = os.path.join(
-                final_inclusion_list_dir, f'{self.analysis_set_acc}_{curr_assay_type}_final_barcode_inclusion_list.txt')
+                local_barcode_file_dir, f'{self.analysis_set_acc}_{curr_assay_type}_final_barcode_inclusion_list.txt')
             curr_seqspec_onlist_output = seqspec_onlist_safetychk_and_get(
                 seqspec_file_paths=curr_seqspec_file_paths, assay_type=curr_assay_type, measet_onlist_files=curr_measet_onlist_files,
                 onlist_method=onlist_method, final_inclusion_list_path=curr_inclusion_list_path, igvf_api=self.igvf_api)
@@ -718,8 +720,11 @@ class SingleCellInputBuilder:
         except BadDataException as e:
             self.data['possible_errors'] += str(e)
 
-    def seqspec_preflight_check(self):
+    def seqspec_preflight_check(self, local_barcode_file_dir: str):
         """Check if onlist info and read format info are consistent all across input. If so, generate the read index and final barcode inclusion list.
+
+        Args:
+            local_barcode_file_dir (str, optional): Directory to save the final inclusion list.
         """
         for column, curr_measet_accs in [('rna_seqspec_urls', self.data['rna_MeaSetIDs']), ('atac_seqspec_urls', self.data['atac_MeaSetIDs'])]:
             if not curr_measet_accs:
@@ -727,7 +732,7 @@ class SingleCellInputBuilder:
             onlist_method = get_onlist_method(
                 measurement_set_accs=curr_measet_accs, igvf_api=self.igvf_api)
             self.single_seqspec_preflight_check(
-                seqspec_column=column, onlist_method=onlist_method, measurement_set_accs=curr_measet_accs)
+                seqspec_column=column, onlist_method=onlist_method, measurement_set_accs=curr_measet_accs, local_barcode_file_dir=local_barcode_file_dir)
 
     def get_taxa_and_subpool_info(self):
         """Add sample taxa and sample accession as the subpool ID. Assumption is that one pipeline run, one sample.
@@ -794,8 +799,11 @@ class SingleCellInputBuilder:
                 elif self.data[col] == '':
                     self.data[col] = "None"
 
-    def build_input_dict(self) -> dict:
+    def build_input_dict(self, local_barcode_file_dir: str) -> dict:
         """Build the final output report dict
+
+        Args:
+            local_barcode_file_dir (str): Directory to save the final inclusion list.
         """
         # Add analysis set accession
         self.data['analysis_set_acc'] = self.analysis_set_acc
@@ -804,7 +812,8 @@ class SingleCellInputBuilder:
         # Add sequence file URLs and seqspec URLs by assay type
         self.get_seqfile_uris_and_seqspec_by_assays_and_runs()
         # Safety check seqspec
-        self.seqspec_preflight_check()
+        self.seqspec_preflight_check(
+            local_barcode_file_dir=local_barcode_file_dir)
         # Clean up seqspec urls
         self.data['atac_seqspec_urls'] = sorted(self.data['atac_seqspec_urls'])
         self.data['rna_seqspec_urls'] = sorted(self.data['rna_seqspec_urls'])
@@ -859,7 +868,8 @@ def generate_pipeline_input_table(query_analysis_set_accs: list, igvf_api, terra
         print('Processing:', anaset_acc)
         curr_input_builder = SingleCellInputBuilder(
             analysis_set_acc=anaset_acc, igvf_api=igvf_api)
-        pipeline_input_list.append(curr_input_builder.build_input_dict())
+        pipeline_input_list.append(curr_input_builder.build_input_dict(
+            local_barcode_file_dir=local_barcode_file_dir))
         print('Done:', anaset_acc)
     pipeline_input_table = pd.DataFrame(pipeline_input_list)
     print('Reformatting input table for Terra format...')
