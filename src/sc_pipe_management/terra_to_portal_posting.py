@@ -269,6 +269,7 @@ def parse_igvf_accessions_from_urls(igvf_file_urls: list[str]) -> list[str]:
     Returns:
         list: A list of accessions extracted from the URLs
     """
+    igvf_file_urls = [url for url in igvf_file_urls if url is not None]
     cleaned_igvf_file_urls = parse_terra_str_list(
         terra_str_lists=igvf_file_urls)
     return [IGVF_URL_PATH_REGEX.search(str(url)).group(1) for url in cleaned_igvf_file_urls if IGVF_URL_PATH_REGEX.search(str(url)) is not None]
@@ -771,7 +772,7 @@ def post_all_rna_data_to_portal(terra_data_record: pd.Series, lab: str, award: s
 
     # Get seqspec and barcode replacement file accessions (barcode file can be NaN on Terra)
     curr_seqspec_and_barcode_replacement = parse_igvf_accessions_from_urls(
-        igvf_file_urls=[terra_data_record['rna_seqspec_urls'], terra_data_record['barcode_replacement_file']])
+        igvf_file_urls=[terra_data_record['rna_seqspec_urls'], terra_data_record.get('barcode_replacement_file', None)])
 
     # Combine seqfile and seqspec into one list as derived_from
     all_derived_from = list(set(
