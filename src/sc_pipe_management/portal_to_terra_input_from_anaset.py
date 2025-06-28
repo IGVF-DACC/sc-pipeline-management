@@ -19,6 +19,7 @@ class BadDataException(Exception):
 # TODO:
 # 1) A SeqFile may have multiple seqspec files but only one is released. Once that is sorted out, need to
 #   update the seqspec URLs to be the released one.
+# 2) Possibly check the release status if a SeqFile has multiple seqspec files
 
 
 # Read_names to read types
