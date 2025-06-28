@@ -561,9 +561,11 @@ def get_existing_analysis_set_docs(analysis_set_acc: str, igvf_utils_api) -> lis
         igvf_utils_api (_type_): igvf utils API client
 
     Returns:
-        list: A list of existing document aliases
+        list: A list of existing document aliases or an empty list if no documents are linked
     """
     analysis_set_obj = igvf_utils_api.get(f'/analysis-sets/{analysis_set_acc}')
+    if not analysis_set_obj.get('documents'):
+        return []
     existing_doc_ids = analysis_set_obj['documents']
     all_existing_doc_aliases = set()
     for doc_id in existing_doc_ids:
