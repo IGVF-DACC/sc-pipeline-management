@@ -142,7 +142,7 @@ def main():
                 portal_input_table=table,
                 verbose=True
             )
-            logging.error("Pipeline input table uploaded to Terra.")
+            logging.info("Pipeline input table uploaded to Terra.")
 
             # Copy barcode files to GCP bucket
             subprocess.run(
