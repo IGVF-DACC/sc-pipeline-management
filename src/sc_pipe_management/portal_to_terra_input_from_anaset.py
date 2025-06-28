@@ -159,7 +159,13 @@ def get_seqfile_items(measet_items: list, igvf_api) -> list:
 def seqfile_sort_func(x):
     """Set up sorting sorter for sequence file item lists.
     """
-    return (x.file_set, x.illumina_read_type, x.sequencing_run, x.lane)
+    return (
+        x.file_set,  # Required property
+        x.illumina_read_type,   # Required property
+        x.sequencing_run,  # Required property
+        x.lane or 99,  # Use 0 for None integers
+        x.flowcell_id or 99  # Use 0 for None integers
+    )
 
 
 def get_atac_seqfile_read_titles(read_names: list) -> str:
