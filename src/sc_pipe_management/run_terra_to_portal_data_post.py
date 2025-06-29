@@ -7,6 +7,31 @@ from datetime import datetime
 from functools import wraps
 
 
+def read_exclusion_file(file_path: str) -> list:
+    """Read exclusion file and return list of accessions.
+
+    Args:
+        file_path (str): Path to the exclusion file containing accessions to exclude.
+
+    Raises:
+        argparse.ArgumentTypeError: If the file cannot be found or read, an error is raised with a message indicating the issue.
+        argparse.ArgumentTypeError: If the file is empty or contains only whitespace, an error is raised.
+
+    Returns:
+        list: A list of accessions to exclude from the data table or an empty list if no file is provided.
+    """
+    if file_path is None:
+        return []
+    try:
+        with open(file_path, 'r') as f:
+            return [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        raise argparse.ArgumentTypeError(
+            f"Exclusion file not found: {file_path}")
+    except Exception as e:
+        raise argparse.ArgumentTypeError(f"Error reading exclusion file: {e}")
+
+
 def get_parser():
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -19,6 +44,8 @@ def get_parser():
                         help="""Terra workspace name for the pipeline platform. Defaults to IGVF Single-Cell Data Processing""")
     parser.add_argument('--terra_etype', type=str,
                         help="""Terra eType name for the pipeline data table.""")
+    parser.add_argument('--excluded_accs', type=read_exclusion_file, default=None,
+                        help="""A file with a list of accessions to exclude from the data table. If not provided, no accessions will be excluded.""")
     parser.add_argument('--upload_file', action='store_true',
                         help="""If True, upload the file to the portal.""")
     parser.add_argument('--output_dir', type=str, default=None,
@@ -108,7 +135,7 @@ def main():
     today = datetime.now().strftime("%m%d%Y")
     if args.output_dir is None:
         args.output_dir = os.path.join(
-            os.getcwd(), "terra_datatables", "output", today)
+            os.getcwd(), "terra_datatables", "output", today, args.terra_etype)
 
     # Call FireCloud API
     do_firecloud_api()
@@ -116,7 +143,10 @@ def main():
     # Download data table from Terra
     terra_table = api_tools.get_terra_tsv_data_table(terra_namespace=args.terra_namespace,
                                                      terra_workspace=args.terra_workspace,
-                                                     terra_etype=args.terra_etype)
+                                                     terra_etype=args.terra_etype,
+                                                     excluded_accessions=args.excluded_accs)
+    print(
+        f'>>>>>>>>>>>>>> A total of {terra_table.shape[0]} pipeline runs found with {len(args.excluded_accs)} of which excluded.')
 
     # Download all workflow configs first (firecloud times out)
     config_file_collection = terra2portal_transfer.download_all_workflow_config_jsons(

@@ -118,13 +118,14 @@ def calculate_gsutil_hash(file_path: str):
         raise Exception(f'gsutil hash command failed: {result.stderr}')
 
 
-def get_terra_tsv_data_table(terra_namespace: str, terra_workspace: str, terra_etype: str) -> pd.DataFrame:
+def get_terra_tsv_data_table(terra_namespace: str, terra_workspace: str, terra_etype: str, excluded_accessions: list = []) -> pd.DataFrame:
     """Get the data table from Terra workspace.
 
     Args:
         terra_namespace (str): DACC_ANVIL
         terra_workspace (str): workspace name
         terra_etype (str): Terra entity type name
+        excluded_accessions (list, optional): List of accessions to exclude from the data table. Defaults to [].
 
     Returns:
         pd.DataFrame: The Terra data table
@@ -132,7 +133,13 @@ def get_terra_tsv_data_table(terra_namespace: str, terra_workspace: str, terra_e
     # TSV get just seems to fail whenever firecloud mode is used.
     query_response_for_tsv = fapi.get_entities_tsv(
         namespace=terra_namespace, workspace=terra_workspace, etype=terra_etype, model='flexible')
-    return pd.read_csv(io.StringIO(query_response_for_tsv.content.decode('utf-8')), sep='\t')
+    terra_datatable = pd.read_csv(io.StringIO(
+        query_response_for_tsv.content.decode('utf-8')), sep='\t')
+    # For larger runs, can exclude failed runs from posting to IGVF portal
+    if excluded_accessions:
+        return terra_datatable[~terra_datatable['analysis_set_acc'].isin(excluded_accessions)]
+    else:
+        return terra_datatable
 
 
 def upload_portal_input_tsv_to_terra(terra_namespace: str, terra_workspace: str, portal_input_table: pd.DataFrame, verbose: bool = False):
