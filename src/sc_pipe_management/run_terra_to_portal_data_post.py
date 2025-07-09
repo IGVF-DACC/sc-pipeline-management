@@ -145,8 +145,12 @@ def main():
                                                      terra_workspace=args.terra_workspace,
                                                      terra_etype=args.terra_etype,
                                                      excluded_accessions=args.excluded_accs)
+    if args.excluded_accs is None:
+        num_excluded = 0
+    else:
+        num_excluded = len(args.excluded_accs)
     print(
-        f'>>>>>>>>>>>>>> A total of {terra_table.shape[0]} pipeline runs found with {len(args.excluded_accs)} of which excluded.')
+        f'>>>>>>>>>>>>>> A total of {terra_table.shape[0]} pipeline runs found with {num_excluded} of which excluded.')
 
     # Download all workflow configs first (firecloud times out)
     config_file_collection = terra2portal_transfer.download_all_workflow_config_jsons(
