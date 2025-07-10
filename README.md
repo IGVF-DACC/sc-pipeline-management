@@ -30,6 +30,11 @@ See `requirement.txt` for package details.
 * firecloud
 * seqspec
 
+#### Installation
+
+* The igvf-client, igvf-utils, and seqspec packages can be install directly from the requirement.txt using `pip install -r requirement.txt`
+* The firecloud package needs to be installed manually due to setuptools incompatibilities. Download the either the zip or tar.gz source file from [FireCloud release v0.16.37](https://github.com/broadinstitute/fiss/releases/tag/v0.16.37) and unzip. Run `python setup.py install`.
+
 ### 2. Additional requirement
 
 * **Set up Google cloud (Terra) access credentials.** FireCloud uses the [Google Cloud SDK](https://cloud.google.com/sdk/) to manage authorization. To use the firecloud CLI or API, you must install the SDK and login locally with `gcloud auth login`.
