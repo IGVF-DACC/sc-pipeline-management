@@ -8,6 +8,12 @@ src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
+
+import hashlib
+import pandas as pd
+from pandas.testing import assert_series_equal, assert_frame_equal
+import unittest
+from sc_pipe_management.igvf_and_terra_api_tools import set_up_api_keys, get_igvf_client_auth
 from sc_pipe_management.portal_to_terra_input_from_anaset import (
     generate_pipeline_input_table,
     generate_ordered_read_ids,
@@ -15,12 +21,6 @@ from sc_pipe_management.portal_to_terra_input_from_anaset import (
     generate_finalinclusion_list,
     get_today_mmddyyyy
 )
-from sc_pipe_management.igvf_and_terra_api_tools import set_up_api_keys, get_igvf_client_auth
-import unittest
-from pandas.testing import assert_series_equal, assert_frame_equal
-import pandas as pd
-import os
-import hashlib
 
 
 # Seqspec files for different assays (Splitseq is not released, needs to download when running the test)
@@ -30,7 +30,9 @@ SEQSPEC_FILES_BY_ASSAY_TITLES = {
     'parse splitseq': {'atac': None,
                        'rna': 'src/tests/test_files/IGVFFI2264BQQD.yaml.gz'},  # SPLiT-seq RNA seqspec
     'shareseq': {'atac': 'src/tests/test_files/IGVFFI8012OCZQ.yaml.gz',  # ShareSeq does not have atac seqspec
-                 'rna': 'src/tests/test_files/IGVFFI5825ATCM.yaml.gz'}  # ShareSeq RNA seqspec
+                 'rna': 'src/tests/test_files/IGVFFI5825ATCM.yaml.gz'},  # ShareSeq RNA seqspec
+    'parse splitseq dbl': {'atac': None,  # ShareSeq does not have atac seqspec
+                           'rna': 'src/tests/test_files/IGVFFI2791JOTW.yaml.gz'},  # This seqspec has cDNA on both R1 and R2
 }
 
 # Expected outputs from seqspec
@@ -55,6 +57,15 @@ SEQSPEC_OUTPUT_BY_ASSAY_TITLES = {
                 'index_input': 'IGVFFI4633WXZI.fastq.gz,IGVFFI9320MADV.fastq.gz',
                 'onlist_input': 'IGVFFI9320MADV.fastq.gz',
                 'onlist_final_list': '7f1e51743561883977e5a905bb345ac8',
+                'onlist_method': 'product'
+                }
+    },
+    'parse splitseq dbl': {
+        'atac': None,
+        'rna': {'read_index': '1,10,18,1,48,56,1,78,86:1,0,10:0,0,151',
+                'index_input': 'IGVFFI4363YURH,IGVFFI8274OQNU',
+                'onlist_input': 'IGVFFI8274OQNU',
+                'onlist_final_list': 'f7ef2f4d24a77208fd2f8f3cc68c071b',
                 'onlist_method': 'product'
                 }
     },

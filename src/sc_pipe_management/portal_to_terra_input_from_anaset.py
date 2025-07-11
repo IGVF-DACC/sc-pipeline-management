@@ -63,7 +63,7 @@ BASE_IGVF_PORTAL_URL = 'https://api.data.igvf.org'
 READ_ID_REGEX = re.compile(r'(IGVF[A-Z0-9]*)')
 
 # seqspec index tool
-ASSAY_TYPE_TO_TOOL_FORMAT = {'rna': 'kb', 'atac': 'chromap'}
+ASSAY_TYPE_TO_TOOL_FORMAT = {'rna': 'kb-single', 'atac': 'chromap'}
 
 
 def terra_str_formatter(input_strs: list) -> str:
