@@ -9,6 +9,8 @@ from igvf_client import ApiClient
 from igvf_client import IgvfApi
 from igvf_utils.connection import Connection
 import os
+import base64
+import binascii
 
 
 fapi._set_session()
@@ -94,28 +96,28 @@ def get_igvf_utils_connection(igvf_api_keys: dict, igvf_utils_mode: str = 'sandb
     return iu_conn
 
 
-def calculate_gsutil_hash(file_path: str):
+def calculate_gsfile_hex_hash(file_path: str) -> str:
     """Calculates the hash of a file using gsutil.
 
     Args:
         file_path (str): The path to the file for which to calculate the hash.
 
     Returns:
-        str: The MD5 hash of the file.
+        str: The MD5 hex hash of the file.
     """
+    # This returns a Base64 encoded MD5 hash, need to convert to hex
     result = subprocess.run(
-        ['gsutil', 'hash', '-h', file_path], capture_output=True, text=True)
+        ['gcloud', 'storage', 'objects', 'describe', file_path, '--format=value(md5_hash)'], capture_output=True, text=True)
     if result.returncode == 0:
-        # Parse the output to extract the hash values
-        output_lines = result.stdout.splitlines()
-        hash_values = {}
-        for line in output_lines:
-            if ':' in line:
-                key, value = line.split(':')
-                hash_values[key.strip()] = value.strip()
-        return hash_values['Hash (md5)']
+        # Convert Base64 to hexadecimal (like md5sum)
+        try:
+            hash_bytes = base64.b64decode(result.stdout)
+            hex_hash = binascii.hexlify(hash_bytes).decode('ascii')
+            return hex_hash
+        except Exception as e:
+            raise Exception(f'Failed to convert Base64 hash to hex: {e}')
     else:
-        raise Exception(f'gsutil hash command failed: {result.stderr}')
+        raise Exception(f'gcloud storage hash command failed: {result.stderr}')
 
 
 def get_terra_tsv_data_table(terra_namespace: str, terra_workspace: str, terra_etype: str, excluded_accessions: list = []) -> pd.DataFrame:

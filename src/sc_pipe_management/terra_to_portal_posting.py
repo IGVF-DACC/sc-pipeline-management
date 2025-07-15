@@ -756,7 +756,7 @@ def post_single_matrix_file(terra_data_record: pd.Series, col_header: str, curr_
                                              gs_path=curr_gs_cloud_link).aliases()
                                          )
         # Calculate md5sum
-        curr_md5sum = api_tools.calculate_gsutil_hash(
+        curr_md5sum = api_tools.calculate_gsfile_hex_hash(
             file_path=curr_gs_cloud_link)
         # Only one reference file
         reference_files = parse_igvf_accessions_from_urls(
@@ -890,7 +890,7 @@ def post_single_alignment_file(terra_data_record: pd.Series, col_header: str, cu
                                          terra_uuids=parse_workflow_uuids_from_gs_path(
                                              gs_path=curr_gs_cloud_link).aliases()
                                          )
-        curr_md5sum = api_tools.calculate_gsutil_hash(
+        curr_md5sum = api_tools.calculate_gsfile_hex_hash(
             file_path=curr_gs_cloud_link)
         # Get reference files
         reference_files = parse_igvf_accessions_from_urls(
@@ -957,7 +957,7 @@ def post_single_tabular_file(terra_data_record: pd.Series, col_header: str, curr
                                          terra_uuids=parse_workflow_uuids_from_gs_path(
                                              gs_path=curr_gs_cloud_link).aliases()
                                          )
-        curr_md5sum = api_tools.calculate_gsutil_hash(
+        curr_md5sum = api_tools.calculate_gsfile_hex_hash(
             file_path=curr_gs_cloud_link)
         curr_tab_file_payload = dict(award=award,
                                      lab=lab,
@@ -1021,7 +1021,7 @@ def post_single_index_file(terra_data_record: pd.Series, col_header: str, curr_f
                                          terra_uuids=parse_workflow_uuids_from_gs_path(
                                              gs_path=curr_gs_cloud_link).aliases()
                                          )
-        curr_md5sum = api_tools.calculate_gsutil_hash(
+        curr_md5sum = api_tools.calculate_gsfile_hex_hash(
             file_path=curr_gs_cloud_link)
         curr_index_file_payload = dict(award=award,
                                        lab=lab,
