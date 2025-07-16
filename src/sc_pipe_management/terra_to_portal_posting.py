@@ -1343,18 +1343,26 @@ def post_all_successful_runs(full_terra_data_table: pd.DataFrame, igvf_api, igvf
     Returns:
         list[PostResult]: PostResult objects
     """
-    results = []
-    for _, curr_pipeline in full_terra_data_table.iterrows():
-        curr_config_file_info = config_file_collection[curr_pipeline['analysis_set_acc']]
-        results.append(post_all_data_from_one_run(
-            terra_data_record=curr_pipeline,
-            igvf_api=igvf_api,
-            igvf_utils_api=igvf_utils_api,
-            upload_file=upload_file,
-            config_file_path=curr_config_file_info.download_path,
-            doc_aliases=curr_config_file_info.doc_aliases,
-            output_root_dir=output_root_dir))
-        time.sleep(0.1)  # Sleep to avoid hitting API rate limits
+    midpt_post_anasets_file = os.path.join(
+        output_root_dir, 'midpoint_posted_analysis_sets.txt')
+    with open(midpt_post_anasets_file, 'a+') as f:
+        results = []
+        for _, curr_pipeline in full_terra_data_table.iterrows():
+            curr_config_file_info = config_file_collection[curr_pipeline['analysis_set_acc']]
+            pipeline_post_res = post_all_data_from_one_run(
+                terra_data_record=curr_pipeline,
+                igvf_api=igvf_api,
+                igvf_utils_api=igvf_utils_api,
+                upload_file=upload_file,
+                config_file_path=curr_config_file_info.download_path,
+                doc_aliases=curr_config_file_info.doc_aliases,
+                output_root_dir=output_root_dir)
+            # Once a full run is posted, write the AnaSet accession to a file
+            # In case of interruption, we can skip those already posted
+            f.write(f"{pipeline_post_res.analysis_set_acc}\n")
+            f.flush()
+            results.append(pipeline_post_res)
+            time.sleep(0.1)  # Sleep to avoid hitting API rate limits
     return results
 
 
