@@ -17,8 +17,7 @@ class BadDataException(Exception):
     pass
 
 # TODO:
-# 1) A SeqFile may have multiple seqspec files but only one is released. Once that is sorted out, need to
-#   update the seqspec URLs to be the released one.
+# 1) A SeqFile may have multiple seqspec files but only one is released/official. Once that is sorted out, need to update the seqspec URLs to be the released one.
 # 2) Possibly check the release status if a SeqFile has multiple seqspec files
 
 
@@ -249,6 +248,9 @@ def get_seqspec_hrefs(seqspec_ids: list[str], igvf_api) -> set:
     seqspec_urls = set()
     for seqspec_id in seqspec_ids:
         curr_seqspec_item = igvf_api.get_by_id(seqspec_id).actual_instance
+        # Not including revoked, deleted, replaced, archived seqspecs
+        if curr_seqspec_item.status in ['revoked', 'deleted', 'replaced', 'archived']:
+            continue
         seqspec_urls.add(construct_full_href_url(
             igvf_href=curr_seqspec_item.href))
     return seqspec_urls
