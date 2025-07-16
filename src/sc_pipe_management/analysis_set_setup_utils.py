@@ -24,11 +24,11 @@ def get_parser():
     parser.add_argument('--post_endpoint', type=str, choices=['sandbox', 'prod', 'staging'],
                         help="""The POST endpoint, sandbox, prod, or staging.""")
     parser.add_argument('--lab', type=str,
-                        help="""Lab ID for the analysis set. Defaults to /labs/j-michael-cherry/""")
+                        help="""Lab ID for the analysis set.""")
     parser.add_argument('--award', type=str,
-                        help="""Award ID for the analysis set. Defaults to /awards/HG012012/""")
+                        help="""Award ID for the analysis set.""")
     parser.add_argument('--preferred_assay_title', type=str,
-                        help="""Preferred assay title for the measurement set query. Defaults to 10x multiome""")
+                        help="""Preferred assay title for the measurement set query.""")
     parser.add_argument('--limit', type=limit_type, default='all',
                         help="""Query result limit. Defaults to all.""")
     parser.add_argument('--output_dir', type=str, default='./',
@@ -37,7 +37,7 @@ def get_parser():
 
 
 # TODO: this will be replaced by AnalysisSet pipeline status once the ticket is in
-FILE_TRACKING_PIPELINE_RUNS = 'terra_datatables/setup/running_list_of_finished_analysis_sets.txt'
+FILE_TRACKING_PIPELINE_RUNS = 'src/sc_pipe_management/files/running_list_of_finished_analysis_sets.txt'
 
 
 POSSIBLE_SINGLE_CELL_PIPELINE_PHRASES = ['scpipe',
@@ -141,7 +141,22 @@ def query_for_measets(filtered_fields: dict, igvf_client_api, limit: str | int =
         return query_res.graph
 
 
-def check_is_scpipeline(file_set_obj) -> bool:
+def check_is_uniform_workflow(workflow_id: str, igvf_client_api) -> bool:
+    """Check if a workflow is a uniform workflow.
+
+    Args:
+        workflow_id (str): The ID of the workflow to check.
+        igvf_client_api (_type_): The IGVF client API instance.
+
+    Returns:
+        bool: Whether the workflow is a uniform workflow.
+    """
+    workflow_obj = igvf_client_api.get_by_id(workflow_id).actual_instance
+    if workflow_obj.uniform_pipeline:
+        return workflow_obj.uniform_pipeline
+
+
+def check_is_scpipeline(file_set_obj, igvf_client_api) -> bool:
     """Check if a FileSet object is related to single-cell data. The assumption is that the Measurement Sets used to start all these checks are already single cell assays. But currently, there is no way to tell if an Analysis Set is created for the uniform pipeline. The uniform_pipeline property is calculated once files are linked.
 
     Args:
@@ -150,13 +165,16 @@ def check_is_scpipeline(file_set_obj) -> bool:
     Returns:
         bool: Whether the FileSet is related to single-cell data.
     """
-    possible_descriptions = []
-    # Check aliases
-    if file_set_obj.aliases:
-        possible_descriptions.extend(file_set_obj.aliases)
-    if file_set_obj.description:
-        possible_descriptions.append(file_set_obj.description)
-    return any(kwd in entry for entry in possible_descriptions for kwd in POSSIBLE_SINGLE_CELL_PIPELINE_PHRASES)
+    if file_set_obj.workflows:
+        return any([check_is_uniform_workflow(workflow_id=entry, igvf_client_api=igvf_client_api) for entry in file_set_obj.workflows])
+    else:
+        possible_descriptions = []
+        # Check aliases
+        if file_set_obj.aliases:
+            possible_descriptions.extend(file_set_obj.aliases)
+        if file_set_obj.description:
+            possible_descriptions.append(file_set_obj.description)
+        return any(kwd in entry for entry in possible_descriptions for kwd in POSSIBLE_SINGLE_CELL_PIPELINE_PHRASES)
 
 
 def check_is_duped_scpipeline(file_set_id: str, igvf_client_api, finished_anasets: list = []) -> bool:
@@ -175,10 +193,10 @@ def check_is_duped_scpipeline(file_set_id: str, igvf_client_api, finished_anaset
     if file_set_id.split('/')[-2] in finished_anasets:
         return True
     sub_file_set_obj = igvf_client_api.get_by_id(file_set_id).actual_instance
-    if check_is_scpipeline(file_set_obj=sub_file_set_obj):
+    if check_is_scpipeline(file_set_obj=sub_file_set_obj, igvf_client_api=igvf_client_api):
         return True
     else:
-        False
+        return False
 
 
 def check_is_duped_for_all(measurement_set_id: str, igvf_client_api, finished_anasets: str = []) -> bool:

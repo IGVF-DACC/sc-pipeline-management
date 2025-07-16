@@ -37,17 +37,21 @@ class TestCheckIsScpipeline(TestAnalysisSetUtils):
         mock_file_set_obj = Mock()
         mock_file_set_obj.aliases = ['igvf:test-scpipe-analysis']
         mock_file_set_obj.description = None
+        mock_file_set_obj.workflows = []
 
-        result = utils.check_is_scpipeline(mock_file_set_obj)
+        result = utils.check_is_scpipeline(
+            mock_file_set_obj, self.mock_igvf_client)
         self.assertTrue(result)
 
     def test_check_is_scpipeline_with_single_cell_description(self):
         """Test that file set with single cell description returns True."""
         mock_file_set_obj = Mock()
-        mock_file_set_obj.aliases = None
+        mock_file_set_obj.aliases = []
         mock_file_set_obj.description = 'single cell uniform pipeline analysis'
+        mock_file_set_obj.workflows = []
 
-        result = utils.check_is_scpipeline(mock_file_set_obj)
+        result = utils.check_is_scpipeline(
+            mock_file_set_obj, self.mock_igvf_client)
         self.assertTrue(result)
 
     def test_check_is_scpipeline_with_sc_pipeline_alias(self):
@@ -55,8 +59,10 @@ class TestCheckIsScpipeline(TestAnalysisSetUtils):
         mock_file_set_obj = Mock()
         mock_file_set_obj.aliases = ['igvf:my-sc-pipeline-test']
         mock_file_set_obj.description = None
+        mock_file_set_obj.workflows = []
 
-        result = utils.check_is_scpipeline(mock_file_set_obj)
+        result = utils.check_is_scpipeline(
+            mock_file_set_obj, self.mock_igvf_client)
         self.assertTrue(result)
 
     def test_check_is_scpipeline_false_case(self):
@@ -65,18 +71,37 @@ class TestCheckIsScpipeline(TestAnalysisSetUtils):
         mock_file_set_obj.aliases = [
             'igvf:other-analysis', 'igvf:non-pipeline-test']
         mock_file_set_obj.description = 'some other analysis description'
+        mock_file_set_obj.workflows = []
 
-        result = utils.check_is_scpipeline(mock_file_set_obj)
+        result = utils.check_is_scpipeline(
+            mock_file_set_obj, self.mock_igvf_client)
         self.assertFalse(result)
 
     def test_check_is_scpipeline_no_aliases_no_description(self):
         """Test that file set with no aliases or description returns False."""
         mock_file_set_obj = Mock()
-        mock_file_set_obj.aliases = None
+        mock_file_set_obj.aliases = []
         mock_file_set_obj.description = None
+        mock_file_set_obj.workflows = []
 
-        result = utils.check_is_scpipeline(mock_file_set_obj)
+        result = utils.check_is_scpipeline(
+            mock_file_set_obj, self.mock_igvf_client)
         self.assertFalse(result)
+
+    def test_check_is_scpipeline_with_workflows(self):
+        """Test that file set with workflows returns True (i.e., has files)."""
+        # Create a mock workflow object with uniform_pipeline property
+        mock_workflow = Mock()
+        mock_workflow.uniform_pipeline = True
+        mock_workflow.id = 'IGVFWF7365VWQV'
+
+        # Set workflows to contain the mock workflow object
+        mock_file_set_obj = Mock()
+        mock_file_set_obj.workflows = [mock_workflow.id]
+
+        result = utils.check_is_scpipeline(
+            mock_file_set_obj, self.mock_igvf_client)
+        self.assertTrue(result)
 
 
 class TestCheckIsDupedScpipeline(TestAnalysisSetUtils):
@@ -100,6 +125,7 @@ class TestCheckIsDupedScpipeline(TestAnalysisSetUtils):
         mock_file_set_obj = Mock()
         mock_file_set_obj.aliases = ['igvf:test-scpipe-analysis']
         mock_file_set_obj.description = None
+        mock_file_set_obj.workflows = []
 
         # Mock the HTTP response object
         mock_response = Mock()
@@ -118,6 +144,7 @@ class TestCheckIsDupedScpipeline(TestAnalysisSetUtils):
         mock_file_set_obj = Mock()
         mock_file_set_obj.aliases = ['igvf:other-analysis']
         mock_file_set_obj.description = 'non-pipeline analysis'
+        mock_file_set_obj.workflows = []
 
         # Mock the HTTP response object
         mock_response = Mock()
