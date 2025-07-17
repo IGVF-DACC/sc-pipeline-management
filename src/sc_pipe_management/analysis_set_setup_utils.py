@@ -189,7 +189,7 @@ def check_is_duped_scpipeline(file_set_id: str, igvf_client_api, finished_anaset
         bool: Whether the analysis set is a single cell uniform pipeline, have no duplicates, and haven't been processed.
     """
     if not file_set_id.startswith('/analysis-sets/'):
-        return
+        return False
     if file_set_id.split('/')[-2] in finished_anasets:
         return True
     sub_file_set_obj = igvf_client_api.get_by_id(file_set_id).actual_instance

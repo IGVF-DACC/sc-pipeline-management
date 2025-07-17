@@ -110,7 +110,7 @@ class TestCheckIsDupedScpipeline(TestAnalysisSetUtils):
         """Test that non-analysis-set ID returns None."""
         result = utils.check_is_duped_scpipeline(
             '/measurement-sets/IGVFMS123456/', self.mock_igvf_client, [])
-        self.assertIsNone(result)
+        self.assertFalse(result)
 
     def test_check_is_duped_scpipeline_already_finished(self):
         """Test that already finished analysis set returns True."""
