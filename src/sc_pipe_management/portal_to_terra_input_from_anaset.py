@@ -115,8 +115,17 @@ def get_sample_obj(sample_id: str, igvf_api):
 
 # Get analysis set level info
 def get_analysis_set_obj(analysis_set_accessions: list, igvf_api):
-    """Get the analysis set object from the IGVF API."""
-    return igvf_api.analysis_sets(accession=analysis_set_accessions).graph[0]
+    """Get the analysis set object from the IGVF API.
+
+    Args:
+        analysis_set_accessions (list): A list of analysis set accessions (e.g., ['IGVFxxxxx'])
+        igvf_api (_type_): IGVF client api
+
+    Returns:
+        _type_: IGVF client query return object
+    """
+    # get_by_id is less dependent on objects being indexed
+    return igvf_api.get_by_id(f'/analysis-sets/{analysis_set_accessions[0]}').actual_instance
 
 
 def get_measurement_set_ids(analysis_set_obj) -> list:
