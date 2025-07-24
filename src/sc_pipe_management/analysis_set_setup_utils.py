@@ -91,13 +91,13 @@ def remove_duplicate_sublists(list_of_lists: list[list]) -> list[list]:
     return [list(t) for t in set(tuple(sublist) for sublist in list_of_lists)]
 
 
-def generate_filtered_fields(lab_id: str, award_id: str, preferred_assay_title: str, excluded_nc_audits: list, excluded_error_audits: list, statues: list, sample_names: list = []) -> dict:
+def generate_filtered_fields(lab_id: str, award_id: str, preferred_assay_titles: list, excluded_nc_audits: list, excluded_error_audits: list, statues: list, sample_names: list = []) -> dict:
     """Generate a dictionary of filtered fields for querying.
 
     Args:
         lab_id (str): e.g. /labs/j-michael-cherry/
         award_id (str): e.g. /awards/HG012012/
-        preferred_assay_title (str): e.g., 10x multiome
+        preferred_assay_title (list): e.g., ["10x multiome"]
         excluded_nc_audits (list): a list of NOT_COMPLIANT audit categories to exclude
         excluded_error_audits (list): a list of ERROR audit categories to exclude
         statues (list): a list of statuses to include, e.g., ['released']
@@ -109,7 +109,7 @@ def generate_filtered_fields(lab_id: str, award_id: str, preferred_assay_title: 
     base_criteria = {'status': statues,
                      'lab.@id': lab_id,
                      'award.@id': award_id,
-                     'preferred_assay_title': preferred_assay_title,
+                     'preferred_assay_titles': preferred_assay_titles,
                      'audit.NOT_COMPLIANT.category!': excluded_nc_audits,
                      'audit.ERROR.category!': excluded_error_audits
                      }
