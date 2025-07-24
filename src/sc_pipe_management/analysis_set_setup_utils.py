@@ -36,10 +36,6 @@ def get_parser():
     return parser
 
 
-# TODO: this will be replaced by AnalysisSet pipeline status once the ticket is in
-FILE_TRACKING_PIPELINE_RUNS = 'src/sc_pipe_management/files/running_list_of_finished_analysis_sets.txt'
-
-
 POSSIBLE_SINGLE_CELL_PIPELINE_PHRASES = ['scpipe',
                                          'single cell',
                                          'single cell uniform pipeline',
@@ -50,9 +46,6 @@ POSSIBLE_SINGLE_CELL_PIPELINE_PHRASES = ['scpipe',
                                          'sc-pipeline',
                                          'uniform-pipeline']
 
-
-FINISHED_ANALYSIS_SETS = open(
-    FILE_TRACKING_PIPELINE_RUNS, 'r').read().splitlines()
 
 EXCLUDED_NONCOMP_AUDITS = ['missing sequence specification',
                            'missing barcode replacement file',
@@ -156,17 +149,27 @@ def check_is_uniform_workflow(workflow_id: str, igvf_client_api) -> bool:
         return workflow_obj.uniform_pipeline
 
 
-def check_is_scpipeline(file_set_obj, igvf_client_api) -> bool:
+def check_is_scpipeline(file_set_id: str, igvf_client_api) -> bool:
     """Check if a FileSet object is related to single-cell data. The assumption is that the Measurement Sets used to start all these checks are already single cell assays. But currently, there is no way to tell if an Analysis Set is created for the uniform pipeline. The uniform_pipeline property is calculated once files are linked.
 
     Args:
-        file_set_obj (_type_): a single IGVF client API FileSet object query result
-
+        file_set_id (str): e.g., /analysis-sets/IGVFAS0000xxxx/
+        igvf_client_api (_type_): IGVF client API instance.
     Returns:
-        bool: Whether the FileSet is related to single-cell data.
+        bool: Whether the FileSet is related to single-cell data. True if it is, False otherwise.
     """
+    # If not used as input for any analysis set, not a duplicated single cell uniform pipeline
+    if not file_set_id.startswith('/analysis-sets/'):
+        return False
+    # Get the FileSet object by ID
+    file_set_obj = igvf_client_api.get_by_id(file_set_id).actual_instance
+    # If the FileSet has a uniform pipeline status, it is a single cell uniform pipeline analysis set
+    if file_set_obj.uniform_pipeline_status is not None:
+        return True
+    # If the FileSet has uniform workflows, it is a single cell uniform pipeline analysis set
     if file_set_obj.workflows:
         return any([check_is_uniform_workflow(workflow_id=entry, igvf_client_api=igvf_client_api) for entry in file_set_obj.workflows])
+    # If the FileSet has phrases indicating single cell in its aliases or description, it is a single cell uniform pipeline analysis set
     else:
         possible_descriptions = []
         # Check aliases
@@ -177,35 +180,12 @@ def check_is_scpipeline(file_set_obj, igvf_client_api) -> bool:
         return any(kwd in entry for entry in possible_descriptions for kwd in POSSIBLE_SINGLE_CELL_PIPELINE_PHRASES)
 
 
-def check_is_duped_scpipeline(file_set_id: str, igvf_client_api, finished_anasets: list = []) -> bool:
-    """Check if an analysis set is a single cell uniform pipeline related and hasn't been processed.
-
-    Args:
-        file_set_id (str): e.g., /analysis-sets/IGVFAS0000xxxx/
-        igvf_client_api (_type_): IGVF client API instance.
-        finished_anasets (list, optional): a list of analysis sets already processed. Defaults to [].
-
-    Returns:
-        bool: Whether the analysis set is a single cell uniform pipeline, have no duplicates, and haven't been processed.
-    """
-    if not file_set_id.startswith('/analysis-sets/'):
-        return False
-    if file_set_id.split('/')[-2] in finished_anasets:
-        return True
-    sub_file_set_obj = igvf_client_api.get_by_id(file_set_id).actual_instance
-    if check_is_scpipeline(file_set_obj=sub_file_set_obj, igvf_client_api=igvf_client_api):
-        return True
-    else:
-        return False
-
-
-def check_is_duped_for_all(measurement_set_id: str, igvf_client_api, finished_anasets: str = []) -> bool:
+def check_is_duped_for_all(measurement_set_id: str, igvf_client_api) -> bool:
     """Check if a MeasurementSet is already linked to a single cell uniform pipeline analysis set.
 
     Args:
         measurement_set_id (str): e.g., /measurement-sets/IGVFM0000xxxx/
         igvf_client_api (_type_): IGVF client API instance.
-        finished_anasets (str, optional): a list of analysis sets already processed. Defaults to [].
 
     Returns:
         bool: Whether the MeasurementSet is already linked to a single cell uniform pipeline analysis set.
@@ -213,22 +193,21 @@ def check_is_duped_for_all(measurement_set_id: str, igvf_client_api, finished_an
     measet_obj = igvf_client_api.measurement_sets(
         id=[measurement_set_id]).graph[0]
     if measet_obj.input_for:
-        return any([check_is_duped_scpipeline(file_set_id=entry, igvf_client_api=igvf_client_api, finished_anasets=finished_anasets) for entry in measet_obj.input_for])
+        return any([check_is_scpipeline(file_set_id=entry, igvf_client_api=igvf_client_api) for entry in measet_obj.input_for])
 
 
-def calc_input_file_sets_single(single_query_res, igvf_client_api, finished_anasets: str = []) -> list | None:
+def calc_input_file_sets_single(single_query_res, igvf_client_api) -> list | None:
     """ Calculate input file sets used to create a new single cell uniform pipeline analysis set from a measurement set ID.
 
     Args:
         single_query_res (_type_): a single IGVF client API MeasurementSet object query result
         igvf_client_api (_type_): IGVF client API instance.
-        finished_anasets (str, optional): a list of analysis sets already processed. Defaults to [].
 
     Returns:
         list | None: A sorted list of input file set IDs, or None if the analysis set is a duplicate.
     """
     # check if duplicating existing starter analysis sets
-    if check_is_duped_for_all(measurement_set_id=single_query_res.id, igvf_client_api=igvf_client_api, finished_anasets=finished_anasets):
+    if check_is_duped_for_all(measurement_set_id=single_query_res.id, igvf_client_api=igvf_client_api):
         return
     # collect a list of inputs if not duped
     curr_output = set()
@@ -242,13 +221,12 @@ def calc_input_file_sets_single(single_query_res, igvf_client_api, finished_anas
     return sorted(curr_output)
 
 
-def get_all_input_file_sets(query_res: list, igvf_client_api, finished_anasets: str = []) -> list:
+def get_all_input_file_sets(query_res: list, igvf_client_api) -> list:
     """ Calculate input file sets used to create new single cell uniform pipeline analysis sets from a list of measurement set IDs.
 
     Args:
         query_res (list): a list of IGVF client API MeasurementSet object query results
         igvf_client_api (_type_): IGVF client API instance.
-        finished_anasets (str, optional): a list of analysis sets already processed. Defaults to [].
 
     Returns:
         list: A list of lists, each containing sorted input file set IDs for a new analysis set.
@@ -256,7 +234,7 @@ def get_all_input_file_sets(query_res: list, igvf_client_api, finished_anasets: 
     input_fileset_collection = []
     for res in query_res:
         input_fileset_collection.append(calc_input_file_sets_single(
-            single_query_res=res, igvf_client_api=igvf_client_api, finished_anasets=finished_anasets))
+            single_query_res=res, igvf_client_api=igvf_client_api))
     return remove_duplicate_sublists([entry for entry in input_fileset_collection if entry is not None])
 
 
@@ -302,6 +280,7 @@ def create_analysis_set_payload(input_file_sets: list, lab: list, award: list, i
         'lab': lab,
         'award': award,
         'aliases': [f'{alias_lab}:Sample-{sample_accessions}_single-cell-uniform-pipeline'],
+        'uniform_pipeline_status': 'preprocessing',
         'file_set_type': 'intermediate analysis'
     }
     return payload
@@ -420,7 +399,7 @@ def main():
 
     # Get all input file sets for new analysis sets
     all_input_file_sets = get_all_input_file_sets(
-        query_res=query_res, igvf_client_api=igvf_client_api, finished_anasets=FINISHED_ANALYSIS_SETS)
+        query_res=query_res, igvf_client_api=igvf_client_api)
     if not all_input_file_sets:
         print('>>>>>>>>>> No new analysis sets to create. Exiting.')
         return

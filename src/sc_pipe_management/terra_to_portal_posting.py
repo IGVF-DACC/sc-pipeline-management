@@ -616,6 +616,7 @@ def mk_anaset_docs_patching_payload(doc_aliases: list, analysis_set_acc: str, ig
     return {
         'documents': new_docs_aliases,
         igvf_utils_api.IGVFID_KEY: f"/analysis-sets/{analysis_set_acc}/",
+        'uniform_pipeline_status': 'completed',
         '_profile': 'analysis_set'
     }
 
@@ -1335,7 +1336,7 @@ def post_all_data_from_one_run(terra_data_record: pd.Series, igvf_api, igvf_util
                                                      output_root_dir=output_root_dir
                                                      )
 
-    # Add posting run config document
+    # Add posting run config document and patch analysis set with doc and status completed
     post_results += post_single_document_to_portal(terra_data_record=terra_data_record,
                                                    lab=pipeline_data_lab,
                                                    award=pipeline_data_award,
