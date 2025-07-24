@@ -29,8 +29,13 @@ class TestAnalysisSetUtils(unittest.TestCase):
         self.test_award = '/awards/HG012012/'
 
 
-# TODO: This will change once pipeline status is added to AnalysisSet
 class TestCheckIsScpipeline(TestAnalysisSetUtils):
+    def test_check_is_scpipeline_not_analysis_set(self):
+        """Test that non-analysis-set ID returns None."""
+        # Assertion check: not single cell
+        result = utils.check_is_scpipeline(
+            '/measurement-sets/IGVFMS123456/', self.mock_igvf_client)
+        self.assertFalse(result)
 
     def test_check_is_scpipeline_with_scpipe_alias(self):
         """Test that file set with scpipe alias returns True."""
@@ -39,8 +44,16 @@ class TestCheckIsScpipeline(TestAnalysisSetUtils):
         mock_file_set_obj.description = None
         mock_file_set_obj.workflows = []
 
+        # Mock the HTTP response object
+        mock_response = Mock()
+        mock_response.actual_instance = mock_file_set_obj
+
+        # Set what get_by_id() returns
+        self.mock_igvf_client.get_by_id.return_value = mock_response
+
+        # Assertion check: single cell
         result = utils.check_is_scpipeline(
-            mock_file_set_obj, self.mock_igvf_client)
+            '/analysis-sets/IGVFAS123456/', self.mock_igvf_client)
         self.assertTrue(result)
 
     def test_check_is_scpipeline_with_single_cell_description(self):
@@ -50,8 +63,16 @@ class TestCheckIsScpipeline(TestAnalysisSetUtils):
         mock_file_set_obj.description = 'single cell uniform pipeline analysis'
         mock_file_set_obj.workflows = []
 
+        # Mock the HTTP response object
+        mock_response = Mock()
+        mock_response.actual_instance = mock_file_set_obj
+
+        # Set what get_by_id() returns
+        self.mock_igvf_client.get_by_id.return_value = mock_response
+
+        # Assertion check: single cell
         result = utils.check_is_scpipeline(
-            mock_file_set_obj, self.mock_igvf_client)
+            '/analysis-sets/IGVFAS123456/', self.mock_igvf_client)
         self.assertTrue(result)
 
     def test_check_is_scpipeline_with_sc_pipeline_alias(self):
@@ -61,8 +82,16 @@ class TestCheckIsScpipeline(TestAnalysisSetUtils):
         mock_file_set_obj.description = None
         mock_file_set_obj.workflows = []
 
+        # Mock the HTTP response object
+        mock_response = Mock()
+        mock_response.actual_instance = mock_file_set_obj
+
+        # Set what get_by_id() returns
+        self.mock_igvf_client.get_by_id.return_value = mock_response
+
+        # Assertion check: single cell
         result = utils.check_is_scpipeline(
-            mock_file_set_obj, self.mock_igvf_client)
+            '/analysis-sets/IGVFAS123456/', self.mock_igvf_client)
         self.assertTrue(result)
 
     def test_check_is_scpipeline_false_case(self):
@@ -72,9 +101,18 @@ class TestCheckIsScpipeline(TestAnalysisSetUtils):
             'igvf:other-analysis', 'igvf:non-pipeline-test']
         mock_file_set_obj.description = 'some other analysis description'
         mock_file_set_obj.workflows = []
+        mock_file_set_obj.uniform_pipeline_status = None
 
+        # Mock the HTTP response object
+        mock_response = Mock()
+        mock_response.actual_instance = mock_file_set_obj
+
+        # Set what get_by_id() returns
+        self.mock_igvf_client.get_by_id.return_value = mock_response
+
+        # Assertion check: no single cell
         result = utils.check_is_scpipeline(
-            mock_file_set_obj, self.mock_igvf_client)
+            '/analysis-sets/IGVFAS123456/', self.mock_igvf_client)
         self.assertFalse(result)
 
     def test_check_is_scpipeline_no_aliases_no_description(self):
@@ -83,12 +121,21 @@ class TestCheckIsScpipeline(TestAnalysisSetUtils):
         mock_file_set_obj.aliases = []
         mock_file_set_obj.description = None
         mock_file_set_obj.workflows = []
+        mock_file_set_obj.uniform_pipeline_status = None
 
+        # Mock the HTTP response object
+        mock_response = Mock()
+        mock_response.actual_instance = mock_file_set_obj
+
+        # Set what get_by_id() returns
+        self.mock_igvf_client.get_by_id.return_value = mock_response
+
+        # Assertion check: no single cell
         result = utils.check_is_scpipeline(
-            mock_file_set_obj, self.mock_igvf_client)
+            '/analysis-sets/IGVFAS123456/', self.mock_igvf_client)
         self.assertFalse(result)
 
-    def test_check_is_scpipeline_with_workflows(self):
+    def test_check_is_scpipeline_with_uniform_workflows(self):
         """Test that file set with workflows returns True (i.e., has files)."""
         # Create a mock workflow object with uniform_pipeline property
         mock_workflow = Mock()
@@ -98,34 +145,27 @@ class TestCheckIsScpipeline(TestAnalysisSetUtils):
         # Set workflows to contain the mock workflow object
         mock_file_set_obj = Mock()
         mock_file_set_obj.workflows = [mock_workflow.id]
+        mock_file_set_obj.uniform_pipeline_status = None
 
+        # Mock the HTTP response object
+        mock_response = Mock()
+        mock_response.actual_instance = mock_file_set_obj
+
+        # Set what get_by_id() returns
+        self.mock_igvf_client.get_by_id.return_value = mock_response
+
+        # Assertion check: single cell
         result = utils.check_is_scpipeline(
-            mock_file_set_obj, self.mock_igvf_client)
+            '/analysis-sets/IGVFAS123456/', self.mock_igvf_client)
         self.assertTrue(result)
 
-
-class TestCheckIsDupedScpipeline(TestAnalysisSetUtils):
-
-    def test_check_is_duped_scpipeline_not_analysis_set(self):
-        """Test that non-analysis-set ID returns None."""
-        result = utils.check_is_duped_scpipeline(
-            '/measurement-sets/IGVFMS123456/', self.mock_igvf_client, [])
-        self.assertFalse(result)
-
-    def test_check_is_duped_scpipeline_already_finished(self):
-        """Test that already finished analysis set returns True."""
-        finished_list = ['IGVFAS123456']
-        result = utils.check_is_duped_scpipeline(
-            '/analysis-sets/IGVFAS123456/', self.mock_igvf_client, finished_list)
-        self.assertTrue(result)
-
-    def test_check_is_duped_scpipeline_is_pipeline(self):
-        """Test that analysis set with pipeline characteristics returns True."""
-        # Mock the file set object
+    def test_check_is_scpipeline_with_pipeline_status(self):
+        """Test that file set with pipeline status returns True."""
         mock_file_set_obj = Mock()
-        mock_file_set_obj.aliases = ['igvf:test-scpipe-analysis']
+        mock_file_set_obj.aliases = []
         mock_file_set_obj.description = None
         mock_file_set_obj.workflows = []
+        mock_file_set_obj.uniform_pipeline_status = 'processing'
 
         # Mock the HTTP response object
         mock_response = Mock()
@@ -134,28 +174,10 @@ class TestCheckIsDupedScpipeline(TestAnalysisSetUtils):
         # Set what get_by_id() returns
         self.mock_igvf_client.get_by_id.return_value = mock_response
 
-        result = utils.check_is_duped_scpipeline(
-            '/analysis-sets/IGVFAS123456/', self.mock_igvf_client, [])
+        # Assertion check: single cell
+        result = utils.check_is_scpipeline(
+            '/analysis-sets/IGVFAS123456/', self.mock_igvf_client)
         self.assertTrue(result)
-
-    def test_check_is_duped_scpipeline_not_pipeline(self):
-        """Test that analysis set without pipeline characteristics returns False."""
-        # Mock the file set object
-        mock_file_set_obj = Mock()
-        mock_file_set_obj.aliases = ['igvf:other-analysis']
-        mock_file_set_obj.description = 'non-pipeline analysis'
-        mock_file_set_obj.workflows = []
-
-        # Mock the HTTP response object
-        mock_response = Mock()
-        mock_response.actual_instance = mock_file_set_obj
-
-        # Set what get_by_id() returns
-        self.mock_igvf_client.get_by_id.return_value = mock_response
-
-        result = utils.check_is_duped_scpipeline(
-            '/analysis-sets/IGVFAS123456/', self.mock_igvf_client, [])
-        self.assertFalse(result)  # Should be False, not None
 
 
 class TestCalcInputFileSets(TestAnalysisSetUtils):
@@ -172,7 +194,7 @@ class TestCalcInputFileSets(TestAnalysisSetUtils):
         # Mock check_is_duped_for_all to return False
         with patch.object(utils, 'check_is_duped_for_all', return_value=False):
             result = utils.calc_input_file_sets_single(
-                mock_query_res, self.mock_igvf_client, [])
+                mock_query_res, self.mock_igvf_client)
 
         expected = ['/measurement-sets/IGVFMS123456/',
                     '/measurement-sets/IGVFMS789012/']
@@ -197,7 +219,7 @@ class TestCalcInputFileSets(TestAnalysisSetUtils):
         # Mock check_is_duped_for_all to return False
         with patch.object(utils, 'check_is_duped_for_all', return_value=False):
             result = utils.calc_input_file_sets_single(
-                mock_query_res, self.mock_igvf_client, [])
+                mock_query_res, self.mock_igvf_client)
 
         expected = ['/measurement-sets/IGVFMS123456/',
                     '/curated-sets/IGVFMS333333/', '/measurement-sets/IGVFMS789012/']
@@ -212,7 +234,7 @@ class TestCalcInputFileSets(TestAnalysisSetUtils):
 
         with patch.object(utils, 'check_is_duped_for_all', return_value=False):
             result = utils.calc_input_file_sets_single(
-                mock_query_res, self.mock_igvf_client, [])
+                mock_query_res, self.mock_igvf_client)
 
         expected = ['/measurement-sets/IGVFMS123456/']
         self.assertEqual(result, expected)
@@ -224,7 +246,7 @@ class TestCalcInputFileSets(TestAnalysisSetUtils):
 
         with patch.object(utils, 'check_is_duped_for_all', return_value=True):
             result = utils.calc_input_file_sets_single(
-                mock_query_res, self.mock_igvf_client, [])
+                mock_query_res, self.mock_igvf_client)
 
         self.assertIsNone(result)
 
@@ -292,7 +314,8 @@ class TestCreateAnalysisSetPayload(TestAnalysisSetUtils):
             'lab': self.test_lab,
             'award': self.test_award,
             'aliases': ['j-michael-cherry:Sample-IGVFSM111111_IGVFSM222222_single-cell-uniform-pipeline'],
-            'file_set_type': 'intermediate analysis'
+            'file_set_type': 'intermediate analysis',
+            'uniform_pipeline_status': 'preprocessing'
         }
 
         self.assertEqual(result, expected)
@@ -314,7 +337,7 @@ class TestIntegrationScenarios(TestAnalysisSetUtils):
         with patch.object(utils, 'check_is_duped_for_all', return_value=False):
             # Test calc_input_file_sets_single
             input_sets = utils.calc_input_file_sets_single(
-                mock_measet, self.mock_igvf_client, [])
+                mock_measet, self.mock_igvf_client)
 
         expected_input_sets = [
             '/measurement-sets/IGVFMS123456/', '/measurement-sets/IGVFMS789012/']
@@ -353,7 +376,7 @@ class TestIntegrationScenarios(TestAnalysisSetUtils):
         with patch.object(utils, 'check_is_duped_for_all', return_value=False):
             # Test calc_input_file_sets_single
             input_sets = utils.calc_input_file_sets_single(
-                mock_measet, self.mock_igvf_client, [])
+                mock_measet, self.mock_igvf_client)
 
         expected_input_sets = [
             '/measurement-sets/IGVFMS123456/',
