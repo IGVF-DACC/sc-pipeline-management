@@ -27,8 +27,8 @@ def get_parser():
                         help="""Lab ID for the analysis set.""")
     parser.add_argument('--award', type=str,
                         help="""Award ID for the analysis set.""")
-    parser.add_argument('--preferred_assay_titles', type=str,
-                        help="""Preferred assay titles for the measurement set query, comma-separated if multiple.""")
+    parser.add_argument('--preferred_assay_title', type=str,
+                        help="""Preferred assay title for the measurement set query.""")
     parser.add_argument('--limit', type=limit_type, default='all',
                         help="""Query result limit. Defaults to all.""")
     parser.add_argument('--output_dir', type=str, default='./',
@@ -404,7 +404,8 @@ def main():
     filtered_fields = generate_filtered_fields(
         lab_id=args.lab,
         award_id=args.award,
-        preferred_assay_titles=args.preferred_assay_titles,
+        # query one assay title at a time
+        preferred_assay_titles=[args.preferred_assay_title],
         excluded_nc_audits=EXCLUDED_NONCOMP_AUDITS,
         excluded_error_audits=EXCLUDED_ERROR_AUDITS,
         statues=MEASET_STATUSES
@@ -438,7 +439,7 @@ def main():
         return
 
     # Save the new analysis set accessions to a file
-    unique_name = f'{args.lab.split("/")[-2]}_{args.preferred_assay_titles.replace(" ", "-").replace(",", "-")}_{datetime.now().strftime("%m%d%Y")}'
+    unique_name = f'{args.lab.split("/")[-2]}_{args.preferred_assay_title.replace(" ", "-")}_{datetime.now().strftime("%m%d%Y")}'
     output_file_path = f"{args.output_dir.rstrip('/')}/new_anasets_to_run_{unique_name}.txt"
     write_list_to_file(list_to_write=post_res, file_path=output_file_path)
     print(
