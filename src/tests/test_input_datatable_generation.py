@@ -33,6 +33,8 @@ SEQSPEC_FILES_BY_ASSAY_TITLES = {
                  'rna': 'src/tests/test_files/IGVFFI5825ATCM.yaml.gz'},  # ShareSeq RNA seqspec
     'parse splitseq dbl': {'atac': None,  # ShareSeq does not have atac seqspec
                            'rna': 'src/tests/test_files/IGVFFI2791JOTW.yaml.gz'},  # This seqspec has cDNA on both R1 and R2
+    'rnaseq with bad read_id': {'atac': None,  # ShareSeq does not have atac seqspec
+                                'rna': 'src/tests/test_files/IGVFFI1382HZDV.yaml.gz'}  # This seqspec has a bad read_id
 }
 
 # Expected outputs from seqspec
@@ -81,6 +83,15 @@ SEQSPEC_OUTPUT_BY_ASSAY_TITLES = {
                 'onlist_input': 'IGVFFI7330UNCB.fastq.gz',
                 'onlist_final_list': 'f7eabd710222e594459698a6c624de7b',
                 'onlist_method': 'product'
+                },
+    },
+    'rnaseq with bad read_id': {
+        'atac': None,  # ShareSeq does not have atac seqspec
+        'rna': {'read_index': '0,0,16:0,16,28:1,0,90',
+                'index_input': 'RNA Read 1,RNA Read 2',
+                'onlist_input': 'RNA Read 2',
+                'onlist_final_list': '5b223bbf2d45ba5e8bb55787872321c8',
+                'onlist_method': 'no combination'
                 }
     }
 }
@@ -204,7 +215,7 @@ class TestInputDatatableGeneration(unittest.TestCase):
                     continue
                 print(
                     f'Testing {assay_title} {assay_type} for read index generation.')
-                # Get the current read index from seqspec\
+                # Get the current read index from seqspec
                 print(seqspec_path)
                 curr_index_input = seqspec_index_get(
                     seqspec_file_path=seqspec_path, assay_type=assay_type, igvf_api=IGVF_PROD_CLIENT_API)
