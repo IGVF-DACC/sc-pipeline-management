@@ -226,7 +226,6 @@ def get_seqfile_readnames(seqfile_item, assay_type: str) -> str:
 
     Args:
         seqfile_item (_type_): Return item from the API
-        preferred_assay_title (str): _description_
         assay_type (str): translated from assay term into atac or rna
 
     Returns:

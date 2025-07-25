@@ -27,8 +27,8 @@ def get_parser():
                         help="""Lab ID for the analysis set.""")
     parser.add_argument('--award', type=str,
                         help="""Award ID for the analysis set.""")
-    parser.add_argument('--preferred_assay_title', type=str,
-                        help="""Preferred assay title for the measurement set query.""")
+    parser.add_argument('--preferred_assay_titles', type=str,
+                        help="""Preferred assay titles for the measurement set query, comma-separated if multiple.""")
     parser.add_argument('--limit', type=limit_type, default='all',
                         help="""Query result limit. Defaults to all.""")
     parser.add_argument('--output_dir', type=str, default='./',
@@ -97,7 +97,7 @@ def generate_filtered_fields(lab_id: str, award_id: str, preferred_assay_titles:
     Args:
         lab_id (str): e.g. /labs/j-michael-cherry/
         award_id (str): e.g. /awards/HG012012/
-        preferred_assay_title (list): e.g., ["10x multiome"]
+        preferred_assay_titles (list): e.g., ["10x multiome"]
         excluded_nc_audits (list): a list of NOT_COMPLIANT audit categories to exclude
         excluded_error_audits (list): a list of ERROR audit categories to exclude
         statues (list): a list of statuses to include, e.g., ['released']
@@ -404,7 +404,7 @@ def main():
     filtered_fields = generate_filtered_fields(
         lab_id=args.lab,
         award_id=args.award,
-        preferred_assay_title=args.preferred_assay_title,
+        preferred_assay_titles=args.preferred_assay_titles,
         excluded_nc_audits=EXCLUDED_NONCOMP_AUDITS,
         excluded_error_audits=EXCLUDED_ERROR_AUDITS,
         statues=MEASET_STATUSES
