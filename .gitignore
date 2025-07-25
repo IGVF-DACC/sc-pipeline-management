@@ -18,6 +18,7 @@ src/tests/test_data/__pycache__
 src/tests/test_files/test_input_datatable_generation_generated.tsv
 src/tests/test_files/IGVFFI2264BQQD.yaml.gz
 src/tests/test_files/IGVFFI2791JOTW.yaml.gz
+src/tests/test_files/IGVFFI1382HZDV.yaml.gz
 src/terra_datatable/
 temp/
 terra_datatables/
