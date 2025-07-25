@@ -9,6 +9,7 @@ import requests
 from collections import OrderedDict
 from itertools import chain
 from seqspec.utils import load_spec
+import seqspec
 import re
 
 
@@ -363,7 +364,37 @@ def sort_dict_by_order(input_dict, key_order):
     return sorted_dict
 
 
-def parse_read_id_from_seqspec(seqspec_file_path: str, assay_type: str) -> str:
+def find_igvf_acc_in_seqspec(spec: seqspec.Read.Read) -> str:
+    """Find IGVF accession in a seqspec for fastq files. Trying read_id first, then file_ids, and finally the URL.
+
+    Args:
+        spec (seqspec.Read.Read): The seqspec to search after importing a seqspec.
+
+    Raises:
+        BadDataException: If no IGVF accession is found.
+
+    Returns:
+        str: The found IGVF accession.
+    """
+    # If read_id is an IGVF accession, return it
+    read_id = spec.read_id
+    if READ_ID_REGEX.match(read_id):
+        return read_id
+    # If read_id is not an IGVF accession, check the file_ids
+    file_specs = spec.files
+    for file_spec in file_specs:
+        file_id = file_spec.file_id
+        # If the read_id is not an IGVF accession, check the file_id
+        if READ_ID_REGEX.match(file_id):
+            return file_id
+        # If file_id is not an IGVF accession, check the URL
+        for item in file_spec.url.split('/'):
+            if READ_ID_REGEX.match(item):
+                return item
+    raise BadDataException('Error: Cannot find any IGVF accession in seqspec')
+
+
+def parse_read_ids_from_seqspec_file(seqspec_file_path: str, assay_type: str) -> list[tuple[str, str]]:
     """Retrieve read_id values of a specific modality from a seqspec
 
     Args:
@@ -374,17 +405,14 @@ def parse_read_id_from_seqspec(seqspec_file_path: str, assay_type: str) -> str:
         BadDataException: If the read_id does not contain IGVF accession
 
     Returns:
-        str: read_id value
+        list[tuple[str, str]]: a list of (read_id, IGVF accession)
     """
     sequence_specs = load_spec(seqspec_file_path).sequence_spec
     read_ids = []
     for spec in sequence_specs:
         if spec.modality == assay_type:
-            read_id = spec.read_id
-            if not read_id.startswith('IGVF'):
-                raise BadDataException(
-                    f'Error: Read ID {read_id} is not an IGVF accession.')
-            read_ids.append(read_id)
+            igvf_accession = find_igvf_acc_in_seqspec(spec=spec)
+            read_ids.append((spec.read_id, igvf_accession))
     return read_ids
 
 
@@ -404,12 +432,12 @@ def generate_ordered_read_ids(seqspec_file_path: str, assay_type: str, usage_pur
         str: read1_fastaq_accession,read2_fastaq_accession,barcode_fastaq_accession
     """
     # Get read IDs from the seqspec file
-    read_ids = parse_read_id_from_seqspec(
+    read_ids = parse_read_ids_from_seqspec_file(
         seqspec_file_path=seqspec_file_path, assay_type=assay_type)
     ordered_seqfiles = {}
-    for read_id in read_ids:
+    for (read_id, igvf_accession) in read_ids:
         # Parse out IGVF accession from read_id if there is some other formatting
-        parsed_read_id = READ_ID_REGEX.search(read_id).group(1)
+        parsed_read_id = READ_ID_REGEX.search(igvf_accession).group(1)
         # Get seq file object
         seqfile_obj = igvf_api.get_by_id(
             f'/sequence-files/{parsed_read_id}/').actual_instance
@@ -540,6 +568,7 @@ def seqspec_index_get(seqspec_file_path: str, assay_type: str, igvf_api) -> str:
     curr_run_log = subprocess.run(['seqspec', 'index', '-m', assay_type, '-t',
                                    ASSAY_TYPE_TO_TOOL_FORMAT[assay_type], '-s', 'read', '-i', seqspec_index_input_files, seqspec_file_path], capture_output=True)
     if curr_run_log.returncode != 0:
+        print(curr_run_log)
         raise BadDataException('Error: seqspec index command failed.')
     if assay_type == 'rna':
         return curr_run_log.stdout.decode('utf-8').strip()
