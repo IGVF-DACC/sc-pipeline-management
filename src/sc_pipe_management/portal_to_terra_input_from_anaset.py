@@ -580,10 +580,9 @@ def get_onlist_mapping_status(measurement_set_ids: list, igvf_api) -> bool:
     curr_onlist_mapping = []
     for measet_id in measurement_set_ids:
         curr_measet_item = igvf_api.get_by_id(measet_id).actual_instance
-        if curr_measet_item.preferred_assay_title in ASSAYS_NEED_ONLIST_MAPPING:
-            curr_onlist_mapping.append(True)
-        else:
-            curr_onlist_mapping.append(False)
+        need_onlist_mapping = any(
+            assay_title in ASSAYS_NEED_ONLIST_MAPPING for assay_title in curr_measet_item.preferred_assay_titles)
+        curr_onlist_mapping.append(need_onlist_mapping)
     if len(set(curr_onlist_mapping)) > 1:
         return BadDataException('Error: Measurement sets have different onlist mapping status.')
     else:

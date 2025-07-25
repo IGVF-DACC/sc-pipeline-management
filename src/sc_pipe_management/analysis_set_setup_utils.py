@@ -438,7 +438,7 @@ def main():
         return
 
     # Save the new analysis set accessions to a file
-    unique_name = f'{args.lab.split("/")[-2]}_{args.preferred_assay_title.replace(" ", "-")}_{datetime.now().strftime("%m%d%Y")}'
+    unique_name = f'{args.lab.split("/")[-2]}_{args.preferred_assay_titles.replace(" ", "-").replace(",", "-")}_{datetime.now().strftime("%m%d%Y")}'
     output_file_path = f"{args.output_dir.rstrip('/')}/new_anasets_to_run_{unique_name}.txt"
     write_list_to_file(list_to_write=post_res, file_path=output_file_path)
     print(
