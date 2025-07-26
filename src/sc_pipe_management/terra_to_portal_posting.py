@@ -465,6 +465,28 @@ def dump_json(input_json: dict, analysis_set_acc: str, output_root_dir: str = '.
     return output_file_path
 
 
+def get_gs_path_for_terra_output_cols(terra_data_record: pd.Series) -> str:
+    """Get GS path from terra data record for submission and workflow IDs parsing, trying RNA first, then ATAC.
+
+    Args:
+        terra_data_record (pd.Series): Terra pipeline data record
+
+    Returns:
+        str: GS path for workflow UUID parsing
+
+    Raises:
+        ValueError: If no valid GS path is found
+    """
+    # Possible columns to check for GS path (RNA first, then ATAC)
+    possible_columns = ['rna_kb_h5ad', 'atac_bam']
+    for col in possible_columns:
+        # If the column is empty, it returns np.float64(nan)
+        if pd.notna(terra_data_record[col]):
+            return terra_data_record[col]
+    raise ValueError(
+        'No valid GS path found in the Terra data record for workflow UUID parsing.')
+
+
 def download_workflow_config_json(terra_data_record: pd.Series, terra_namespace: str, terra_workspace: str, output_root_dir: str = '/igvf/data/') -> str:
     """Download the workflow configuration JSON file for a given Terra data record.
 
@@ -477,9 +499,9 @@ def download_workflow_config_json(terra_data_record: pd.Series, terra_namespace:
     Returns:
         str: path to the saved JSON file
     """
-    # NOTE: A bit of hack here to get submission ID (RNA data will always be available)
+    # NOTE: A bit of hack here to get submission ID (Check RNA data first, then ATAC)
     terra_ids = parse_workflow_uuids_from_gs_path(
-        gs_path=terra_data_record['rna_kb_h5ad'])
+        gs_path=get_gs_path_for_terra_output_cols(terra_data_record=terra_data_record))
     curr_workflow_config = api_tools.get_workflow_input_config(terra_namespace=terra_namespace,
                                                                terra_workspace=terra_workspace,
                                                                submission_id=terra_ids.submission_id,
