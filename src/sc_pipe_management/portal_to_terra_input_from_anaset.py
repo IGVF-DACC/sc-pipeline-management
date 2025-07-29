@@ -749,8 +749,6 @@ class SingleCellInputBuilder:
             return
         try:
             # Dir will be a fixed place with a date folder under the current working directory
-            # final_inclusion_list_dir = os.path.join(
-            #     os.getcwd(), 'final_barcode_list', get_today_mmddyyyy())
             if not os.path.exists(local_barcode_file_dir):
                 os.makedirs(local_barcode_file_dir)
             curr_inclusion_list_path = os.path.join(
@@ -808,11 +806,6 @@ class SingleCellInputBuilder:
         """
         # NOTE: Assumption that all measurement sets in the analysis set have the same barcode replacement file because an audit will show up if not the case.
         # Take one of the RNA measurement set accessions
-        # Temporary solution until the pipeline is updated to use the tab file object
-        replacement_file_gs_urls = {
-            'IGVFFI4834TCML': 'gs://fc-secure-de19fd29-2253-41cd-9751-1788cf7ad1a5/barcode_replacement_files/IGVFFI4834TCML_r1_RT_replace.tsv',
-            'IGVFFI4529PWCF': 'gs://fc-secure-de19fd29-2253-41cd-9751-1788cf7ad1a5/barcode_replacement_files/IGVFFI4529PWCF_r1_RT_replace_wt.tsv'
-        }
         if self.data['rna_MeaSetIDs']:
             measet_obj = self.igvf_api.get_by_id(
                 f'/measurement-sets/{self.data["rna_MeaSetIDs"][0]}').actual_instance
@@ -820,11 +813,8 @@ class SingleCellInputBuilder:
             if measet_obj.barcode_replacement_file:
                 tab_file_obj = self.igvf_api.get_by_id(
                     measet_obj.barcode_replacement_file).actual_instance
-                # Once pipeline is updated
                 self.data['barcode_replacement_file'] = construct_full_href_url(
                     igvf_href=tab_file_obj.href)
-                # self.data['barcode_replacement_file'] = [
-                #     replacement_file_gs_urls[tab_file_obj.accession]]
 
     def reformat_arrays_to_terra_format(self):
         """Reformat all read file URLs arrays to Terra format.
