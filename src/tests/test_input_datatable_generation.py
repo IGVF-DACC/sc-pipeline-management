@@ -28,7 +28,7 @@ SEQSPEC_FILES_BY_ASSAY_TITLES = {
     '10x multiome': {'atac': 'src/tests/test_files/IGVFFI1365BOUI.yaml.gz',
                      'rna': 'src/tests/test_files/IGVFFI2433YUEJ.yaml.gz'},  # 10x multiome RNA seqspec
     'parse splitseq': {'atac': None,
-                       'rna': 'src/tests/test_files/IGVFFI2264BQQD.yaml.gz'},  # SPLiT-seq RNA seqspec
+                       'rna': 'src/tests/test_files/IGVFFI2264BQQD.yaml.gz'},  # SPLiT-seq RNA seqspec (read_id has .fastq.gz suffix)
     'shareseq': {'atac': 'src/tests/test_files/IGVFFI8012OCZQ.yaml.gz',  # ShareSeq does not have atac seqspec
                  'rna': 'src/tests/test_files/IGVFFI5825ATCM.yaml.gz'},  # ShareSeq RNA seqspec
     'parse splitseq dbl': {'atac': None,  # ShareSeq does not have atac seqspec
