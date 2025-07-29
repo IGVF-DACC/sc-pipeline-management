@@ -481,7 +481,7 @@ def get_gs_path_for_terra_output_cols(terra_data_record: pd.Series) -> str:
     possible_columns = ['rna_kb_h5ad', 'atac_bam']
     for col in possible_columns:
         # If the column is empty, it returns np.float64(nan)
-        if pd.notna(terra_data_record[col]):
+        if (col in list(terra_data_record.index)) and (pd.notna(terra_data_record[col])):
             return terra_data_record[col]
     raise ValueError(
         'No valid GS path found in the Terra data record for workflow UUID parsing.')
