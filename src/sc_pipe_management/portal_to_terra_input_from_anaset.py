@@ -364,7 +364,7 @@ def sort_dict_by_order(input_dict, key_order):
     return sorted_dict
 
 
-def find_igvf_acc_in_seqspec(spec: seqspec.Read.Read) -> str:
+def find_igvf_acc_in_seqspec(spec: seqspec.Read.Read) -> str | None:
     """Find IGVF accession in a seqspec for fastq files. Trying read_id first, then file_ids, and finally the URL.
 
     Args:
@@ -391,10 +391,10 @@ def find_igvf_acc_in_seqspec(spec: seqspec.Read.Read) -> str:
         for item in file_spec.url.split('/'):
             if READ_ID_REGEX.match(item):
                 return READ_ID_REGEX.search(item).group(1)
-    raise BadDataException('Error: Cannot find any IGVF accession in seqspec')
+    return None
 
 
-def parse_read_ids_from_seqspec_file(seqspec_file_path: str, assay_type: str) -> list[tuple[str, str]]:
+def parse_read_ids_from_seqspec_file(seqspec_file_path: str, assay_type: str) -> list[tuple[str, str | None]]:
     """Retrieve read_id values of a specific modality from a seqspec
 
     Args:
@@ -405,7 +405,7 @@ def parse_read_ids_from_seqspec_file(seqspec_file_path: str, assay_type: str) ->
         BadDataException: If the read_id does not contain IGVF accession
 
     Returns:
-        list[tuple[str, str]]: a list of (read_id, IGVF accession)
+        list[tuple[str, str | None]]: a list of (read_id, IGVF accession)
     """
     sequence_specs = load_spec(seqspec_file_path).sequence_spec
     read_ids = []
@@ -436,9 +436,14 @@ def generate_ordered_read_ids(seqspec_file_path: str, assay_type: str, usage_pur
         seqspec_file_path=seqspec_file_path, assay_type=assay_type)
     ordered_seqfiles = {}
     for (read_id, igvf_accession) in read_ids:
-        # Get seq file object
+        # If no IGVF accession is found, add to unknown
+        if igvf_accession is None:
+            ordered_seqfiles.setdefault('Unknown', []).append(read_id)
+            continue
+        # Get seq file object if there is IGVF accession
         seqfile_obj = igvf_api.get_by_id(
             f'/sequence-files/{igvf_accession}/').actual_instance
+        # If no read names are found, skip this seqfile
         if not seqfile_obj.read_names:
             continue
         # Get the read names from the seqfile object
@@ -452,11 +457,16 @@ def generate_ordered_read_ids(seqspec_file_path: str, assay_type: str, usage_pur
             if sorted(seqfile_obj.read_names) == sorted(['Read 2', 'Barcode index']):
                 ordered_seqfiles.setdefault(
                     'Read 2', []).append(read_id)
+    # Quality checks before returning the ordered read IDs
     # If a read name has multiple sequence files, raise an error. This should not happen in a well-formed portal metadata.
     for read_name in ordered_seqfiles:
         if len(ordered_seqfiles[read_name]) > 1:
             raise BadDataException(
                 f'Error: Multiple sequence files found for the same {read_name}.')
+        # If there is unknown read ids (e.g., no IGVF accession found) sequence files, raise an error.
+        if ordered_seqfiles.get('Unknown'):
+            raise BadDataException(
+                'Error: Seqspec does not have IGVF accession for all sequence files. Please check the seqspec file.')
     # Sort the dictionary by the order of keys
     ordered_seqfiles = sort_dict_by_order(input_dict=ordered_seqfiles, key_order=[
                                           'Read 1', 'Read 2', 'Barcode index'])
