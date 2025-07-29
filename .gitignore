@@ -12,8 +12,6 @@ src/sc_pipe_management/qc_metrics/
 src/sc_pipe_management/run_config/
 src/sc_pipe_management/workflow_configs/
 src/sc_pipe_management/*.ipynb
-src/tests/test_files/parse splitseq dbl_rna_final_barcode_list.txt
-src/tests/test_files/rnaseq with bad read_id_rna_final_barcode_list.txt
 src/tests/test_data/__pycache__
 src/tests/test_files/test_input_datatable_generation_generated.tsv
 src/tests/test_files/IGVFFI2791JOTW.yaml.gz

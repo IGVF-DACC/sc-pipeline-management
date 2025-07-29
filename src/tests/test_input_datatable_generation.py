@@ -31,8 +31,8 @@ SEQSPEC_FILES_BY_ASSAY_TITLES = {
                        'rna': 'src/tests/test_files/IGVFFI2264BQQD.yaml.gz'},  # SPLiT-seq RNA seqspec (read_id has .fastq.gz suffix)
     'shareseq': {'atac': 'src/tests/test_files/IGVFFI8012OCZQ.yaml.gz',  # ShareSeq does not have atac seqspec
                  'rna': 'src/tests/test_files/IGVFFI5825ATCM.yaml.gz'},  # ShareSeq RNA seqspec
-    'parse splitseq dbl': {'atac': None,  # ShareSeq does not have atac seqspec
-                           'rna': 'src/tests/test_files/IGVFFI2791JOTW.yaml.gz'},  # This seqspec has cDNA on both R1 and R2
+    '10x multiome double': {'atac': None,  # No need to test ATAC on double cDNA reads
+                            'rna': 'src/tests/test_files/IGVFFI8568RJIP.yaml.gz'},  # This seqspec has cDNA on both R1 and R2
     'rnaseq with bad read_id': {'atac': None,  # ShareSeq does not have atac seqspec
                                 'rna': 'src/tests/test_files/IGVFFI1382HZDV.yaml.gz'}  # This seqspec has a bad read_id
 }
@@ -62,13 +62,13 @@ SEQSPEC_OUTPUT_BY_ASSAY_TITLES = {
                 'onlist_method': 'product'
                 }
     },
-    'parse splitseq dbl': {
+    '10x multiome double': {
         'atac': None,
-        'rna': {'read_index': '1,10,18,1,48,56,1,78,86:1,0,10:0,0,151',
-                'index_input': 'IGVFFI4363YURH,IGVFFI8274OQNU',
-                'onlist_input': 'IGVFFI8274OQNU',
-                'onlist_final_list': 'f7ef2f4d24a77208fd2f8f3cc68c071b',
-                'onlist_method': 'product'
+        'rna': {'read_index': '0,0,16:0,16,28:1,0,101',
+                'index_input': 'IGVFFI4117HDFW,IGVFFI9675ROSO',
+                'onlist_input': 'IGVFFI9675ROSO',
+                'onlist_final_list': '5b223bbf2d45ba5e8bb55787872321c8',
+                'onlist_method': 'no combination'
                 }
     },
     'shareseq': {
