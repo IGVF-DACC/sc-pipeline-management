@@ -416,6 +416,23 @@ def parse_read_ids_from_seqspec_file(seqspec_file_path: str, assay_type: str) ->
     return read_ids
 
 
+def get_read_names_from_seqfile(seqfile_obj) -> str:
+    """Get the read names from the seqfile object.
+
+    Args:
+        seqfile_obj (_type_): IGVF client query return object for sequence file
+
+    Returns:
+        str: The read name (e.g., 'Read 1', 'Read 2', 'Barcode index').
+    """
+    if len(seqfile_obj.read_names) == 1:
+        return seqfile_obj.read_names[0]
+    # If Read2 and Barcode are concatenated, use only Read 2
+    assert sorted(seqfile_obj.read_names) == sorted(
+        ['Read 2', 'Barcode index']), 'Malformed seqfile read names.'
+    return 'Read 2'
+
+
 def generate_ordered_read_ids(seqspec_file_path: str, assay_type: str, usage_purpose: str, igvf_api) -> str:
     """Get the read1,read2,barcode files order from the seqspec read_id and portal metadata.
 
@@ -426,7 +443,8 @@ def generate_ordered_read_ids(seqspec_file_path: str, assay_type: str, usage_pur
         igvf_api (_type_): igvf client api
 
     Raises:
-        BadDataException: If a seqspec file has multiple sequence files for the same read name.
+        BadDataException: If no IGVF accession is found for a read ID.
+        BadDataException: If sequence files have fatal errors in read_names property.
 
     Returns:
         str: read1_fastaq_accession,read2_fastaq_accession,barcode_fastaq_accession
@@ -434,51 +452,34 @@ def generate_ordered_read_ids(seqspec_file_path: str, assay_type: str, usage_pur
     # Get read IDs from the seqspec file
     read_ids = parse_read_ids_from_seqspec_file(
         seqspec_file_path=seqspec_file_path, assay_type=assay_type)
-    ordered_seqfiles = {}
+    id_by_name = {}
     for (read_id, igvf_accession) in read_ids:
         # If no IGVF accession is found, add to unknown
         if igvf_accession is None:
-            ordered_seqfiles.setdefault('Unknown', []).append(read_id)
-            continue
+            raise BadDataException(
+                f'Error: No IGVF accession found for read ID {read_id}.')
         # Get seq file object if there is IGVF accession
         seqfile_obj = igvf_api.get_by_id(
             f'/sequence-files/{igvf_accession}/').actual_instance
         # If no read names are found, skip this seqfile
         if not seqfile_obj.read_names:
             continue
-        # Get the read names from the seqfile object
-        # If no fastq concatenation, take all 3 fastqs
-        if len(seqfile_obj.read_names) == 1:
-            for read_name in seqfile_obj.read_names:
-                # Generate read1,read2,barcode index
-                ordered_seqfiles.setdefault(read_name, []).append(read_id)
-        else:
-            # If Read2 and Barcode are concatenated, use only Read 2
-            if sorted(seqfile_obj.read_names) == sorted(['Read 2', 'Barcode index']):
-                ordered_seqfiles.setdefault(
-                    'Read 2', []).append(read_id)
-    # Quality checks before returning the ordered read IDs
-    # If a read name has multiple sequence files, raise an error. This should not happen in a well-formed portal metadata.
-    for read_name in ordered_seqfiles:
-        if len(ordered_seqfiles[read_name]) > 1:
+        read_name = get_read_names_from_seqfile(seqfile_obj=seqfile_obj)
+        if read_name in id_by_name:
             raise BadDataException(
                 f'Error: Multiple sequence files found for the same {read_name}.')
-        # If there is unknown read ids (e.g., no IGVF accession found) sequence files, raise an error.
-        if ordered_seqfiles.get('Unknown'):
-            raise BadDataException(
-                'Error: Seqspec does not have IGVF accession for all sequence files. Please check the seqspec file.')
+        id_by_name[read_name] = read_id
+
+    if usage_purpose == 'onlist':
+        if 'Barcode index' in id_by_name:
+            return id_by_name.get('Barcode index')
+        return id_by_name.get('Read 2')
+    assert usage_purpose == 'index'
     # Sort the dictionary by the order of keys
-    ordered_seqfiles = sort_dict_by_order(input_dict=ordered_seqfiles, key_order=[
-                                          'Read 1', 'Read 2', 'Barcode index'])
+    ordered_names = [id_by_name.get('Read 1'), id_by_name.get(
+        'Read 2'), id_by_name.get('Barcode index')]
     # for use with seqspec index, it takes all read ids joined
-    if usage_purpose == 'index':
-        return ','.join(list(chain(*ordered_seqfiles.values())))
-    # for use with seqspec onlist, return read2_read-id if barcode is either combined or not indicated; return barcode_read-id if it is a separate file.
-    elif usage_purpose == 'onlist':
-        if not ordered_seqfiles.get('Barcode index'):
-            return ordered_seqfiles.get('Read 2')[0]
-        else:
-            return ordered_seqfiles.get('Barcode index')[0]
+    return ','.join(name for name in ordered_names if name is not None)
 
 
 def generate_finalinclusion_list(seqspec_file_path: str, assay_type: str, onlist_method: str, final_inclusion_list_path: str, igvf_api) -> str:
@@ -566,6 +567,7 @@ def seqspec_index_get(seqspec_file_path: str, assay_type: str, igvf_api) -> str:
 
     Raises:
         BadDataException: If seqspec index command fails.
+        BadDataException: If failed to generate ordered read IDs.
 
     Returns:
         str: RNAseq or ATACseq read index
@@ -731,44 +733,28 @@ class SingleCellInputBuilder:
         curr_assay_type = seqspec_column.split('_')[0]
         curr_seqspec_urls = list(self.data[seqspec_column])
         if not curr_seqspec_urls:
-            self.data['possible_errors'] += f'Error: No seqspec URLs found for {curr_assay_type} seqspecs.'
-            return
-        try:
-            curr_seqspec_file_paths = [
-                download_file_via_https(igvf_portal_href_url=seqspec_url)
-                for seqspec_url in curr_seqspec_urls
-            ]
-        except BadDataException as e:
-            self.data[
-                'possible_errors'] += f'Error: {curr_assay_type} seqspec download error: {str(e)}.'
-            return
+            raise BadDataException(
+                'No seqspec URLs found for {curr_assay_type} seqspecs.')
+        curr_seqspec_file_paths = [
+            download_file_via_https(igvf_portal_href_url=seqspec_url)
+            for seqspec_url in curr_seqspec_urls
+        ]
         # Preflight index check and generation
-        try:
-            curr_seqspec_index_output = seqspec_index_safetychk_and_get(
-                seqspec_file_paths=curr_seqspec_file_paths, assay_type=curr_assay_type, igvf_api=self.igvf_api)
-            self.data[f'{curr_assay_type}_read_format'] = curr_seqspec_index_output
-        except BadDataException as e:
-            self.data[
-                'possible_errors'] += f'Error: {curr_assay_type} seqspec index generation error: {str(e)}.'
+        curr_seqspec_index_output = seqspec_index_safetychk_and_get(
+            seqspec_file_paths=curr_seqspec_file_paths, assay_type=curr_assay_type, igvf_api=self.igvf_api)
+        self.data[f'{curr_assay_type}_read_format'] = curr_seqspec_index_output
         # Preflight onlist check and generation
-        try:
-            curr_measet_onlist_files = get_onlist_files_from_measet(
-                measurement_set_accs=measurement_set_accs, igvf_api=self.igvf_api)
-        except BadDataException as e:
-            self.data['possible_errors'] += str(e)
-            return
-        try:
-            # Dir will be a fixed place with a date folder under the current working directory
-            if not os.path.exists(local_barcode_file_dir):
-                os.makedirs(local_barcode_file_dir)
-            curr_inclusion_list_path = os.path.join(
-                local_barcode_file_dir, f'{self.analysis_set_acc}_{curr_assay_type}_final_barcode_inclusion_list.txt')
-            curr_seqspec_onlist_output = seqspec_onlist_safetychk_and_get(
-                seqspec_file_paths=curr_seqspec_file_paths, assay_type=curr_assay_type, measet_onlist_files=curr_measet_onlist_files,
-                onlist_method=onlist_method, final_inclusion_list_path=curr_inclusion_list_path, igvf_api=self.igvf_api)
-            self.data[f'{curr_assay_type}_barcode_inclusion_list'] = curr_seqspec_onlist_output
-        except BadDataException as e:
-            self.data['possible_errors'] += str(e)
+        curr_measet_onlist_files = get_onlist_files_from_measet(
+            measurement_set_accs=measurement_set_accs, igvf_api=self.igvf_api)
+        # Dir will be a fixed place with a date folder under the current working directory
+        if not os.path.exists(local_barcode_file_dir):
+            os.makedirs(local_barcode_file_dir)
+        curr_inclusion_list_path = os.path.join(
+            local_barcode_file_dir, f'{self.analysis_set_acc}_{curr_assay_type}_final_barcode_inclusion_list.txt')
+        curr_seqspec_onlist_output = seqspec_onlist_safetychk_and_get(
+            seqspec_file_paths=curr_seqspec_file_paths, assay_type=curr_assay_type, measet_onlist_files=curr_measet_onlist_files,
+            onlist_method=onlist_method, final_inclusion_list_path=curr_inclusion_list_path, igvf_api=self.igvf_api)
+        self.data[f'{curr_assay_type}_barcode_inclusion_list'] = curr_seqspec_onlist_output
 
     def seqspec_preflight_check(self, local_barcode_file_dir: str):
         """Check if onlist info and read format info are consistent all across input. If so, generate the read index and final barcode inclusion list.
@@ -781,8 +767,11 @@ class SingleCellInputBuilder:
                 continue
             onlist_method = get_onlist_method(
                 measurement_set_accs=curr_measet_accs, igvf_api=self.igvf_api)
-            self.single_seqspec_preflight_check(
-                seqspec_column=column, onlist_method=onlist_method, measurement_set_accs=curr_measet_accs, local_barcode_file_dir=local_barcode_file_dir)
+            try:
+                self.single_seqspec_preflight_check(
+                    seqspec_column=column, onlist_method=onlist_method, measurement_set_accs=curr_measet_accs, local_barcode_file_dir=local_barcode_file_dir)
+            except BadDataException as e:
+                self.data['possible_errors'] += str(e)
 
     def get_taxa_and_subpool_info(self):
         """Add sample taxa and sample accession as the subpool ID. Assumption is that one pipeline run, one sample.
