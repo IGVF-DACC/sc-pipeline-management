@@ -215,6 +215,11 @@ class WorkflowConfigInfo:
     download_path: str
 
 
+class IGVFPortalPostError(Exception):
+    """Custom exception for IGVF Portal POST errors."""
+    pass
+
+
 def parse_workflow_uuids_from_gs_path(gs_path: str, gs_path_regex: re.Pattern = GS_FILE_PATH_REGEX) -> PipelineOutputIds:
     """Parse workflow UUID from a gs path.
 
@@ -374,6 +379,21 @@ def get_file_alias(col_header: str, lab: str, terra_data_record: pd.Series, terr
     return f'{lab.split("/")[-2]}:{terra_data_record["analysis_set_acc"]}_{terra_uuids}_{col_header}_uniform-pipeline'
 
 
+def get_iu_conn_post_stdout(iu_conn_post_stdout: tuple) -> str:
+    """Get the standard output from the IU connection POST request.
+
+    Args:
+        iu_conn_post_stdout (tuple): The standard output from the IU connection POST request.
+
+    Returns:
+        str: The accession or UUID from the standard output.
+    """
+    if 'accession' in iu_conn_post_stdout[0]:
+        return iu_conn_post_stdout[0]['accession']
+    else:
+        return iu_conn_post_stdout[0]['uuid']
+
+
 # Helper function to post data object via IGVF utils
 def single_post_to_portal(igvf_data_payload: dict, igvf_utils_api, upload_file: bool = False) -> str:
     """POST a single data object to the portal
@@ -392,10 +412,14 @@ def single_post_to_portal(igvf_data_payload: dict, igvf_utils_api, upload_file: 
     stdout = igvf_utils_api.post(
         igvf_data_payload, upload_file=upload_file, return_original_status_code=True, truncate_long_strings_in_payload_log=True)
     # NOTE: Some POSTs will not have accessions, so UUID is probably the best to use.
-    if 'accession' in stdout[0]:
-        return stdout[0]['accession']
+    portal_record_id = get_iu_conn_post_stdout(stdout)
+    if stdout[1] == 201:
+        return portal_record_id
+    elif stdout[1] == 409:
+        return f'Conflicted with an existing object: {portal_record_id}.'
     else:
-        return stdout[0]['uuid']
+        raise IGVFPortalPostError(
+            f'POST failed with status code {stdout[1]} for {_schema_property}.')
 
 
 def download_qc_file_from_gcp(gs_file_path: str, downloaded_dir: str) -> str:
@@ -696,7 +720,7 @@ def mk_qc_obj_aliases(curr_workflow_config: PipelineOutputIds, qc_prefix: str, l
 
 
 def post_single_qc_metric_to_portal(terra_data_record: pd.Series, qc_data_info: dict, qc_of_file_accs: list, lab: str, award: str, analysis_step_version: str, qc_prefix: str, qc_obj_aliases: list, igvf_utils_api, output_root_dir: str = '/igvf/data/') -> list[PostResult]:
-    """Post a single QC metric to the portal.
+    """Post a single QC metric to the portal. If the QC_OF objects fail to post due to conflicts or other errors, it will return a failure result.
 
     Args:
         terra_data_record (pd.Series): One Terra pipeline (i.e., one row in the data table)
