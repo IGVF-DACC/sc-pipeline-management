@@ -905,7 +905,7 @@ def post_all_rna_data_to_portal(terra_data_record: pd.Series, lab: str, award: s
 
 
 # Post ATAC data to the portal
-def post_single_alignment_file(terra_data_record: pd.Series, col_header: str, curr_file_format: str, curr_description: str, lab: str, award: str, curr_assembly: str, curr_ctrl_access: bool, curr_derived_from: list, igvf_utils_api, upload_file: bool) -> PostResult:
+def post_single_alignment_file(terra_data_record: pd.Series, col_header: str, curr_file_format: str, curr_description: str, lab: str, award: str, curr_ctrl_access: bool, curr_derived_from: list, igvf_utils_api, upload_file: bool) -> PostResult:
     """Post one alignment file to the portal.
 
     Args:
@@ -915,7 +915,6 @@ def post_single_alignment_file(terra_data_record: pd.Series, col_header: str, cu
         curr_description (str): The output file description
         lab (str): The data submitter lab
         award (str): The data submitter lab's award
-        curr_assembly (str): The genome assembly
         curr_ctrl_access (bool): The controlled access status (computed based on SeqFile status)
         curr_derived_from (list): The sequence file and seqspec accessions (for derived_from)
         igvf_utils_api (_type_): IGVF python client api
@@ -946,7 +945,6 @@ def post_single_alignment_file(terra_data_record: pd.Series, col_header: str, cu
                                       lab=lab,
                                       analysis_step_version=ANALYSIS_STEP_VERSIONS_BY_ASSAY_TYPES['atac'],
                                       aliases=[curr_file_alias],
-                                      assembly=curr_assembly,
                                       controlled_access=curr_ctrl_access,
                                       file_format=curr_file_format,
                                       content_type='alignments',
@@ -1096,13 +1094,12 @@ def post_single_index_file(terra_data_record: pd.Series, col_header: str, curr_f
         return PostResult.Failure(col_header=col_header, error=e)
 
 
-def post_all_atac_alignment_data_to_portal(terra_data_record: pd.Series, lab: str, award: str, curr_assembly: str, curr_ctrl_access: bool, curr_derived_from: list, igvf_utils_api, upload_file: bool, output_root_dir: str = '/igvf/data/') -> list[PostResult]:
+def post_all_atac_alignment_data_to_portal(terra_data_record: pd.Series, lab: str, award: str, curr_ctrl_access: bool, curr_derived_from: list, igvf_utils_api, upload_file: bool, output_root_dir: str = '/igvf/data/') -> list[PostResult]:
     """Post all ATAC alignment data to the portal (alignment, bam index files, and QC).
 
     Args:
         terra_data_record (pd.Series): One Terra pipeline (i.e., one row in the data table)
         lab (str): The data submitter lab
-        curr_assembly (str): The genome assembly
         curr_ctrl_access (bool): The controlled access status (computed based on SeqFile status)
         curr_derived_from (list): The sequence file and seqspec accessions (for derived_from)
         award (str): The data submitter lab's award
@@ -1125,7 +1122,6 @@ def post_all_atac_alignment_data_to_portal(terra_data_record: pd.Series, lab: st
                                                       'alignment_file'][alignment_file_col]['description'],
                                                   lab=lab,
                                                   award=award,
-                                                  curr_assembly=curr_assembly,
                                                   curr_ctrl_access=curr_ctrl_access,
                                                   curr_derived_from=curr_derived_from,
                                                   igvf_utils_api=igvf_utils_api,
@@ -1309,7 +1305,6 @@ def post_all_atac_data_to_portal(terra_data_record: pd.Series, lab: str, award: 
                 terra_data_record=terra_data_record,
                 lab=lab,
                 award=award,
-                curr_assembly=curr_assembly,
                 curr_ctrl_access=curr_ctrl_access,
                 curr_derived_from=all_derived_from,
                 igvf_utils_api=igvf_utils_api,
