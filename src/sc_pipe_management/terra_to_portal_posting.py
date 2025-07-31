@@ -681,7 +681,21 @@ def post_single_document_to_portal(terra_data_record: pd.Series, lab: str, award
     return workflow_config_post_results
 
 
-def post_single_qc_metric_to_portal(terra_data_record: pd.Series, qc_data_info: dict, qc_of_file_accs: list, lab: str, award: str, analysis_step_version: str, qc_prefix: str, igvf_utils_api, output_root_dir: str = '/igvf/data/') -> list[PostResult]:
+def mk_qc_obj_aliases(curr_workflow_config: PipelineOutputIds, qc_prefix: str, lab: str) -> list:
+    """Create a list of QC objects aliases for the workflow configuration.
+
+    Args:
+        curr_workflow_config (PipelineOutputIds): The current workflow configuration
+        qc_prefix (str): The prefix for the QC object (fragment, gene count, etc.)
+        lab (str): The lab name
+
+    Returns:
+        list: A list of QC objects aliases
+    """
+    return [f'{lab.split("/")[-2]}:{curr_workflow_config.aliases()}_{qc_prefix}_QC-metrics_uniform-pipeline']
+
+
+def post_single_qc_metric_to_portal(terra_data_record: pd.Series, qc_data_info: dict, qc_of_file_accs: list, lab: str, award: str, analysis_step_version: str, qc_prefix: str, qc_obj_aliases: list, igvf_utils_api, output_root_dir: str = '/igvf/data/') -> list[PostResult]:
     """Post a single QC metric to the portal.
 
     Args:
@@ -692,6 +706,7 @@ def post_single_qc_metric_to_portal(terra_data_record: pd.Series, qc_data_info: 
         award (str): The data submitter lab's award
         analysis_step_version (str): The analysis step version
         qc_prefix (str): The prefix for the QC object type (fragment, gene count, etc.)
+        qc_obj_aliases (list): The list of QC object aliases
         igvf_utils_api (_type_): IGVF python client api
         output_root_dir (str, optional): The output directory to download the QC files to. Defaults to '/igvf/data/'.
 
@@ -699,9 +714,6 @@ def post_single_qc_metric_to_portal(terra_data_record: pd.Series, qc_data_info: 
         PostResult: list(PostResult(col_header=qc_obj_type, accession=..., error=...))
     """
     try:
-        # make some base QC obj with necessary info
-        qc_aliases = [
-            f'{lab.split("/")[-2]}:{terra_data_record["analysis_set_acc"]}_{qc_data_info["object_type"]}_{qc_prefix}_uniform-pipeline']
         # NOTE: GCP VM persistent disk is /igvf/data
         curr_qc_file_dir = os.path.join(
             output_root_dir, 'qc_metrics', terra_data_record['analysis_set_acc'])
@@ -710,7 +722,7 @@ def post_single_qc_metric_to_portal(terra_data_record: pd.Series, qc_data_info: 
         # Base QC object payload
         qc_payload = dict(lab=lab,
                           award=award,
-                          aliases=qc_aliases,
+                          aliases=qc_obj_aliases,
                           analysis_step_version=analysis_step_version,
                           description=qc_data_info['description'],
                           quality_metric_of=qc_of_file_accs,
@@ -862,17 +874,28 @@ def post_all_rna_data_to_portal(terra_data_record: pd.Series, lab: str, award: s
         results = pool.starmap(post_single_matrix_file, tasks)
 
     # Post RNA QC metrics
+    # Get posted H5AD accessions
     posted_rna_accessions = [
         res.accession for res in results if res.error is None]
     # NOTE: Has some hard coded values for now
+    qc_prefix = 'gene_count'
+    # Get GCP bucket, submission, workflow, and subworkflow IDs from the GS path of the H5AD file
+    curr_workflow_config = parse_workflow_uuids_from_gs_path(
+        gs_path=terra_data_record['rna_kb_h5ad'])
+    # Generate QC object aliases
+    qc_obj_aliases = mk_qc_obj_aliases(curr_workflow_config=curr_workflow_config,
+                                       qc_prefix=qc_prefix,
+                                       lab=lab)
+    # Post QC metrics to the portal
     qc_metric_post_result = post_single_qc_metric_to_portal(terra_data_record=terra_data_record,
-                                                            qc_data_info=TERRA_QC_OUTPUTS['rnaseq']['gene_count'],
+                                                            qc_data_info=TERRA_QC_OUTPUTS['rnaseq'][qc_prefix],
                                                             qc_of_file_accs=posted_rna_accessions,
                                                             lab=lab,
                                                             award=award,
                                                             analysis_step_version=ANALYSIS_STEP_VERSIONS_BY_ASSAY_TYPES[
                                                                 'rna'],
-                                                            qc_prefix='gene_count',
+                                                            qc_prefix=qc_prefix,
+                                                            qc_obj_aliases=qc_obj_aliases,
                                                             igvf_utils_api=igvf_utils_api,
                                                             output_root_dir=output_root_dir
                                                             )
@@ -1127,17 +1150,28 @@ def post_all_atac_alignment_data_to_portal(terra_data_record: pd.Series, lab: st
     curr_post_summary.append(bam_index_result)
 
     # Submit Alignment QC
-    # NOTE: Has some hard coded values for now
+    # Get derived_from accessions from the alignment file post result
     posted_alignment_accs = [
         res.accession for res in curr_post_summary if res.error is None]
+    # NOTE: Has some hard coded values for now
+    qc_prefix = 'alignment'
+    # Get GCP bucket, submission, workflow, and subworkflow IDs from the GS path of the BAM file
+    curr_workflow_config = parse_workflow_uuids_from_gs_path(
+        gs_path=terra_data_record['atac_bam'])
+    # Generate QC object aliases
+    qc_obj_aliases = mk_qc_obj_aliases(curr_workflow_config=curr_workflow_config,
+                                       qc_prefix=qc_prefix,
+                                       lab=lab)
+    # Post QC metrics to the portal
     alignment_metric_post_result = post_single_qc_metric_to_portal(terra_data_record=terra_data_record,
-                                                                   qc_data_info=TERRA_QC_OUTPUTS['atacseq']['alignment'],
+                                                                   qc_data_info=TERRA_QC_OUTPUTS['atacseq'][qc_prefix],
                                                                    qc_of_file_accs=posted_alignment_accs,
                                                                    lab=lab,
                                                                    award=award,
                                                                    analysis_step_version=ANALYSIS_STEP_VERSIONS_BY_ASSAY_TYPES[
                                                                        'atac'],
-                                                                   qc_prefix='alignment',
+                                                                   qc_prefix=qc_prefix,
+                                                                   qc_obj_aliases=qc_obj_aliases,
                                                                    igvf_utils_api=igvf_utils_api,
                                                                    output_root_dir=output_root_dir
                                                                    )
@@ -1204,16 +1238,27 @@ def post_all_atac_fragment_data_to_portal(terra_data_record: pd.Series, lab: str
                                                         )
     curr_post_summary.append(fragment_index_file_result)
     # Post Fragment QC
+    # Get derived_from accessions from the fragment file post result
     posted_fragment_accs = [
         res.accession for res in curr_post_summary if res.error is None]
+    # NOTE: Has some hard coded values for now
+    qc_prefix = 'fragment'
+    # Get GCP bucket, submission, workflow, and subworkflow IDs from the GS path of the BED file
+    curr_workflow_config = parse_workflow_uuids_from_gs_path(
+        gs_path=terra_data_record['atac_fragments'])
+    # Generate QC object aliases
+    qc_obj_aliases = mk_qc_obj_aliases(curr_workflow_config=curr_workflow_config,
+                                       qc_prefix=qc_prefix,
+                                       lab=lab)
     fragment_metric_post_result = post_single_qc_metric_to_portal(terra_data_record=terra_data_record,
-                                                                  qc_data_info=TERRA_QC_OUTPUTS['atacseq']['fragment'],
+                                                                  qc_data_info=TERRA_QC_OUTPUTS['atacseq'][qc_prefix],
                                                                   qc_of_file_accs=posted_fragment_accs,
                                                                   lab=lab,
                                                                   award=award,
                                                                   analysis_step_version=ANALYSIS_STEP_VERSIONS_BY_ASSAY_TYPES[
                                                                       'atac'],
-                                                                  qc_prefix='fragment',
+                                                                  qc_prefix=qc_prefix,
+                                                                  qc_obj_aliases=qc_obj_aliases,
                                                                   igvf_utils_api=igvf_utils_api,
                                                                   output_root_dir=output_root_dir
                                                                   )
