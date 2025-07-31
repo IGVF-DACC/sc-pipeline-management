@@ -1510,7 +1510,7 @@ def summarize_post_status(post_results: list) -> pd.DataFrame:
     post_status_summary_table = pd.DataFrame(
         post_status_summary).transpose().fillna('')
     post_status_summary_table['post_status_fail'] = post_status_summary_table.apply(
-        lambda x: x.str.startswith(('POST Failed')), axis=1).sum(axis=1)
+        lambda x: x.str.startswith(('POST Failed', 'Conflicted with an existing object')), axis=1).sum(axis=1)
     return post_status_summary_table
 
 
