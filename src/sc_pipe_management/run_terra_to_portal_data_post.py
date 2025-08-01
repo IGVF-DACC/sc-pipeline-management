@@ -1,5 +1,6 @@
 import igvf_and_terra_api_tools as api_tools
-import terra_to_portal_posting as terra2portal_transfer
+import terra_to_portal_posting as tr2igvf
+import accessioning_utils as acc_utils
 import argparse
 import firecloud.api as fapi
 import os
@@ -50,6 +51,8 @@ def get_parser():
                         help="""If True, upload the file to the portal.""")
     parser.add_argument('--output_dir', type=str, default=None,
                         help="""Path to the output directory. Defaults to $(pwd)/terra_datatables/output/$(date +%m%d%Y)""")
+    parser.add_argument('--patch_existing_post', action='store_true',
+                        help="""Whether to patch an existing post. Defaults to False. See `single_post_to_portal` for more details.""")
     parser.add_argument('--tries', type=int, default=3,
                         help="""Number of tries to attempt the API calls. Default is 3.""")
     parser.add_argument('--delay', type=int, default=5,
@@ -153,7 +156,7 @@ def main():
         f'>>>>>>>>>>>>>> A total of {terra_table.shape[0]} pipeline runs found with {num_excluded} of which excluded.')
 
     # Download all workflow configs first (firecloud times out)
-    config_file_collection = terra2portal_transfer.download_all_workflow_config_jsons(
+    config_file_collection = acc_utils.download_all_workflow_config_jsons(
         terra_namespace=args.terra_namespace,
         terra_workspace=args.terra_workspace,
         terra_data_table=terra_table,
@@ -171,21 +174,22 @@ def main():
         igvf_api_keys=igvf_api_keys, post_endpoint=args.post_endpoint)
 
     # Will return a list of Postres
-    portal_post_results = terra2portal_transfer.post_all_successful_runs(full_terra_data_table=terra_table,
-                                                                         igvf_api=igvf_client_api,
-                                                                         igvf_utils_api=igvf_utils_api,
-                                                                         upload_file=args.upload_file,
-                                                                         config_file_collection=config_file_collection,
-                                                                         output_root_dir=args.output_dir)
+    portal_post_results = tr2igvf.post_all_successful_runs(full_terra_data_table=terra_table,
+                                                           igvf_api=igvf_client_api,
+                                                           igvf_utils_api=igvf_utils_api,
+                                                           upload_file=args.upload_file,
+                                                           config_file_collection=config_file_collection,
+                                                           output_root_dir=args.output_dir,
+                                                           patch_existing_post=args.patch_existing_post)
 
     # Summarize into a table
-    portal_post_summary = terra2portal_transfer.summarize_post_status(
+    portal_post_summary = acc_utils.summarize_post_status(
         post_results=portal_post_results)
-    updated_terra_table = terra2portal_transfer.add_post_status_summary_to_output_data_table(
+    updated_terra_table = acc_utils.add_post_status_summary_to_output_data_table(
         full_terra_data_table=terra_table, post_status_df=portal_post_summary)
 
     # Save the updated terra table
-    terra2portal_transfer.save_pipeline_postres_tables(
+    acc_utils.save_pipeline_postres_tables(
         pipeline_postres_table=portal_post_summary, updated_full_data_table=updated_terra_table, output_root_dir=args.output_dir)
 
 
