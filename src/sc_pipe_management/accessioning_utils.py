@@ -274,7 +274,7 @@ def mk_qc_obj_aliases(curr_workflow_config: PipelineOutputIds, analysis_set_acc:
     Returns:
         list: A list of QC objects aliases
     """
-    return [f'{lab.split("/")[-2]}:{analysis_set_acc}_{curr_workflow_config.aliases()}_{qc_prefix}_QC-metrics_uniform-pipeline']
+    return [f'{lab.split("/")[-2]}:{analysis_set_acc}_{curr_workflow_config.aliases()}_{qc_prefix}_uniform-pipeline']
 
 
 # Download QC files and workflow config JSONs from Terra GCP bucket

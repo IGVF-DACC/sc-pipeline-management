@@ -124,6 +124,7 @@ def mk_anaset_docs_patching_payload(doc_aliases: list, analysis_set_acc: str, ig
     }
 
 
+# Functions to do IGVF portal posting and error handling
 def get_conflict_object_id(igvf_utils_api, igvf_data_payload: dict) -> str | None:
     """Get the ID of a conflicting object, if it exists by aliases or MD5."""
     if igvf_data_payload.get('aliases'):
@@ -131,8 +132,9 @@ def get_conflict_object_id(igvf_utils_api, igvf_data_payload: dict) -> str | Non
             f"aliases:{igvf_data_payload['aliases'][0]}")
         if existing_file_by_alias:
             return existing_file_by_alias['@id']
+    if igvf_data_payload.get('md5sum'):
         existing_file_by_md5 = igvf_utils_api.get(
-            f"md5:{igvf_data_payload['md5']}")
+            f"md5:{igvf_data_payload['md5sum']}")
         if existing_file_by_md5:
             return existing_file_by_md5['@id']
     return None
@@ -166,6 +168,16 @@ def single_post_to_portal(igvf_data_payload: dict, igvf_utils_api, upload_file: 
     stdout = igvf_utils_api.post(
         igvf_data_payload, upload_file=upload_file, return_original_status_code=True, truncate_long_strings_in_payload_log=True)
     return stdout[0]['uuid']
+
+
+def midway_failing_chained_posting(will_fail_col_headers: list[str]) -> PostResult:
+    """Return a PostResult indicating that the posting failed midway due to some objects already posted."""
+    midway_fail_results = []
+    for col_header in will_fail_col_headers:
+        midway_fail_results.append(PostResult.Failure(
+            col_header=col_header,
+            error=f'Cannot post {col_header} because its linked object failed to post.'))
+    return midway_fail_results
 
 
 # Post workflow configuration document to the portal
@@ -221,11 +233,11 @@ def post_single_document_to_portal(terra_data_record: pd.Series, lab: str, award
                 workflow_config_post_results.append(PostResult.Success(
                     col_header='analysis_set_workflow_config_patch', accession='No update needed'))
         # Log error of patching analysis set with workflow config document
-        except requests.exceptions.HTTPError as e:
+        except (requests.exceptions.HTTPError, PortalConflictError) as e:
             workflow_config_post_results.append(PostResult.Failure(
                 col_header='analysis_set_workflow_config_patch', error=e))
     # Log error of posting workflow config document
-    except requests.exceptions.HTTPError as e:
+    except (requests.exceptions.HTTPError, PortalConflictError) as e:
         workflow_config_post_results.append(PostResult.Failure(
             col_header='workflow_config_document', error=e))
     # Return the post results
@@ -293,7 +305,7 @@ def post_single_qc_metric_to_portal(terra_data_record: pd.Series, qc_data_info: 
                                               )
         # Post result
         return PostResult.Success(col_header=f'{qc_prefix}:{qc_data_info["object_type"]}', accession=curr_post_res)
-    except requests.exceptions.HTTPError as e:
+    except (requests.exceptions.HTTPError, PortalConflictError) as e:
         return PostResult.Failure(col_header=f'{qc_prefix}:{qc_data_info["object_type"]}', error=e)
 
 
@@ -362,7 +374,7 @@ def post_single_matrix_file(terra_data_record: pd.Series, col_header: str, curr_
             igvf_utils_api.upload_file(
                 file_id=curr_post_res, file_path=curr_gs_cloud_link)
         return PostResult.Success(col_header=col_header, accession=curr_post_res)
-    except requests.exceptions.HTTPError as e:
+    except (requests.exceptions.HTTPError, PortalConflictError) as e:
         return PostResult.Failure(col_header=col_header, error=e)
 
 
@@ -417,12 +429,18 @@ def post_all_rna_data_to_portal(terra_data_record: pd.Series, lab: str, award: s
         results = pool.starmap(post_single_matrix_file, tasks)
 
     # Post RNA QC metrics
-    # Get posted H5AD accessions
+    qc_prefix = 'gene_count'
+    # Get already posted RNA mtx file UUIDs
     posted_rna_accessions = [
         res.accession for res in results if res.error is None]
-    # NOTE: Has some hard coded values for now
-    qc_prefix = 'gene_count'
-    # Get GCP bucket, submission, workflow, and subworkflow IDs from the GS path of the H5AD file
+
+    # If Post failed
+    if not posted_rna_accessions:
+        results.extend(midway_failing_chained_posting(
+            will_fail_col_headers=[f'{qc_prefix}_qc']
+        ))
+        return results
+
     curr_workflow_config = parse_workflow_uuids_from_gs_path(
         gs_path=terra_data_record['rna_kb_h5ad'])
     # Generate QC object aliases
@@ -511,7 +529,7 @@ def post_single_alignment_file(terra_data_record: pd.Series, col_header: str, cu
             igvf_utils_api.upload_file(
                 file_id=curr_post_res, file_path=curr_gs_cloud_link)
         return PostResult.Success(col_header=col_header, accession=curr_post_res)
-    except requests.exceptions.HTTPError as e:
+    except (requests.exceptions.HTTPError, PortalConflictError) as e:
         return PostResult.Failure(col_header=col_header, error=e)
 
 
@@ -578,7 +596,7 @@ def post_single_tabular_file(terra_data_record: pd.Series, col_header: str, curr
             igvf_utils_api.upload_file(
                 file_id=curr_post_res, file_path=curr_gs_cloud_link)
         return PostResult.Success(col_header=col_header, accession=curr_post_res)
-    except requests.exceptions.HTTPError as e:
+    except (requests.exceptions.HTTPError, PortalConflictError) as e:
         return PostResult.Failure(col_header=col_header, error=e)
 
 
@@ -638,7 +656,7 @@ def post_single_index_file(terra_data_record: pd.Series, col_header: str, curr_f
             igvf_utils_api.upload_file(
                 file_id=curr_post_res, file_path=curr_gs_cloud_link)
         return PostResult.Success(col_header=col_header, accession=curr_post_res)
-    except requests.exceptions.HTTPError as e:
+    except (requests.exceptions.HTTPError, PortalConflictError) as e:
         return PostResult.Failure(col_header=col_header, error=e)
 
 
@@ -660,9 +678,12 @@ def post_all_atac_alignment_data_to_portal(terra_data_record: pd.Series, lab: st
         list[PostResult]: [PostResult(
             col_header='rna_kb_output_folder_tar_gz', accession='TSTFI00286528', error=None)]
     """
+    alignment_file_col = 'atac_bam'
+    bam_index_col = 'atac_bam_index'
+    qc_prefix = 'alignment'
+
     curr_post_summary = []
     # Post alignment bam
-    alignment_file_col = 'atac_bam'
     alignment_result = post_single_alignment_file(terra_data_record=terra_data_record,
                                                   col_header=alignment_file_col,
                                                   curr_file_format=TERRA_OUTPUT_TABLE_COLUMN_TYPES[
@@ -678,8 +699,15 @@ def post_all_atac_alignment_data_to_portal(terra_data_record: pd.Series, lab: st
                                                   patch_existing_post=patch_existing_post)
     curr_post_summary.append(alignment_result)
 
+    # Get the alignment file post result. Return errors early if the post failed
+    if alignment_result.error is not None:
+        curr_post_summary.extend(midway_failing_chained_posting(
+            will_fail_col_headers=[bam_index_col, f'{qc_prefix}_qc']))
+        return curr_post_summary
+
+    # Get the posted alignment UUID
+    posted_alignment_uuid = alignment_result.accession
     # Post bam index .bam.bai files
-    bam_index_col = 'atac_bam_index'
     bam_index_result = post_single_index_file(terra_data_record=terra_data_record,
                                               col_header=bam_index_col,
                                               curr_file_format=TERRA_OUTPUT_TABLE_COLUMN_TYPES[
@@ -690,21 +718,15 @@ def post_all_atac_alignment_data_to_portal(terra_data_record: pd.Series, lab: st
                                               award=award,
                                               curr_ctrl_access=curr_ctrl_access,
                                               curr_derived_from=[
-                                                  res.Description() for res in curr_post_summary],
+                                                  posted_alignment_uuid],
                                               igvf_utils_api=igvf_utils_api,
                                               upload_file=upload_file,
                                               patch_existing_post=patch_existing_post)
     curr_post_summary.append(bam_index_result)
 
     # Submit Alignment QC
-    # Get derived_from accessions from the alignment file post result
-    posted_alignment_accs = [
-        res.accession for res in curr_post_summary if res.error is None]
-    # NOTE: Has some hard coded values for now
-    qc_prefix = 'alignment'
-    # Get GCP bucket, submission, workflow, and subworkflow IDs from the GS path of the BAM file
     curr_workflow_config = parse_workflow_uuids_from_gs_path(
-        gs_path=terra_data_record['atac_bam'])
+        gs_path=terra_data_record[alignment_file_col])
     # Generate QC object aliases
     qc_obj_aliases = mk_qc_obj_aliases(curr_workflow_config=curr_workflow_config,
                                        analysis_set_acc=terra_data_record['analysis_set_acc'],
@@ -713,7 +735,8 @@ def post_all_atac_alignment_data_to_portal(terra_data_record: pd.Series, lab: st
     # Post QC metrics to the portal
     alignment_metric_post_result = post_single_qc_metric_to_portal(terra_data_record=terra_data_record,
                                                                    qc_data_info=TERRA_QC_OUTPUTS['atacseq'][qc_prefix],
-                                                                   qc_of_file_accs=posted_alignment_accs,
+                                                                   qc_of_file_accs=[
+                                                                       posted_alignment_uuid],
                                                                    lab=lab,
                                                                    award=award,
                                                                    analysis_step_version=ANALYSIS_STEP_VERSIONS_BY_ASSAY_TYPES[
@@ -750,9 +773,12 @@ def post_all_atac_fragment_data_to_portal(terra_data_record: pd.Series, lab: str
         list[PostResult]: [PostResult(
             col_header='rna_kb_output_folder_tar_gz', accession='TSTFI00286528', error=None)]
     """
+    fragment_file_col = 'atac_fragments'
+    fragment_index_file_col = 'atac_fragments_index'
+    qc_prefix = 'fragment'
+
     curr_post_summary = []
     # Post fragment file
-    fragment_file_col = 'atac_fragments'
     fragment_file_result = post_single_tabular_file(terra_data_record=terra_data_record,
                                                     col_header=fragment_file_col,
                                                     curr_file_format=TERRA_OUTPUT_TABLE_COLUMN_TYPES[
@@ -771,8 +797,17 @@ def post_all_atac_fragment_data_to_portal(terra_data_record: pd.Series, lab: str
                                                     patch_existing_post=patch_existing_post)
     curr_post_summary.append(fragment_file_result)
 
+    # Check if the fragment file post result has an error
+    if fragment_file_result.error is not None:
+        curr_post_summary.extend(midway_failing_chained_posting(
+            will_fail_col_headers=[fragment_index_file_col, f'{qc_prefix}_qc']))
+        return curr_post_summary
+
+    # Get the posted alignment UUID
+    posted_fragment_uuid = fragment_file_result.accession
+
     # Post fragment index file
-    fragment_index_file_col = 'atac_fragments_index'
+
     fragment_index_file_result = post_single_index_file(terra_data_record=terra_data_record,
                                                         col_header=fragment_index_file_col,
                                                         curr_file_format=TERRA_OUTPUT_TABLE_COLUMN_TYPES[
@@ -783,19 +818,14 @@ def post_all_atac_fragment_data_to_portal(terra_data_record: pd.Series, lab: str
                                                         award=award,
                                                         curr_ctrl_access=False,
                                                         curr_derived_from=[
-                                                            res.Description() for res in curr_post_summary],
+                                                            posted_fragment_uuid],
                                                         igvf_utils_api=igvf_utils_api,
                                                         upload_file=upload_file,
                                                         patch_existing_post=patch_existing_post
                                                         )
     curr_post_summary.append(fragment_index_file_result)
+
     # Post Fragment QC
-    # Get derived_from accessions from the fragment file post result
-    posted_fragment_accs = [
-        res.accession for res in curr_post_summary if res.error is None]
-    # NOTE: Has some hard coded values for now
-    qc_prefix = 'fragment'
-    # Get GCP bucket, submission, workflow, and subworkflow IDs from the GS path of the BED file
     curr_workflow_config = parse_workflow_uuids_from_gs_path(
         gs_path=terra_data_record['atac_fragments'])
     # Generate QC object aliases
@@ -805,7 +835,8 @@ def post_all_atac_fragment_data_to_portal(terra_data_record: pd.Series, lab: str
                                        lab=lab)
     fragment_metric_post_result = post_single_qc_metric_to_portal(terra_data_record=terra_data_record,
                                                                   qc_data_info=TERRA_QC_OUTPUTS['atacseq'][qc_prefix],
-                                                                  qc_of_file_accs=posted_fragment_accs,
+                                                                  qc_of_file_accs=[
+                                                                      posted_fragment_uuid],
                                                                   lab=lab,
                                                                   award=award,
                                                                   analysis_step_version=ANALYSIS_STEP_VERSIONS_BY_ASSAY_TYPES[
