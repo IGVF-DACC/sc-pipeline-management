@@ -5,4 +5,5 @@ igvf-client
 Dumper==1.2.0
 seqspec @ git+https://github.com/IGVF-DACC/seqspec.git@v25-07-16
 firecloud==0.16.38
-pre-commit==2.17.0
+pre-commit==4.2.0
+setuptools==65.1.0
