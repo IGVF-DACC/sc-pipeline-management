@@ -13,10 +13,7 @@ from sc_pipe_management.accession.parse_terra_metadata import (
 )
 
 from constants import (
-    POSTING_LAB,
-    POSTING_AWARD,
     OUTPUT_SUBMITTER_INFO,
-    FileObjMetadata,
     ALIGNMENT_FILETYPES,
     INDEX_FILETYPES,
     TABULAR_FILETYPES,
@@ -550,24 +547,38 @@ class DocumentPayload:
         return doc_payload
 
 
-# class AnalysisSetPatchingPayload:
-#     def get_existing_analysis_set_docs(analysis_set_acc: str, igvf_utils_api) -> list:
-#         """Get existing document aliases linked to the analysis set.
+class AnalysisSetPatchingPayload:
+    """Class to create a patching payload for an analysis set."""
 
-#         Args:
-#             analysis_set_acc (str): Analysis set accession
-#             igvf_utils_api (_type_): igvf utils API client
+    def __init__(self, terra_metadata: TerraOutputMetadata, input_params_doc_uuid: str, igvf_utils_api):
+        self.terra_metadata = terra_metadata
+        self.analysis_set_acc = terra_metadata.analysis_set_acc
+        self.input_params_doc_uuid = input_params_doc_uuid
+        self.igvf_utils_api = igvf_utils_api
 
-#         Returns:
-#             list: A list of existing document aliases or an empty list if no documents are linked
-#         """
-#         analysis_set_obj = igvf_utils_api.get(f'/analysis-sets/{analysis_set_acc}')
-#         if not analysis_set_obj.get('documents'):
-#             return []
-#         existing_doc_ids = analysis_set_obj['documents']
-#         all_existing_doc_aliases = set()
-#         for doc_id in existing_doc_ids:
-#             doc_obj = igvf_utils_api.get(doc_id)
-#             if 'aliases' in doc_obj:
-#                 all_existing_doc_aliases.update(doc_obj['aliases'])
-#         return sorted(all_existing_doc_aliases)
+    def _get_existing_analysis_set_docs(self) -> list:
+        """Get existing document UUID linked to the analysis set."""
+        analysis_set_obj = self.igvf_utils_api.get(
+            f'/analysis-sets/{self.analysis_set_acc}')
+        if not analysis_set_obj.get('documents'):
+            return []
+        existing_doc_ids = analysis_set_obj['documents']
+        all_existing_doc_uuids = set()
+        for doc_id in existing_doc_ids:
+            doc_obj = self.igvf_utils_api.get(doc_id)
+            all_existing_doc_uuids.update(doc_obj['uuid'])
+        return sorted(all_existing_doc_uuids)
+
+    def _get_patch_payload(self) -> dict | None:
+        """Get the patch payload for the analysis set."""
+        existing_anaset_doc_uuids = self._get_existing_analysis_set_docs()
+        if self.input_params_doc_uuid in existing_anaset_doc_uuids:
+            return None
+        new_anaset_doc_uuids = existing_anaset_doc_uuids.append(
+            self.input_params_doc_uuid)
+        return {
+            'documents': new_anaset_doc_uuids,
+            self.igvf_utils_api.IGVFID_KEY: f"/analysis-sets/{self.analysis_set_acc}/",
+            'uniform_pipeline_status': 'completed',
+            '_profile': 'analysis_set'
+        }
