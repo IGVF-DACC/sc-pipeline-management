@@ -46,6 +46,15 @@ class InputFileAccs:
     rna_barcode_replacement: list[str]
     reference_files: list[str]
 
+    def get_derived_from(self) -> list[str]:
+        """Get a list of derived from accessions."""
+        # Combine all derived from files, filtering out None values
+        all_accessions = self.sequence_files + self.seqspec_files + \
+            self.rna_barcode_replacement + self.reference_files
+        derived_from_accessions = [
+            acc for acc in all_accessions if acc is not None]
+        return derived_from_accessions
+
 
 @dataclasses.dataclass(frozen=True)
 class InputFileInfo:
