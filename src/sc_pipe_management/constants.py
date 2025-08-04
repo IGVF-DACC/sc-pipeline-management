@@ -9,17 +9,36 @@ import re
 POSTING_LAB = '/labs/igvf-dacc-processing-pipeline/'
 POSTING_AWARD = '/awards/HG012012/'
 
+
+# Hard code for columns with IGVF accessions
+ACCESSION_HEADERS_BY_ASSAY_TYPES = {'atac': ['atac_read1_accessions', 'atac_read2_accessions', 'atac_barcode_accessions'],
+                                    'rna': ['rna_read1_accessions', 'rna_read2_accessions', 'rna_barcode_accessions']
+                                    }
+
+# NOTE: These may end up not being needed if genome tsv reference and assembly column is available in input
+# Convert Terra table's info to portal enum
+GENOME_ASSEMBLY_INFO = {'Homo sapiens': 'GRCh38', 'Mus musculus': 'GRCm39'}
+
+
+# IGVF file url parsing regex for accession
+IGVF_URL_PATH_REGEX = re.compile(
+    r'\/.*-files\/(IGVF[A-Z0-9]+|TST[A-Z0-9]+)\/@@download')
+
+# GS file path regex
+GS_FILE_PATH_REGEX = re.compile(
+    r'gs://([a-z0-9\-]+)/submissions/final-outputs/([a-z0-9\-]+)/single_cell_pipeline/([a-z0-9\-]+)/[a-z\-]+/[a-z\_]+/([a-z0-9\-]+)/.*')
+
+
 # Dataclass object to store IGVF data object metadata
-
-
 @dataclasses.dataclass(frozen=True)
 class FileObjMetadata:
-    """Metadata for file objects that will be accessioned to the IGVF portal."""
-    file_format: str
-    description: str
-    content_type: str
-    file_specification: list
-    analysis_step_version: str
+    """Payload metadata for file objects that will be accessioned to the IGVF portal."""
+    file_format: str    # file format enum used for the output file
+    description: str    # description for the output file
+    content_type: str   # content type enum used for the output file
+    # file format specification documents' aliases for the output file
+    file_specifications: list
+    analysis_step_version: str  # ASV used for for the output file
 
 # The following is a mapping of file types to their metadata.
 # The dict key is the name of the Terra data table column that hosts the GCP path to the file.
@@ -30,7 +49,7 @@ ALIGNMENT_FILETYPES = {
     'atac_bam': FileObjMetadata(file_format='bam',
                                 description='Raw Aligned bam file from Chromap',
                                 content_type='alignments',
-                                file_specification=[
+                                file_specifications=[
                                     'buenrostro-bernstein:igvf-sc-pipeline-alignment-bam-specification'],
                                 analysis_step_version='igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0'
                                 )
@@ -41,14 +60,14 @@ INDEX_FILETYPES = {
     'atac_fragments_index': FileObjMetadata(file_format='tbi',
                                             description='Raw Fragment file index from Chromap',
                                             content_type='index',
-                                            file_specification=[
+                                            file_specifications=[
                                                 'buenrostro-bernstein:igvf-sc-pipeline-fragment-file-specification'],
                                             analysis_step_version='igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0'
                                             ),
     'atac_bam_index': FileObjMetadata(file_format='bai',
                                       description='Raw Aligned bam file index from Chromap',
                                       content_type='index',
-                                      file_specification=[
+                                      file_specifications=[
                                           'buenrostro-bernstein:igvf-sc-pipeline-alignment-bam-index-specification'],
                                       analysis_step_version='igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0'
                                       )
@@ -86,28 +105,15 @@ MATRIX_FILETYPES = {
 }
 
 
-# Hard code for columns with IGVF accessions
-ACCESSION_HEADERS_BY_ASSAY_TYPES = {'atac': ['atac_read1_accessions', 'atac_read2_accessions', 'atac_barcode_accessions'],
-                                    'rna': ['rna_read1_accessions', 'rna_read2_accessions', 'rna_barcode_accessions']
-                                    }
-
-# NOTE: These may end up not being needed if genome tsv reference and assembly column is available in input
-# Convert Terra table's info to portal enum
-GENOME_ASSEMBLY_INFO = {'Homo sapiens': 'GRCh38', 'Mus musculus': 'GRCm39'}
-
-# Analysis step versions
-ANALYSIS_STEP_VERSIONS_BY_ASSAY_TYPES = {'atac': 'igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0',
-                                         'rna': 'igvf:single-cell-uniform-pipeline-kalliso-bustools-rnaseq-step-v1.1.0'
-                                         }
-
-
+# Dataclass for QC info map that will be used to generate QC metrics payloads
 @dataclasses.dataclass(frozen=True)
 class QCInfoMap:
-    metadata: list
-    object_type: str
-    attachment: dict
-    metadata_map: dict
-    description: str
+    """Dataclass to hold QC information for posting to the IGVF portal."""
+    metadata: list  # The output files will be parsed into a JSON schema payload
+    object_type: str    # The object type for the QC metrics
+    attachment: dict    # The output files that will be uploaded as attachments
+    metadata_map: dict  # The metadata map to convert the QC JSON files to the portal schema
+    description: str    # Description of the QC metrics
 
 
 # QC objects using QCInfoMap dataclass
@@ -182,11 +188,3 @@ TERRA_QC_OUTPUTS = {
         )
     }
 }
-
-# IGVF file url parsing regex for accession
-IGVF_URL_PATH_REGEX = re.compile(
-    r'\/.*-files\/(IGVF[A-Z0-9]+|TST[A-Z0-9]+)\/@@download')
-
-# GS file path regex
-GS_FILE_PATH_REGEX = re.compile(
-    r'gs://([a-z0-9\-]+)/submissions/final-outputs/([a-z0-9\-]+)/single_cell_pipeline/([a-z0-9\-]+)/[a-z\-]+/[a-z\_]+/([a-z0-9\-]+)/.*')

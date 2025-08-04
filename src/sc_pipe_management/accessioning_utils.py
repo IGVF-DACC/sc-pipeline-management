@@ -14,48 +14,27 @@ import re
 import subprocess
 import firecloud.api as fapi
 
-from constants import (
-    ACCESSION_HEADERS_BY_ASSAY_TYPES,
-    GENOME_ASSEMBLY_INFO,
-    GS_FILE_PATH_REGEX,
-    IGVF_URL_PATH_REGEX
-)
+# Hard code for columns with IGVF accessions
+ACCESSION_HEADERS_BY_ASSAY_TYPES = {'atac': ['atac_read1_accessions', 'atac_read2_accessions', 'atac_barcode_accessions'],
+                                    'rna': ['rna_read1_accessions', 'rna_read2_accessions', 'rna_barcode_accessions']
+                                    }
 
-# Define data classes for structured data handling
-
-
-@dataclasses.dataclass(frozen=True)
-class PipelineOutputIds:
-    gcloud_bucket: str
-    submission_id: str
-    workflow_id: str
-    subworkflow_id: str
-
-    def aliases(self) -> str:
-        """Generate a string of the form submissionID_workflowID_subworkflowID as file."""
-        return f'{self.gcloud_bucket}_{self.submission_id}_{self.workflow_id}_{self.subworkflow_id}'
-
-    def config_aliases(self) -> str:
-        """Generate a string of the form submissionID_workflowID."""
-        return f'{self.submission_id}_{self.workflow_id}'
+# NOTE: These may end up not being needed if genome tsv reference and assembly column is available in input
+# Convert Terra table's info to portal enum
+GENOME_ASSEMBLY_INFO = {'Homo sapiens': 'GRCh38', 'Mus musculus': 'GRCm39'}
 
 
-@dataclasses.dataclass(frozen=True)
-class WorkflowConfigInfo:
-    doc_aliases: list[str]
-    download_path: str
+# IGVF file url parsing regex for accession
+IGVF_URL_PATH_REGEX = re.compile(
+    r'\/.*-files\/(IGVF[A-Z0-9]+|TST[A-Z0-9]+)\/@@download')
+
+# GS file path regex
+GS_FILE_PATH_REGEX = re.compile(
+    r'gs://([a-z0-9\-]+)/submissions/final-outputs/([a-z0-9\-]+)/single_cell_pipeline/([a-z0-9\-]+)/[a-z\-]+/[a-z\_]+/([a-z0-9\-]+)/.*')
 
 
-# Functions to parse info from Terra data tables
-def parse_terra_str_list(terra_str_lists: list[str]) -> list:
-    """Parse a string list from Terra to a Python list.
-
-    Args:
-        terra_str_list (list[str]): The string list from Terra
-
-    Returns:
-        list: A Python list
-    """
+def _parse_terra_str_list(terra_str_lists: list[str]) -> list[str]:
+    """Parse a string list from Terra data table to a Python list."""
     parse_list_of_strs = []
     for value in terra_str_lists:
         if str(value) == 'nan':
@@ -72,92 +51,15 @@ def parse_terra_str_list(terra_str_lists: list[str]) -> list:
     return parse_list_of_strs
 
 
-def parse_igvf_accessions_from_urls(igvf_file_urls: list[str]) -> list[str]:
-    """Parse sequence specification URLs to get accessions.
-
-    Args:
-        seqspec_download_urls (list): List of seqspec download URLs. Possible to have NaN values.
-
-    Returns:
-        list: A list of accessions extracted from the URLs
-    """
+def _parse_igvf_accessions_from_urls(igvf_file_urls: list[str]) -> list[str]:
+    """Parse a list of sequence specification URLs to get IGVF accessions."""
     igvf_file_urls = [url for url in igvf_file_urls if url is not None]
-    cleaned_igvf_file_urls = parse_terra_str_list(
+    cleaned_igvf_file_urls = _parse_terra_str_list(
         terra_str_lists=igvf_file_urls)
     return [IGVF_URL_PATH_REGEX.search(str(url)).group(1) for url in cleaned_igvf_file_urls if IGVF_URL_PATH_REGEX.search(str(url)) is not None]
 
 
-def get_seqfile_accs_from_table(terra_data_record: pd.Series, seqfile_acc_cols: list) -> list:
-    """Get a list of sequence file accessions (for derived_from) from Terra table.
-
-    Args:
-        terra_data_record (pd.Series): One Terra pipeline (i.e., one row in the data table)
-        seqfile_acc_cols (list): columns with sequence file accessions of interest
-
-    Returns:
-        list: A list of sequence file accessions
-    """
-    seqfile_accessions = parse_terra_str_list(
-        terra_str_lists=[terra_data_record[seqfile_col] for seqfile_col in seqfile_acc_cols])
-    return [seqfile_accession for seqfile_accession in seqfile_accessions if seqfile_accession.startswith(('IGVF', 'TSTF'))]
-
-
-def get_gs_path_for_terra_output_cols(terra_data_record: pd.Series) -> str:
-    """Get GS path from terra data record for submission and workflow IDs parsing, trying RNA first, then ATAC.
-
-    Args:
-        terra_data_record (pd.Series): Terra pipeline data record
-
-    Returns:
-        str: GS path for workflow UUID parsing
-
-    Raises:
-        ValueError: If no valid GS path is found
-    """
-    # Possible columns to check for GS path (RNA first, then ATAC)
-    possible_columns = ['rna_kb_h5ad', 'atac_bam']
-    for col in possible_columns:
-        # If the column is empty, it returns np.float64(nan)
-        if (col in list(terra_data_record.index)) and (pd.notna(terra_data_record[col])):
-            return terra_data_record[col]
-    raise ValueError(
-        'No valid GS path found in the Terra data record for workflow UUID parsing.')
-
-
-def parse_workflow_uuids_from_gs_path(gs_path: str, gs_path_regex: re.Pattern = GS_FILE_PATH_REGEX) -> PipelineOutputIds:
-    """Parse workflow UUID from a gs path.
-
-    Args:
-        gs_path (str): The gs path to the workflow
-        gs_path_regex (re.Pattern, optional): The regex pattern to match the gs path. Defaults to GS_FILE_PATH_REGEX.
-
-    Returns:
-        PipelineOutputIds: A dataclass containing the parsed UUIDs.
-    """
-    matches = re.search(gs_path_regex, gs_path)
-    if not matches:
-        raise ValueError('Unable to parse workflow UUIDs from file GCP path.')
-    uuids = matches.groups()
-    return PipelineOutputIds(gcloud_bucket=uuids[0],
-                             submission_id=uuids[1],
-                             workflow_id=uuids[2],
-                             subworkflow_id=uuids[3])
-
-
-# Functions to handle post setups (e.g., file aliases, access levels)
-def get_genome_assembly(taxa: str) -> str:
-    """Get genome assembly based on taxa.
-
-    Args:
-        taxa (str): human or mouse
-
-    Returns:
-        str: genome assembly, e.g., GRCh38 or GRCm39
-    """
-    return GENOME_ASSEMBLY_INFO.get(taxa)  # Default to 'Unknown assembly' if taxa not found
-
-
-def check_single_or_multiome(terra_data_record: pd.Series) -> list:
+def _get_multiome_types(terra_data_record: pd.Series) -> list:
     """Check based on input measurement set IDs to see if the pipeline is RNAseq-only, ATACseq-only, or multiome-seq
 
     Args:
@@ -169,12 +71,12 @@ def check_single_or_multiome(terra_data_record: pd.Series) -> list:
     multiome_map = {'atac_MeaSetIDs': 'ATACseq', 'rna_MeaSetIDs': 'RNAseq'}
     pipeline_output_content = []
     for key, value in multiome_map.items():
-        if len(parse_terra_str_list(terra_str_lists=[terra_data_record[key]])) > 0:
+        if len(_parse_terra_str_list(terra_str_lists=[terra_data_record[key]])) > 0:
             pipeline_output_content.append(value)
     return pipeline_output_content
 
 
-def get_access_status(sequence_file_accessions: list, igvf_api) -> bool:
+def _get_access_status(sequence_file_accessions: list, igvf_api) -> bool:
     """Get file controlled_access status. If any seq data is controlled access, the output data inherit that.
 
     Args:
@@ -195,25 +97,22 @@ def get_access_status(sequence_file_accessions: list, igvf_api) -> bool:
         return False
 
 
-def get_seqfile_access_lvl_and_accessions(terra_data_record: pd.Series, assay_type: str, igvf_api) -> tuple:
-    """Get sequence files' controlled access info and accession IDs
+def _get_seqfile_accs_from_table(terra_data_record: pd.Series, seqfile_acc_cols: list) -> list:
+    """Get a list of sequence file accessions (for derived_from) from Terra table.
 
     Args:
         terra_data_record (pd.Series): One Terra pipeline (i.e., one row in the data table)
-        assay_type (str): rna or atac
-        igvf_api (_type_): _description_
+        seqfile_acc_cols (list): columns with sequence file accessions of interest
 
     Returns:
-        tuple: (controlled_access_boolean, sequence file accessions)
+        list: A list of sequence file accessions
     """
-    seqfile_accessions = get_seqfile_accs_from_table(
-        terra_data_record=terra_data_record, seqfile_acc_cols=ACCESSION_HEADERS_BY_ASSAY_TYPES[assay_type])
-    output_data_controlled_access = get_access_status(
-        sequence_file_accessions=seqfile_accessions, igvf_api=igvf_api)
-    return (output_data_controlled_access, seqfile_accessions)
+    seqfile_accessions = _parse_terra_str_list(
+        terra_str_lists=[terra_data_record[seqfile_col] for seqfile_col in seqfile_acc_cols])
+    return [seqfile_accession for seqfile_accession in seqfile_accessions if seqfile_accession.startswith(('IGVF', 'TSTF'))]
 
 
-def get_existing_analysis_set_docs(analysis_set_acc: str, igvf_utils_api) -> list:
+def _get_existing_analysis_set_docs(analysis_set_acc: str, igvf_utils_api) -> list:
     """Get existing document aliases linked to the analysis set.
 
     Args:
@@ -233,6 +132,81 @@ def get_existing_analysis_set_docs(analysis_set_acc: str, igvf_utils_api) -> lis
         if 'aliases' in doc_obj:
             all_existing_doc_aliases.update(doc_obj['aliases'])
     return sorted(all_existing_doc_aliases)
+
+
+@dataclasses.dataclass(frozen=True)
+class PipelineOutputIds:
+    """Data class to hold pipeline output UUIDs."""
+    gcloud_bucket: str
+    submission_id: str
+    workflow_id: str
+    subworkflow_id: str
+
+
+@dataclasses.dataclass(frozen=True)
+class WorkflowConfigInfo:
+    doc_aliases: list[str]
+    download_path: str
+
+
+class TerraOutputMetadata:
+    def __init__(self, terra_data_record: pd.Series, igvf_client_api):
+        self.pipeline_output = terra_data_record
+        self.igvf_api = igvf_client_api
+        self.anaset_accession = self.pipeline_output['analysis_set_acc']
+        self.taxa = self.pipeline_output['taxa']
+        self.genome_assembly = GENOME_ASSEMBLY_INFO.get(self.taxa)
+        self.multiome_type = _get_multiome_types(
+            terra_data_record=self.pipeline_output)
+
+    def _get_gs_path_for_terra_output_cols(self) -> str:
+        """Get GS path from terra data record for submission and workflow IDs parsing, trying RNA first, then ATAC."""
+        # Possible columns to check for GS path (RNA first, then ATAC)
+        possible_columns = ['rna_kb_h5ad', 'atac_bam']
+        for col in possible_columns:
+            # If the column is empty, it returns np.float64(nan)
+            if (col in list(self.pipeline_output.index)) and (pd.notna(self.pipeline_output[col])):
+                return self.pipeline_output[col]
+        raise ValueError(
+            'No valid GS path found in the Terra data record for workflow UUID parsing.')
+
+    def _parse_workflow_uuids_from_gs_path(self, gs_path_regex: re.Pattern = GS_FILE_PATH_REGEX) -> PipelineOutputIds:
+        """Parse workflow UUID from a gs path.
+
+        Args:
+            gs_path (str): The gs path to the workflow
+            gs_path_regex (re.Pattern, optional): The regex pattern to match the gs path. Defaults to GS_FILE_PATH_REGEX.
+
+        Returns:
+            PipelineOutputIds: A dataclass containing the parsed UUIDs.
+        """
+        usable_gs_path = self._get_gs_path_for_terra_output_cols()
+        matches = re.search(gs_path_regex, usable_gs_path)
+        if not matches:
+            raise ValueError(
+                'Unable to parse workflow UUIDs from file GCP path.')
+        uuids = matches.groups()
+        return PipelineOutputIds(gcloud_bucket=uuids[0],
+                                 submission_id=uuids[1],
+                                 workflow_id=uuids[2],
+                                 subworkflow_id=uuids[3])
+
+    def _get_seqfile_access_lvl_and_accessions(self, assay_type: str) -> tuple:
+        """Get sequence files' controlled access info and accession IDs
+
+        Args:
+            terra_data_record (pd.Series): One Terra pipeline (i.e., one row in the data table)
+            assay_type (str): rna or atac
+            igvf_api (_type_): _description_
+
+        Returns:
+            tuple: (controlled_access_boolean, sequence file accessions)
+        """
+        seqfile_accessions = _get_seqfile_accs_from_table(
+            terra_data_record=self.pipeline_output, seqfile_acc_cols=ACCESSION_HEADERS_BY_ASSAY_TYPES[assay_type])
+        output_data_controlled_access = _get_access_status(
+            sequence_file_accessions=seqfile_accessions, igvf_api=self.igvf_client_api)
+        return (output_data_controlled_access, seqfile_accessions)
 
 
 def get_file_aliases(col_header: str, lab: str, terra_data_record: pd.Series, terra_uuids: str) -> list:
@@ -321,8 +295,8 @@ def download_workflow_config_json(terra_data_record: pd.Series, terra_namespace:
         str: path to the saved JSON file
     """
     # NOTE: A bit of hack here to get submission ID (Check RNA data first, then ATAC)
-    terra_ids = parse_workflow_uuids_from_gs_path(
-        gs_path=get_gs_path_for_terra_output_cols(terra_data_record=terra_data_record))
+    terra_ids = _parse_workflow_uuids_from_gs_path(
+        gs_path=_get_gs_path_for_terra_output_cols(terra_data_record=terra_data_record))
     curr_workflow_config = api_tools.get_workflow_input_config(terra_namespace=terra_namespace,
                                                                terra_workspace=terra_workspace,
                                                                submission_id=terra_ids.submission_id,

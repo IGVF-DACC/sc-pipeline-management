@@ -309,6 +309,47 @@ def post_single_qc_metric_to_portal(terra_data_record: pd.Series, qc_data_info: 
         return PostResult.Failure(col_header=f'{qc_prefix}:{qc_data_info["object_type"]}', error=e)
 
 
+class PostService:
+    """Service class to handle posting data to the portal."""
+
+    def __init__(self, igvf_utils_api):
+        self.igvf_utils_api = igvf_utils_api
+
+    def post(self, payload: dict, upload_file: bool = False, resumed_posting: bool = False) -> str:
+        """Post data to the portal."""
+        return single_post_to_portal(
+            igvf_data_payload=payload,
+            igvf_utils_api=self.igvf_utils_api,
+            upload_file=upload_file,
+            resumed_posting=resumed_posting
+        )
+
+
+class TerraMetadata:
+    """Class to hold Terra metadata for posting to the portal."""
+
+    def __init__(self, workflow_id: str, workflow_name: str, workflow_version: str):
+        self.workflow_id = workflow_id
+        self.workflow_name = workflow_name
+        self.workflow_version = workflow_version
+
+    def get_workflow_info(self) -> dict:
+        return string_value_1
+
+    def get_file_path(self, col_header: str) -> str:
+        """Get the file path for a given column header."""
+        return f"gs://{self.workflow_id}/{col_header}"
+
+
+class MatrixFile:
+
+    def __init__(self, file_metadata: FileMetadata,):
+        self.file_metadata = file_metadata
+
+    def payload_mtx():
+        return dict(prop1=self.file_metadata.file_format, pro2=, pro3=)
+
+
 # Posting RNA data to the portal
 def post_single_matrix_file(terra_data_record: pd.Series, col_header: str, curr_file_format: str, curr_derived_from: list, curr_description: str, lab: str, award: str, curr_content_type: str, curr_file_specification: list, igvf_utils_api, upload_file: bool, resumed_posting: bool = False) -> PostResult:
     """Post a single tabular file (for RNA output) to the portal.
@@ -378,6 +419,16 @@ def post_single_matrix_file(terra_data_record: pd.Series, col_header: str, curr_
         return PostResult.Failure(col_header=col_header, error=e)
 
 
+class Submission:
+    terra_data_record: TerraDataRecord
+    lab: str
+    award: str
+
+
+class TerraDataRecord:
+    data: pd.Series
+
+
 def post_all_rna_data_to_portal(terra_data_record: pd.Series, lab: str, award: str, igvf_utils_api, upload_file: bool, output_root_dir: str = '/igvf/data/', resumed_posting: bool = False) -> list[PostResult]:
     """POST all RNA data as matrix files to the portal (H5AD, tarball, and QC metrics).
 
@@ -410,7 +461,7 @@ def post_all_rna_data_to_portal(terra_data_record: pd.Series, lab: str, award: s
         (
             terra_data_record,
             col_header,
-            file_info['file_format'],
+            file_info,
             all_derived_from,
             file_info['description'],
             lab,
