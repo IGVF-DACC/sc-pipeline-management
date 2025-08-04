@@ -19,7 +19,7 @@ from constants import (
     POSTING_AWARD
 )
 
-from accessioning_utils import (
+from sc_pipe_management.accession.parse_terra_metadata import (
     parse_workflow_uuids_from_gs_path,
     parse_igvf_accessions_from_urls,
     get_genome_assembly,
@@ -1077,3 +1077,65 @@ def post_all_successful_runs(full_terra_data_table: pd.DataFrame, igvf_api, igvf
             results.append(pipeline_post_res)
             time.sleep(0.1)  # Sleep to avoid hitting API rate limits
     return results
+
+
+# Functions to summarize POST status and add it to the output data table
+def summarize_post_status(post_results: list) -> pd.DataFrame:
+    """Summarize the POST status of all data from a single pipeline run.
+
+    Args:
+        post_status_df (pd.DataFrame): The POST status DataFrame
+
+    Returns:
+        pd.DataFrame: The POST status summary DataFrame
+    """
+    post_status_summary = {}
+    for result in post_results:
+        accession_results = post_status_summary.setdefault(
+            result.analysis_set_acc, {'time_stamp': result.finish_time})
+        for post_res in result.post_results:
+            accession_results[post_res.col_header] = post_res.Description()
+    post_status_summary_table = pd.DataFrame(
+        post_status_summary).transpose().fillna('')
+    post_status_summary_table['post_status_fail'] = post_status_summary_table.apply(
+        lambda x: x.str.startswith(('POST Failed')), axis=1).sum(axis=1)
+    return post_status_summary_table
+
+
+def add_post_status_summary_to_output_data_table(full_terra_data_table: pd.DataFrame, post_status_df: pd.DataFrame) -> pd.DataFrame:
+    """Add the POST status summary to the output data table.
+
+    Args:
+        full_terra_data_table (pd.DataFrame): The Complete Terra data table
+        post_status_df (pd.DataFrame): The POST status DataFrame
+
+    Returns:
+        pd.DataFrame: The output data table with POST status summary
+    """
+    return pd.merge(left=full_terra_data_table, right=post_status_df[['time_stamp', 'post_status_fail']], left_on='analysis_set_acc', right_index=True)
+
+
+def save_pipeline_postres_tables(pipeline_postres_table: pd.DataFrame, updated_full_data_table: pd.DataFrame, output_root_dir: str):
+    """Save the pipeline input table to a TSV file.
+
+    Args:
+        pipeline_input_table (pd.DataFrame): The pipeline input table
+        output_dir (str): The output directory
+    """
+    curr_datetime = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+    # make output dir if it does not exist
+    if os.path.exists(output_root_dir) is False:
+        os.makedirs(output_root_dir)
+
+    # The original table has an extra index column from merging
+    updated_full_data_table.to_csv(os.path.join(
+        output_root_dir, f'full_terra_data_table_with_post_status_{curr_datetime}.tsv'), sep='\t', index=False)
+
+    # Change post result detail table index to match that of updated full data table for easy Terra upload
+    postres_table_index_name = [
+        col for col in updated_full_data_table.columns if col.startswith('entity:')][0]
+    pipeline_postres_table.index.name = postres_table_index_name.replace(
+        '_id', '_postres_id')
+    # Output post result detail table in Terra format
+    pipeline_postres_table.to_csv(os.path.join(
+        output_root_dir, f'single-cell_uniform_pipeline_postres_detail_{curr_datetime}.tsv'), sep='\t')

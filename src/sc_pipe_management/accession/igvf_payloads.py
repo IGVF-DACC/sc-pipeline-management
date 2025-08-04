@@ -1,3 +1,7 @@
+import os
+import datetime
+import subprocess
+
 # NOTE: These may end up not being needed if genome tsv reference and assembly column is available in input
 # Convert Terra table's info to portal enum
 GENOME_ASSEMBLY_INFO = {'Homo sapiens': 'GRCh38', 'Mus musculus': 'GRCm39'}
@@ -76,32 +80,33 @@ def download_qc_file_from_gcp(gs_file_path: str, downloaded_dir: str) -> str:
         raise Exception(f'GCP download error: {err_msg}.')
     return downloaded_file_path
 
-    def _download_workflow_config_json(self, terra_namespace: str, terra_workspace: str, output_root_dir: str = '/igvf/data/') -> str:
-        """Download the workflow configuration JSON file for a given Terra data record.
 
-        Args:
-            terra_data_record (pd.Series): One Terra pipeline (i.e., one row in the data table)
-            terra_namespace (str): Terra project namespace, e.g., DACC_ANVIL
-            terra_workspace (str): Terra workspace name, e.g., IGVF Single-Cell Data Processing
-            output_root_dir (str, optional): Where the file will be saved to. Defaults to '/igvf/data/'.
+def download_workflow_config_json(self, terra_namespace: str, terra_workspace: str, output_root_dir: str = '/igvf/data/') -> str:
+    """Download the workflow configuration JSON file for a given Terra data record.
 
-        Returns:
-            str: path to the saved JSON file
-        """
-        # NOTE: A bit of hack here to get submission ID (Check RNA data first, then ATAC)
-        terra_ids = self._parse_workflow_uuids_from_gs_path()
-        curr_workflow_config = api_tools.get_workflow_input_config(terra_namespace=terra_namespace,
-                                                                   terra_workspace=terra_workspace,
-                                                                   submission_id=terra_ids.submission_id,
-                                                                   workflow_id=terra_ids.workflow_id)
-        curr_workflow_config['igvf_credentials'] = 'Google cloud path to a txt file with credentials to access the IGVF data portal.'
-        json_output_dir = os.path.join(
-            output_root_dir, terra_data_record['analysis_set_acc'])
-        local_file_path = dump_json(input_json=curr_workflow_config,
-                                    analysis_set_acc=terra_data_record['analysis_set_acc'],
-                                    output_root_dir=json_output_dir)
-        return WorkflowConfigInfo(doc_aliases=mk_doc_aliases(curr_workflow_config=terra_ids),
-                                  download_path=local_file_path)
+    Args:
+        terra_data_record (pd.Series): One Terra pipeline (i.e., one row in the data table)
+        terra_namespace (str): Terra project namespace, e.g., DACC_ANVIL
+        terra_workspace (str): Terra workspace name, e.g., IGVF Single-Cell Data Processing
+        output_root_dir (str, optional): Where the file will be saved to. Defaults to '/igvf/data/'.
+
+    Returns:
+        str: path to the saved JSON file
+    """
+    # NOTE: A bit of hack here to get submission ID (Check RNA data first, then ATAC)
+    terra_ids = self._parse_workflow_uuids_from_gs_path()
+    curr_workflow_config = api_tools.get_workflow_input_config(terra_namespace=terra_namespace,
+                                                               terra_workspace=terra_workspace,
+                                                               submission_id=terra_ids.submission_id,
+                                                               workflow_id=terra_ids.workflow_id)
+    curr_workflow_config['igvf_credentials'] = 'Google cloud path to a txt file with credentials to access the IGVF data portal.'
+    json_output_dir = os.path.join(
+        output_root_dir, terra_data_record['analysis_set_acc'])
+    local_file_path = dump_json(input_json=curr_workflow_config,
+                                analysis_set_acc=terra_data_record['analysis_set_acc'],
+                                output_root_dir=json_output_dir)
+    return WorkflowConfigInfo(doc_aliases=mk_doc_aliases(curr_workflow_config=terra_ids),
+                              download_path=local_file_path)
 
 
 def download_all_workflow_config_jsons(terra_data_table: pd.DataFrame, terra_namespace: str, terra_workspace: str, output_root_dir: str = '/igvf/data/workflow_configs') -> list[str]:
@@ -128,7 +133,7 @@ def download_all_workflow_config_jsons(terra_data_table: pd.DataFrame, terra_nam
     return workflow_config_download_paths
 
 
-def _get_access_status(sequence_file_accessions: list, igvf_api) -> bool:
+def get_access_status(sequence_file_accessions: list, igvf_api) -> bool:
     """Get file controlled_access status. If any seq data is controlled access, the output data inherit that.
 
     Args:
@@ -149,7 +154,7 @@ def _get_access_status(sequence_file_accessions: list, igvf_api) -> bool:
         return False
 
 
-def _get_existing_analysis_set_docs(analysis_set_acc: str, igvf_utils_api) -> list:
+def get_existing_analysis_set_docs(analysis_set_acc: str, igvf_utils_api) -> list:
     """Get existing document aliases linked to the analysis set.
 
     Args:
