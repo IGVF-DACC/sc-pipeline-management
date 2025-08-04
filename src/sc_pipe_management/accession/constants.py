@@ -10,8 +10,6 @@ OUTPUT_SUBMITTER_INFO = {
     'award': '/awards/HG012012/'
 }
 
-# Dataclass object to store IGVF data object metadata
-
 
 @dataclasses.dataclass(frozen=True)
 class FileObjMetadata:
