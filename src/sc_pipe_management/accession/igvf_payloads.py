@@ -42,7 +42,7 @@ class WorkflowConfigInfo:
 @dataclasses.dataclass(frozen=True)
 class QCFileDownloadInfo:
     paths_of_metadata_files: list[str]
-    paths_of_attachment_files: dict[str, str]
+    paths_of_attachment_files: list[str]
 
 
 def _dump_json(input_json: dict, analysis_set_acc: str, output_root_dir: str = './run_config') -> str:
@@ -79,21 +79,6 @@ def _mk_doc_aliases(curr_workflow_config: TerraJobUUIDs) -> list:
     return [f'igvf-dacc-processing-pipeline:{curr_workflow_config.input_param_aliases()}_pipeline_config']
 
 
-def _mk_qc_obj_aliases(curr_workflow_config: TerraJobUUIDs, analysis_set_acc: str, qc_prefix: str, lab: str) -> list:
-    """Create a list of QC objects aliases for the workflow configuration.
-
-    Args:
-        curr_workflow_config (TerraJobUUIDs): The current workflow configuration
-        analysis_set_acc (str): The analysis set accession
-        qc_prefix (str): The prefix for the QC object (fragment, gene count, etc.)
-        lab (str): The lab name
-
-    Returns:
-        list: A list of QC objects aliases
-    """
-    return [f'{lab.split("/")[-2]}:{analysis_set_acc}_{curr_workflow_config.aliases()}_{qc_prefix}_uniform-pipeline']
-
-
 def _get_file_aliases(col_header: str, lab: str, terra_data_record: pd.Series, terra_uuids: str) -> list:
     """ Generate a file alias based on the output data name, lab, analysis set accession, and Terra UUIDs.
 
@@ -107,6 +92,36 @@ def _get_file_aliases(col_header: str, lab: str, terra_data_record: pd.Series, t
         list: A file alias in the form of lab:analysis-set-acc_terra-uuids_col-header_uniform-pipeline
     """
     return [f'{lab.split("/")[-2]}:{terra_data_record["analysis_set_acc"]}_{terra_uuids}_{col_header}_uniform-pipeline']
+
+
+def _download_qc_file_from_gcp(gs_file_path: str, downloaded_dir: str) -> str:
+    """Download Google cloud file to a local directory.
+
+    Args:
+        gs_file_path (str): GCP file path, e.g., gs://bucket/submissions/final-outputs/...
+        downloaded_dir (str): The local directory to download the file to
+
+    Raises:
+        Exception: If the download fails, raise an exception with the error message
+
+    Returns:
+        str: Downloaded file path
+    """
+    if not gs_file_path.startswith('gs://'):
+        raise Exception(
+            f'File path {gs_file_path} is not a valid GCP file path.')
+    if not os.path.exists(downloaded_dir):
+        os.makedirs(downloaded_dir)
+    file_name = os.path.basename(gs_file_path)
+    downloaded_file_path = os.path.join(downloaded_dir, file_name)
+    # Download
+    gcp_download = subprocess.run(
+        ['gcloud', 'storage', 'cp', gs_file_path, downloaded_file_path], capture_output=True)
+    if gcp_download.returncode != 0:
+        err_msg = ','.join([entry for entry in gcp_download.stderr.decode().split(
+            '\n') if entry.startswith('ERROR:')])
+        raise Exception(f'GCP download error: {err_msg}.')
+    return downloaded_file_path
 
 
 class PipelineParamInfo:
@@ -164,100 +179,378 @@ class PipelineParamInfo:
 
 
 class MatrixFilePayload:
-    def __init__(self, terra_metadata: TerraOutputMetadata, File):
+    """Class to create a matrix file payload for a given Terra output name."""
+
+    def __init__(self, terra_metadata: TerraOutputMetadata, terra_output_name: str):
+        # Data object lab and award
+        self.lab = OUTPUT_SUBMITTER_INFO['lab']
+        self.award = OUTPUT_SUBMITTER_INFO['award']
+        # Terra output metadata for this pipeline run
         self.terra_metadata = terra_metadata
-        self.lab = lab
-        self.analysis_set_acc = terra_metadata.analysis_set_acc
+        # The actual pipeline output data Series (one row in the Terra data table)
+        self.terra_data_record = terra_metadata.terra_data_record
+        # The Terra UUIDs for this pipeline run
         self.terra_uuids = terra_metadata._parse_workflow_uuids_from_gs_path()
-        self.file_aliases = _get_file_aliases(
-            col_header=terra_metadata.output_data_name, lab=lab, terra_data_record=terra_metadata, terra_uuids=self.terra_uuids)
+        # The matrix file data class object based on the Terra output name
+        self.file_obj_metadata = MATRIX_FILETYPES[terra_output_name]
+        # The genome assembly info
+        self.assembly = GENOME_ASSEMBLY_INFO.get(self.terra_metadata.taxa)
 
-# Download QC files and workflow config JSONs from Terra GCP bucket
-
-
-def download_qc_file_from_gcp(gs_file_path: str, downloaded_dir: str) -> str:
-    """Download Google cloud file to a local directory.
-
-    Args:
-        gs_file_path (str): GCP file path, e.g., gs://bucket/submissions/final-outputs/...
-        downloaded_dir (str): The local directory to download the file to
-
-    Raises:
-        Exception: If the download fails, raise an exception with the error message
-
-    Returns:
-        str: Downloaded file path
-    """
-    if not gs_file_path.startswith('gs://'):
-        raise Exception(
-            f'File path {gs_file_path} is not a valid GCP file path.')
-    if not os.path.exists(downloaded_dir):
-        os.makedirs(downloaded_dir)
-    file_name = os.path.basename(gs_file_path)
-    downloaded_file_path = os.path.join(downloaded_dir, file_name)
-    # Download
-    gcp_download = subprocess.run(
-        ['gcloud', 'storage', 'cp', gs_file_path, downloaded_file_path], capture_output=True)
-    if gcp_download.returncode != 0:
-        err_msg = ','.join([entry for entry in gcp_download.stderr.decode().split(
-            '\n') if entry.startswith('ERROR:')])
-        raise Exception(f'GCP download error: {err_msg}.')
-    return downloaded_file_path
-
-
-def get_access_status(sequence_file_accessions: list, igvf_api) -> bool:
-    """Get file controlled_access status. If any seq data is controlled access, the output data inherit that.
-
-    Args:
-        sequence_file_accessions (list): Input sequence file accessions
-        igvf_api (_type_): _description_
-
-    Returns:
-        bool: True or False
-    """
-    access_status = 0
-    for seq_file_acc in sequence_file_accessions:
-        seqfile_obj = igvf_api.get_by_id(
-            f'/sequence-files/{seq_file_acc}').actual_instance
-        access_status += seqfile_obj.controlled_access
-    if access_status > 0:
-        return True
-    else:
-        return False
+    def _get_payload(self):
+        """Get the matrix file payload for the given Terra output name."""
+        # Get the file aliases
+        mtx_file_aliases = _get_file_aliases(col_header=self.terra_output_name,
+                                             lab=self.lab,
+                                             terra_data_record=self.terra_metadata.terra_data_record,
+                                             terra_uuids=self.terra_uuids)
+        # Compute MD5
+        mtx_file_md5sum = calculate_gsfile_hex_hash(
+            file_path=self.terra_data_record[self.terra_output_name]
+        )
+        # Compute derived_from and reference files
+        mtx_file_input_files = self.terra_metatadata._get_input_file_accs_from_table(
+            assay_type=self.file_obj_metadata.assay_type)
+        # Make Mtx file payload
+        mtx_file_payload = dict(award=self.award,
+                                lab=self.lab,
+                                analysis_step_version=self.file_obj_metadata.analysis_step_version,
+                                aliases=mtx_file_aliases,
+                                content_type=self.file_obj_metadata.content_type,
+                                md5sum=mtx_file_md5sum,
+                                file_format=self.file_obj_metadata.file_format,
+                                derived_from=mtx_file_input_files.get_derived_from(),
+                                submitted_file_name=mtx_file_md5sum,
+                                file_set=self.terra_metadata.anaset_accession,
+                                principal_dimension='cell',
+                                secondary_dimensions=['gene'],
+                                filtered=False,
+                                reference_files=mtx_file_input_files.reference_files,
+                                description=self.file_obj_metadata.description,
+                                file_format_specifications=self.file_obj_metadata.file_format_specifications,
+                                _profile='matrix_file')
+        return mtx_file_payload
 
 
-def get_existing_analysis_set_docs(analysis_set_acc: str, igvf_utils_api) -> list:
-    """Get existing document aliases linked to the analysis set.
+class AlignmentFilePayload:
+    """Class to create a tabular file payload for a given Terra output name."""
 
-    Args:
-        analysis_set_acc (str): Analysis set accession
-        igvf_utils_api (_type_): igvf utils API client
+    def __init__(self, terra_metadata: TerraOutputMetadata, igvf_api):
+        # Data object lab and award
+        self.lab = OUTPUT_SUBMITTER_INFO['lab']
+        self.award = OUTPUT_SUBMITTER_INFO['award']
+        # IGVF client API for data access
+        self.igvf_api = igvf_api
+        # Data column name
+        self.terra_output_name = 'atac_bam'
+        # Terra output metadata for this pipeline run
+        self.terra_metadata = terra_metadata
+        # The actual pipeline output data Series (one row in the Terra data table)
+        self.terra_data_record = terra_metadata.terra_data_record
+        # The Terra UUIDs for this pipeline run
+        self.terra_uuids = terra_metadata._parse_workflow_uuids_from_gs_path()
+        # Input file accessions
+        self.input_file_accessions = terra_metadata._get_input_file_accs_from_table(
+            assay_type=self.file_obj_metadata.assay_type)
+        # The tabular file data class object based on the Terra output name
+        self.file_obj_metadata = ALIGNMENT_FILETYPES[self.terra_output_name]
 
-    Returns:
-        list: A list of existing document aliases or an empty list if no documents are linked
-    """
-    analysis_set_obj = igvf_utils_api.get(f'/analysis-sets/{analysis_set_acc}')
-    if not analysis_set_obj.get('documents'):
-        return []
-    existing_doc_ids = analysis_set_obj['documents']
-    all_existing_doc_aliases = set()
-    for doc_id in existing_doc_ids:
-        doc_obj = igvf_utils_api.get(doc_id)
-        if 'aliases' in doc_obj:
-            all_existing_doc_aliases.update(doc_obj['aliases'])
-    return sorted(all_existing_doc_aliases)
+    def _get_access_status(self) -> bool:
+        """Get file controlled_access status. If any seq data is controlled access, the output data inherit that.
+
+        Args:
+            sequence_file_accessions (list): Input sequence file accessions
+            igvf_api (_type_): _description_
+
+        Returns:
+            bool: True or False
+        """
+        access_status = 0
+        for seq_file_acc in self.input_file_accessions.sequence_files:
+            seqfile_obj = self.igvf_api.get_by_id(
+                f'/sequence-files/{seq_file_acc}').actual_instance
+            access_status += seqfile_obj.controlled_access
+        if access_status > 0:
+            return True
+        else:
+            return False
+
+    def _get_payload(self):
+        """Get the tabular file payload for the given Terra output name."""
+        # Get the file aliases
+        alignment_file_aliases = _get_file_aliases(col_header=self.terra_output_name,
+                                                   lab=self.lab,
+                                                   terra_data_record=self.terra_metadata.terra_data_record,
+                                                   terra_uuids=self.terra_uuids)
+        # Compute MD5
+        alignment_file_md5sum = calculate_gsfile_hex_hash(
+            file_path=self.terra_data_record[self.terra_output_name]
+        )
+        # Make Alignment file payload
+        alignment_file_payload = dict(award=self.award,
+                                      lab=self.lab,
+                                      analysis_step_version=self.file_obj_metadata.analysis_step_version,
+                                      aliases=alignment_file_aliases,
+                                      controlled_access=self._get_access_status(),
+                                      file_format=self.file_obj_metadata.file_format,
+                                      content_type=self.file_obj_metadata.content_type,
+                                      filtered=False,
+                                      derived_from=self.input_file_accessions.get_derived_from(),
+                                      file_set=self.terra_data_record['analysis_set_acc'],
+                                      md5sum=alignment_file_md5sum,
+                                      submitted_file_name=self.terra_data_record[self.terra_output_name],
+                                      reference_files=self.input_file_accessions.reference_files,
+                                      redacted=False,
+                                      description=self.file_obj_metadata.description,
+                                      _profile='alignment_file'
+                                      )
+        return alignment_file_payload
 
 
-# Functions to read and write JSON files
-def read_json_file(json_file_paths: str) -> dict:
-    """Read a JSON file and return its content as a dictionary.
-    Args:
-        json_file_path (str): The path to the JSON file.
-    Returns:
-        dict: The content of the JSON file as a dictionary.
-    """
-    json_dict = {}
-    for json_file_path in json_file_paths:
-        with open(json_file_path, 'r') as file:
-            json_dict.update(json.load(file))
-    return json_dict
+class FragmentFilePayload:
+    """Class to create a fragment file payload for a given Terra output name."""
+
+    def __init__(self, terra_metadata: TerraOutputMetadata, igvf_api):
+        # Data object lab and award
+        self.lab = OUTPUT_SUBMITTER_INFO['lab']
+        self.award = OUTPUT_SUBMITTER_INFO['award']
+        # IGVF client API for data access
+        self.igvf_api = igvf_api
+        # Data column name
+        self.terra_output_name = 'atac_fragments'
+        # Terra output metadata for this pipeline run
+        self.terra_metadata = terra_metadata
+        # The actual pipeline output data Series (one row in the Terra data table)
+        self.terra_data_record = terra_metadata.terra_data_record
+        # The Terra UUIDs for this pipeline run
+        self.terra_uuids = terra_metadata._parse_workflow_uuids_from_gs_path()
+        # Input file accessions
+        self.input_file_accessions = terra_metadata._get_input_file_accs_from_table(
+            assay_type=self.file_obj_metadata.assay_type)
+        # The tabular file data class object based on the Terra output name
+        self.file_obj_metadata = TABULAR_FILETYPES[self.terra_output_name]
+
+    def _get_payload(self):
+        """Get the tabular file payload for the given Terra output name."""
+        # Get the file aliases
+        fragment_file_aliases = _get_file_aliases(col_header=self.terra_output_name,
+                                                  lab=self.lab,
+                                                  terra_data_record=self.terra_metadata.terra_data_record,
+                                                  terra_uuids=self.terra_uuids)
+        # Compute MD5
+        fragment_file_md5sum = calculate_gsfile_hex_hash(
+            file_path=self.terra_data_record[self.terra_output_name]
+        )
+        # Make Fragment file payload
+        fragment_file_payload = dict(award=self.award,
+                                     lab=self.lab,
+                                     analysis_step_version=self.file_obj_metadata.analysis_step_version,
+                                     aliases=fragment_file_aliases,
+                                     content_type=self.file_obj_metadata.content_type,
+                                     controlled_access=False,
+                                     file_format=self.file_obj_metadata.file_format,
+                                     md5sum=fragment_file_md5sum,
+                                     derived_from=self.input_file_accessions.get_derived_from(),
+                                     submitted_file_name=self.terra_data_record[self.terra_output_name],
+                                     file_set=self.terra_data_record['analysis_set_acc'],
+                                     description=self.input_file_accessions.description,
+                                     filtered=False,
+                                     assembly=GENOME_ASSEMBLY_INFO.get(
+                                         self.terra_metadata.taxa),
+                                     file_format_specifications=self.file_obj_metadata.file_format_specifications,
+                                     _profile='tabular_file'
+                                     )
+        return fragment_file_payload
+
+
+class IndexFilePayload:
+    """Class to create an index file payload for a given Terra output name."""
+
+    def __init__(self, terra_metadata: TerraOutputMetadata, QC, derived_from: list[str], igvf_api):
+        """Initialize the IndexFilePayload class."""
+        # Data object lab and award
+        self.lab = OUTPUT_SUBMITTER_INFO['lab']
+        self.award = OUTPUT_SUBMITTER_INFO['award']
+        # IGVF client API for data access
+        self.igvf_api = igvf_api
+        # Terra output metadata for this pipeline run
+        self.terra_metadata = terra_metadata
+        # The actual pipeline output data Series (one row in the Terra data table)
+        self.terra_data_record = terra_metadata.terra_data_record
+        # The Terra UUIDs for this pipeline run
+        self.terra_uuids = terra_metadata._parse_workflow_uuids_from_gs_path()
+        # The tabular file data class object based on the Terra output name
+        self.file_obj_metadata = INDEX_FILETYPES[self.terra_output_name]
+        # The derived_from file accession
+        self.derived_from = list(set(derived_from))
+
+    def _get_payload(self):
+        """Get the tabular file payload for the given Terra output name."""
+        # Get the file aliases
+        index_file_aliases = _get_file_aliases(col_header=self.terra_output_name,
+                                               lab=self.lab,
+                                               terra_data_record=self.terra_data_record,
+                                               terra_uuids=self.terra_uuids)
+        # Compute MD5
+        index_file_md5sum = calculate_gsfile_hex_hash(
+            file_path=self.terra_data_record[self.terra_output_name]
+        )
+        # Make Index file payload
+        index_file_payload = dict(award=self.award,
+                                  lab=self.lab,
+                                  analysis_step_version=self.file_obj_metadata.analysis_step_version,
+                                  aliases=index_file_aliases,
+                                  content_type='index',
+                                  controlled_access=self.file_obj_metadata.controlled_access,
+                                  file_format=self.file_obj_metadata.file_format,
+                                  md5sum=index_file_md5sum,
+                                  derived_from=self.derived_from,
+                                  submitted_file_name=self.terra_data_record[self.terra_output_name],
+                                  file_set=self.terra_data_record['analysis_set_acc'],
+                                  description=self.file_obj_metadata.description,
+                                  _profile='index_file'
+                                  )
+        return index_file_payload
+
+
+class QCMetricsPayload:
+    """Class to create a QC metrics payload for a given Terra output name."""
+
+    def __init__(self, terra_metadata: TerraOutputMetadata, qc_info_map: QCInfoMap, qc_prefix: str, qc_of: list[str], igvf_api, root_output_dir: str = '/igvf/data/'):
+        # Data object lab and award
+        self.lab = OUTPUT_SUBMITTER_INFO['lab']
+        self.award = OUTPUT_SUBMITTER_INFO['award']
+        # IGVF client API for data access
+        self.igvf_api = igvf_api
+        # QC info map for this pipeline run
+        self.qc_info_map = qc_info_map
+        # QC metrics of files
+        self.qc_of = qc_of
+        # Data column name
+        self.terra_output_name = f'{qc_prefix}_metrics'
+        # Terra output metadata for this pipeline run
+        self.terra_metadata = terra_metadata
+        # The actual pipeline output data Series (one row in the Terra data table)
+        self.terra_data_record = terra_metadata.terra_data_record
+        # The Terra UUIDs for this pipeline run
+        self.terra_uuids = terra_metadata._parse_workflow_uuids_from_gs_path()
+        # Output root directory
+        self.output_root_dir = root_output_dir
+
+    def _mk_qc_obj_aliases(curr_workflow_config: TerraJobUUIDs, analysis_set_acc: str, qc_prefix: str, lab: str) -> list:
+        """Create a list of QC objects aliases for the workflow configuration.
+
+        Args:
+            curr_workflow_config (TerraJobUUIDs): The current workflow configuration
+            analysis_set_acc (str): The analysis set accession
+            qc_prefix (str): The prefix for the QC object (fragment, gene count, etc.)
+            lab (str): The lab name
+
+        Returns:
+            list: A list of QC objects aliases
+        """
+        return [f'{lab.split("/")[-2]}:{analysis_set_acc}_{curr_workflow_config.aliases()}_{qc_prefix}_uniform-pipeline']
+
+    def _read_json_file(json_file_paths: str) -> dict:
+        """Read a JSON file and return its content as a dictionary.
+        Args:
+            json_file_path (str): The path to the JSON file.
+        Returns:
+            dict: The content of the JSON file as a dictionary.
+        """
+        json_dict = {}
+        for json_file_path in json_file_paths:
+            with open(json_file_path, 'r') as file:
+                json_dict.update(json.load(file))
+        return json_dict
+
+    def _get_qc_files(self) -> QCFileDownloadInfo:
+        # Set up download directory for QC files
+        curr_qc_file_dir = os.path.join(
+            self.output_root_dir, 'qc_metrics', self.terra_data_record['analysis_set_acc'])
+        if not os.path.exists(curr_qc_file_dir):
+            os.makedirs(curr_qc_file_dir)
+        # Download attachment files
+        if self.qc_data_info['attachment'] is not None:
+            download_attachment_files = []
+            for key, value in self.qc_data_info['attachment'].items():
+                # Download the file first
+                curr_attachment_file = self._download_qc_file_from_gcp(
+                    gs_file_path=self.terra_data_record[value], downloaded_dir=curr_qc_file_dir)
+                download_attachment_files.append(
+                    {key: {'path': curr_attachment_file}})
+        # Download QC files that will be converted to payloads
+        if self.qc_data_info['metadata'] is not None:
+            downloaded_metadata_files = []
+            # Downloaded JSON file paths
+            for metadata_qc_file_name in self.qc_data_info['metadata']:
+                curr_metadata_file = _download_qc_file_from_gcp(
+                    gs_file_path=self.terra_data_record[metadata_qc_file_name], downloaded_dir=curr_qc_file_dir)
+                downloaded_metadata_files.append(curr_metadata_file)
+        return QCFileDownloadInfo(
+            paths_of_metadata_files=downloaded_metadata_files,
+            paths_of_attachment_files=download_attachment_files
+        )
+
+    def _make_payload(self):
+        curr_qc_file_dir = os.path.join(
+            self.output_root_dir, 'qc_metrics', self.terra_data_record['analysis_set_acc'])
+        if not os.path.exists(curr_qc_file_dir):
+            os.makedirs(curr_qc_file_dir)
+        # QC object aliases
+        self._qc_obj_aliases = self._mk_qc_obj_aliases(
+            curr_workflow_config=self.terra_uuids,
+            analysis_set_acc=self.terra_data_record['analysis_set_acc'],
+            qc_prefix=self.terra_output_name,
+            lab=self.lab
+        )
+        # Base QC object payload
+        qc_payload = dict(lab=self.lab,
+                          award=self.award,
+                          aliases=self.qc_obj_aliases,
+                          analysis_step_version=self.qc_data_info['analysis_step_version'],
+                          description=self.qc_data_info['description'],
+                          quality_metric_of=self.qc_of,
+                          _profile=self.qc_data_info['object_type']
+                          )
+        # Downloaded QC files
+        qc_file_download_info = self._get_qc_files()
+        # Add attachments (key is portal property name, value is table colname)
+        # Do this first because some QC obj only has attachments
+        if qc_file_download_info.paths_of_attachment_files:
+            for item in qc_file_download_info.paths_of_attachment_files:
+                # Download the file first
+                qc_payload.update(item)
+        # Add on other metadata
+        if qc_file_download_info.paths_of_metadata_files:
+            qc_json_parsed = self._read_json_file(
+                json_file_paths=qc_file_download_info.paths_of_metadata_files)
+            # Update base qc payload
+            for key, value in self.qc_data_info['metadata_map'].items():
+                qc_payload.update({value: qc_json_parsed[key]})
+        return qc_payload
+
+
+# class DocumentPayload:
+
+
+# class AnalysisSetPatchingPayload:
+#     def get_existing_analysis_set_docs(analysis_set_acc: str, igvf_utils_api) -> list:
+#         """Get existing document aliases linked to the analysis set.
+
+#         Args:
+#             analysis_set_acc (str): Analysis set accession
+#             igvf_utils_api (_type_): igvf utils API client
+
+#         Returns:
+#             list: A list of existing document aliases or an empty list if no documents are linked
+#         """
+#         analysis_set_obj = igvf_utils_api.get(f'/analysis-sets/{analysis_set_acc}')
+#         if not analysis_set_obj.get('documents'):
+#             return []
+#         existing_doc_ids = analysis_set_obj['documents']
+#         all_existing_doc_aliases = set()
+#         for doc_id in existing_doc_ids:
+#             doc_obj = igvf_utils_api.get(doc_id)
+#             if 'aliases' in doc_obj:
+#                 all_existing_doc_aliases.update(doc_obj['aliases'])
+#         return sorted(all_existing_doc_aliases)
