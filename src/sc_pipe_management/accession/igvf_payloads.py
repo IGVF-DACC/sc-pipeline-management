@@ -20,9 +20,14 @@ from constants import (
     ALIGNMENT_FILETYPES,
     INDEX_FILETYPES,
     TABULAR_FILETYPES,
-    GENOME_ASSEMBLY_INFO
+    GENOME_ASSEMBLY_INFO,
+    MATRIX_FILETYPES,
+    QCInfoMap
 )
 
+from sc_pipe_management.igvf_and_terra_api_tools import (
+    calculate_gsfile_hex_hash
+)
 # NOTE: These may end up not being needed if genome tsv reference and assembly column is available in input
 
 fapi._set_session()
@@ -32,6 +37,12 @@ fapi._set_session()
 class WorkflowConfigInfo:
     doc_aliases: list[str]
     download_path: str
+
+
+@dataclasses.dataclass(frozen=True)
+class QCFileDownloadInfo:
+    paths_of_metadata_files: list[str]
+    paths_of_attachment_files: dict[str, str]
 
 
 def _dump_json(input_json: dict, analysis_set_acc: str, output_root_dir: str = './run_config') -> str:
