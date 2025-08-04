@@ -1,3 +1,4 @@
+setuptools==65.1.0
 jupyterlab
 pandas==2.2.3
 igvf-utils @ https://github.com/IGVF-DACC/igvf_utils/archive/master.zip
@@ -6,4 +7,3 @@ Dumper==1.2.0
 seqspec @ git+https://github.com/IGVF-DACC/seqspec.git@v25-07-16
 firecloud==0.16.38
 pre-commit==4.2.0
-setuptools==65.1.0
