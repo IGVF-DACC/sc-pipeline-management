@@ -31,6 +31,10 @@ jobs:
       - run:
           name: Install dependencies
           command: |
+            pip install --upgrade pip
+            pip install wheel
+            pip install setuptools==57.5.0
+            pip install --no-use-pep517 firecloud
             pip install -r requirements.txt
             pip install pytest pytest-cov coveralls
       - run:
