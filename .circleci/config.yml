@@ -15,10 +15,10 @@ jobs:
     working_directory: ~/sc_pipe_management
     steps:
       - checkout
-      - run: 
+      - run:
           name: Install pre-commit
           command: pip install pre-commit==2.17.0
-      - run: 
+      - run:
           name: Run pre-commit checks
           command: pre-commit run --all-files
 
