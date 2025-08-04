@@ -8,6 +8,9 @@ import pandas as pd
 import dataclasses
 import re
 import firecloud.api as fapi
+import io
+
+fapi._set_session()
 
 # IGVF file url parsing regex for accession
 IGVF_URL_PATH_REGEX = re.compile(
@@ -19,7 +22,7 @@ GS_FILE_PATH_REGEX = re.compile(
 
 
 @dataclasses.dataclass(frozen=True)
-class PipelineOutputIds:
+class TerraJobUUIDs:
     """Data class to hold pipeline output UUIDs."""
     gcloud_bucket: str
     submission_id: str
@@ -47,6 +50,12 @@ class InputFileInfo:
     sequence_file_headers: list[str]
     seqspec_file_headers: str
     reference_file_headers: list[str]
+    barcode_replacement_file_header: str | None
+
+
+@dataclasses.dataclass(frozen=True)
+class TerraPipelineDataTable:
+    terra_datatable: pd.DataFrame
 
 
 # Reference file and derived from file info by assay type
@@ -55,7 +64,8 @@ INPUT_FILE_HEADERS_BY_ASSAY_TYPE = {
         sequence_file_headers=['atac_read1_accessions',
                                'atac_read2_accessions', 'atac_barcode_accessions'],
         seqspec_file_header='atac_seqspec_urls',
-        reference_file_headers=['chromap_index', 'genome_fasta']
+        reference_file_headers=['chromap_index', 'genome_fasta'],
+        barcode_replacement_file_header=None
     ),
     'rna': InputFileInfo(
         sequence_file_headers=['rna_read1_accessions',
@@ -86,14 +96,7 @@ def _parse_terra_str_list(terra_str_lists: list[str]) -> list[str]:
 
 
 def _get_multiome_types(terra_data_record: pd.Series) -> list:
-    """Check based on input measurement set IDs to see if the pipeline is RNAseq-only, ATACseq-only, or multiome-seq
-
-    Args:
-        terra_data_record (pd.Series): One Terra pipeline (i.e., one row in the data table)
-
-    Returns:
-        list: content of the pipeline run
-    """
+    """Check based on input measurement set IDs to see if the pipeline is RNAseq-only, ATACseq-only, or multiome-seq."""
     multiome_map = {'atac_MeaSetIDs': 'ATACseq', 'rna_MeaSetIDs': 'RNAseq'}
     pipeline_output_content = []
     for key, value in multiome_map.items():
@@ -122,26 +125,18 @@ class TerraOutputMetadata:
         raise ValueError(
             'No valid GS path found in the Terra data record for workflow UUID parsing.')
 
-    def _parse_workflow_uuids_from_gs_path(self, gs_path_regex: re.Pattern = GS_FILE_PATH_REGEX) -> PipelineOutputIds:
-        """Parse workflow UUID from a gs path.
-
-        Args:
-            gs_path (str): The gs path to the workflow
-            gs_path_regex (re.Pattern, optional): The regex pattern to match the gs path. Defaults to GS_FILE_PATH_REGEX.
-
-        Returns:
-            PipelineOutputIds: A dataclass containing the parsed UUIDs.
-        """
+    def _parse_workflow_uuids_from_gs_path(self, gs_path_regex: re.Pattern = GS_FILE_PATH_REGEX) -> TerraJobUUIDs:
+        """Parse workflow UUID from a gs path."""
         usable_gs_path = self._get_gs_path_for_terra_output_cols()
         matches = re.search(gs_path_regex, usable_gs_path)
         if not matches:
             raise ValueError(
                 'Unable to parse workflow UUIDs from file GCP path.')
         uuids = matches.groups()
-        return PipelineOutputIds(gcloud_bucket=uuids[0],
-                                 submission_id=uuids[1],
-                                 workflow_id=uuids[2],
-                                 subworkflow_id=uuids[3])
+        return TerraJobUUIDs(gcloud_bucket=uuids[0],
+                             submission_id=uuids[1],
+                             workflow_id=uuids[2],
+                             subworkflow_id=uuids[3])
 
     def _get_input_file_accs_from_table(self, assay_type: str) -> list:
         """Get a list of sequence file accessions (for derived_from) from Terra table."""
@@ -155,7 +150,7 @@ class TerraOutputMetadata:
             igvf_file_urls=[self.pipeline_output[input_file_info.seqspec_file_header]])
         # Get RNA barcode replacement accessions from the file URLs in the Terra table (can be empty for non-Parse)
         barcode_replacement_accession = self._parse_igvf_accessions_from_urls(
-            igvf_file_urls=[self.pipeline_output.get(input_file_info.barcode_replacement_file_header, None)])
+            igvf_file_urls=[self.pipeline_output.get(input_file_info.barcode_replacement_file_header)])
         # Get reference files from the file URLs in the Terra table
         reference_files = self._parse_igvf_accessions_from_urls(
             igvf_file_urls=[self.pipeline_output[ref_file_header] for ref_file_header in input_file_info.reference_file_headers])

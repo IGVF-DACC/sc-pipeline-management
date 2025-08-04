@@ -1,10 +1,92 @@
 import os
 import datetime
 import subprocess
+import pandas as pd
+import firecloud.api as fapi
+
+from sc_pipe_management.accession.parse_terra_metadata import (
+    WorkflowConfigInfo,
+    TerraJobUUIDs,
+    TerraOutputMetadata
+)
+
+from sc_pipe_management.igvf_and_terra_api_tools import (
+    get_workflow_input_config
+)
 
 # NOTE: These may end up not being needed if genome tsv reference and assembly column is available in input
 # Convert Terra table's info to portal enum
 GENOME_ASSEMBLY_INFO = {'Homo sapiens': 'GRCh38', 'Mus musculus': 'GRCm39'}
+
+fapi._set_session()
+
+
+class TerraJobInputParams:
+    def __init__(self, terra_data_table: pd.DataFrame, terra_uuids: TerraJobUUIDs, output_root_dir: str = '/igvf/data/'):
+        self.terra_data_table = terra_data_table
+        self.terra_uuids = terra_uuids
+        self.terra_namespace = 'DACC_ANVIL'
+        self.terra_workspace = 'IGVF Single-Cell Data Processing'
+        self.output_root_dir = output_root_dir
+
+    def _get_workflow_input_config(terra_namespace: str, terra_workspace: str, submission_id: str, workflow_id: str) -> dict:
+        """Get the workflow input configuration for a given submission and workflow ID in a Terra workspace.
+
+        Args:
+            terra_namespace (str): Terra namespace (e.g., DACC_ANVIL)
+            terra_workspace (str): Terra workspace name
+            submission_id (str): submission ID for the full set of pipeline runs in the Terra workspace
+            workflow_id (str): workflow ID (i.e., the ID per pipeline run)
+
+        Raises:
+            FireCloudServerError: If submission ID is not found or if workflow ID is not found in the submission.
+            FireCloudServerError: Workflow input config is not found.
+
+        Returns:
+            dict: Workflow input configuration as a dictionary.
+        """
+        workflow_data_request = fapi.get_workflow_metadata(namespace=terra_namespace,
+                                                           workspace=terra_workspace,
+                                                           submission_id=submission_id,
+                                                           workflow_id=workflow_id
+                                                           )
+    if workflow_data_request.status_code != 200:
+        raise FireCloudServerError(code=workflow_data_request.status_code,
+                                   message=f'Error fetching workflow data: {workflow_id} for submission: {submission_id}.')
+    workflow_data_res = workflow_data_request.json()
+    try:
+        workflow_input_config = workflow_data_res.get('inputs')
+        return workflow_input_config
+    except KeyError:
+        raise FireCloudServerError(code=workflow_data_request.status_code,
+                                   message=f'Error parsing workflow input config for workflow: {workflow_id} in submission: {submission_id}. No inputs found.')
+
+    def _download_workflow_config_json(self) -> str:
+        """Download the workflow configuration JSON file for a given Terra data record.
+
+        Args:
+            terra_data_record (pd.Series): One Terra pipeline (i.e., one row in the data table)
+            terra_namespace (str): Terra project namespace, e.g., DACC_ANVIL
+            terra_workspace (str): Terra workspace name, e.g., IGVF Single-Cell Data Processing
+            output_root_dir (str, optional): Where the file will be saved to. Defaults to '/igvf/data/'.
+
+        Returns:
+            str: path to the saved JSON file
+        """
+        # NOTE: A bit of hack here to get submission ID (Check RNA data first, then ATAC)
+        terra_ids = self._parse_workflow_uuids_from_gs_path()
+        curr_workflow_config = api_tools.get_workflow_input_config(terra_namespace=terra_namespace,
+                                                                   terra_workspace=terra_workspace,
+                                                                   submission_id=terra_ids.submission_id,
+                                                                   workflow_id=terra_ids.workflow_id)
+        curr_workflow_config['igvf_credentials'] = 'Google cloud path to a txt file with credentials to access the IGVF data portal.'
+        json_output_dir = os.path.join(
+            output_root_dir, terra_data_record['analysis_set_acc'])
+        local_file_path = dump_json(input_json=curr_workflow_config,
+                                    analysis_set_acc=terra_data_record['analysis_set_acc'],
+                                    output_root_dir=json_output_dir)
+        return WorkflowConfigInfo(doc_aliases=mk_doc_aliases(curr_workflow_config=terra_ids),
+                                  download_path=local_file_path)
 
 
 def get_file_aliases(col_header: str, lab: str, terra_data_record: pd.Series, terra_uuids: str) -> list:
@@ -22,11 +104,11 @@ def get_file_aliases(col_header: str, lab: str, terra_data_record: pd.Series, te
     return [f'{lab.split("/")[-2]}:{terra_data_record["analysis_set_acc"]}_{terra_uuids}_{col_header}_uniform-pipeline']
 
 
-def mk_doc_aliases(curr_workflow_config: PipelineOutputIds) -> list:
+def mk_doc_aliases(curr_workflow_config: TerraJobUUIDs) -> list:
     """Create a list of document aliases for the workflow configuration.
 
     Args:
-        curr_workflow_config (PipelineOutputIds): The current workflow configuration
+        curr_workflow_config (TerraJobUUIDs): The current workflow configuration
 
     Returns:
         list: A list of document aliases
@@ -34,11 +116,11 @@ def mk_doc_aliases(curr_workflow_config: PipelineOutputIds) -> list:
     return [f'igvf-dacc-processing-pipeline:{curr_workflow_config.config_aliases()}_pipeline_config']
 
 
-def mk_qc_obj_aliases(curr_workflow_config: PipelineOutputIds, analysis_set_acc: str, qc_prefix: str, lab: str) -> list:
+def mk_qc_obj_aliases(curr_workflow_config: TerraJobUUIDs, analysis_set_acc: str, qc_prefix: str, lab: str) -> list:
     """Create a list of QC objects aliases for the workflow configuration.
 
     Args:
-        curr_workflow_config (PipelineOutputIds): The current workflow configuration
+        curr_workflow_config (TerraJobUUIDs): The current workflow configuration
         analysis_set_acc (str): The analysis set accession
         qc_prefix (str): The prefix for the QC object (fragment, gene count, etc.)
         lab (str): The lab name
@@ -79,34 +161,6 @@ def download_qc_file_from_gcp(gs_file_path: str, downloaded_dir: str) -> str:
             '\n') if entry.startswith('ERROR:')])
         raise Exception(f'GCP download error: {err_msg}.')
     return downloaded_file_path
-
-
-def download_workflow_config_json(self, terra_namespace: str, terra_workspace: str, output_root_dir: str = '/igvf/data/') -> str:
-    """Download the workflow configuration JSON file for a given Terra data record.
-
-    Args:
-        terra_data_record (pd.Series): One Terra pipeline (i.e., one row in the data table)
-        terra_namespace (str): Terra project namespace, e.g., DACC_ANVIL
-        terra_workspace (str): Terra workspace name, e.g., IGVF Single-Cell Data Processing
-        output_root_dir (str, optional): Where the file will be saved to. Defaults to '/igvf/data/'.
-
-    Returns:
-        str: path to the saved JSON file
-    """
-    # NOTE: A bit of hack here to get submission ID (Check RNA data first, then ATAC)
-    terra_ids = self._parse_workflow_uuids_from_gs_path()
-    curr_workflow_config = api_tools.get_workflow_input_config(terra_namespace=terra_namespace,
-                                                               terra_workspace=terra_workspace,
-                                                               submission_id=terra_ids.submission_id,
-                                                               workflow_id=terra_ids.workflow_id)
-    curr_workflow_config['igvf_credentials'] = 'Google cloud path to a txt file with credentials to access the IGVF data portal.'
-    json_output_dir = os.path.join(
-        output_root_dir, terra_data_record['analysis_set_acc'])
-    local_file_path = dump_json(input_json=curr_workflow_config,
-                                analysis_set_acc=terra_data_record['analysis_set_acc'],
-                                output_root_dir=json_output_dir)
-    return WorkflowConfigInfo(doc_aliases=mk_doc_aliases(curr_workflow_config=terra_ids),
-                              download_path=local_file_path)
 
 
 def download_all_workflow_config_jsons(terra_data_table: pd.DataFrame, terra_namespace: str, terra_workspace: str, output_root_dir: str = '/igvf/data/workflow_configs') -> list[str]:
@@ -211,65 +265,3 @@ def dump_json(input_json: dict, analysis_set_acc: str, output_root_dir: str = '.
     with open(output_file_path, 'w') as file:
         json.dump(input_json, file)
     return output_file_path
-
-
-# Functions to summarize POST status and add it to the output data table
-def summarize_post_status(post_results: list) -> pd.DataFrame:
-    """Summarize the POST status of all data from a single pipeline run.
-
-    Args:
-        post_status_df (pd.DataFrame): The POST status DataFrame
-
-    Returns:
-        pd.DataFrame: The POST status summary DataFrame
-    """
-    post_status_summary = {}
-    for result in post_results:
-        accession_results = post_status_summary.setdefault(
-            result.analysis_set_acc, {'time_stamp': result.finish_time})
-        for post_res in result.post_results:
-            accession_results[post_res.col_header] = post_res.Description()
-    post_status_summary_table = pd.DataFrame(
-        post_status_summary).transpose().fillna('')
-    post_status_summary_table['post_status_fail'] = post_status_summary_table.apply(
-        lambda x: x.str.startswith(('POST Failed')), axis=1).sum(axis=1)
-    return post_status_summary_table
-
-
-def add_post_status_summary_to_output_data_table(full_terra_data_table: pd.DataFrame, post_status_df: pd.DataFrame) -> pd.DataFrame:
-    """Add the POST status summary to the output data table.
-
-    Args:
-        full_terra_data_table (pd.DataFrame): The Complete Terra data table
-        post_status_df (pd.DataFrame): The POST status DataFrame
-
-    Returns:
-        pd.DataFrame: The output data table with POST status summary
-    """
-    return pd.merge(left=full_terra_data_table, right=post_status_df[['time_stamp', 'post_status_fail']], left_on='analysis_set_acc', right_index=True)
-
-
-def save_pipeline_postres_tables(pipeline_postres_table: pd.DataFrame, updated_full_data_table: pd.DataFrame, output_root_dir: str):
-    """Save the pipeline input table to a TSV file.
-
-    Args:
-        pipeline_input_table (pd.DataFrame): The pipeline input table
-        output_dir (str): The output directory
-    """
-    curr_datetime = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-    # make output dir if it does not exist
-    if os.path.exists(output_root_dir) is False:
-        os.makedirs(output_root_dir)
-
-    # The original table has an extra index column from merging
-    updated_full_data_table.to_csv(os.path.join(
-        output_root_dir, f'full_terra_data_table_with_post_status_{curr_datetime}.tsv'), sep='\t', index=False)
-
-    # Change post result detail table index to match that of updated full data table for easy Terra upload
-    postres_table_index_name = [
-        col for col in updated_full_data_table.columns if col.startswith('entity:')][0]
-    pipeline_postres_table.index.name = postres_table_index_name.replace(
-        '_id', '_postres_id')
-    # Output post result detail table in Terra format
-    pipeline_postres_table.to_csv(os.path.join(
-        output_root_dir, f'single-cell_uniform_pipeline_postres_detail_{curr_datetime}.tsv'), sep='\t')
