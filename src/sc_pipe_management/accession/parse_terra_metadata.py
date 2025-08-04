@@ -31,12 +31,6 @@ class TerraJobUUIDs:
 
 
 @dataclasses.dataclass(frozen=True)
-class WorkflowConfigInfo:
-    doc_aliases: list[str]
-    download_path: str
-
-
-@dataclasses.dataclass(frozen=True)
 class InputFileAccs:
     """Data class to hold derived from files."""
     sequence_files: list[str]
@@ -107,12 +101,12 @@ def _get_multiome_types(terra_data_record: pd.Series) -> list:
 
 class TerraOutputMetadata:
     def __init__(self, terra_data_record: pd.Series, igvf_client_api):
-        self.pipeline_output = terra_data_record
+        self.terra_data_record = terra_data_record
         self.igvf_api = igvf_client_api
-        self.anaset_accession = self.pipeline_output['analysis_set_acc']
-        self.taxa = self.pipeline_output['taxa']
+        self.anaset_accession = self.terra_data_record['analysis_set_acc']
+        self.taxa = self.terra_data_record['taxa']
         self.multiome_type = _get_multiome_types(
-            terra_data_record=self.pipeline_output)
+            terra_data_record=self.terra_data_record)
 
     def _get_gs_path_for_terra_output_cols(self) -> str:
         """Get GS path from terra data record for submission and workflow IDs parsing, trying RNA first, then ATAC."""
@@ -120,8 +114,8 @@ class TerraOutputMetadata:
         possible_columns = ['rna_kb_h5ad', 'atac_bam']
         for col in possible_columns:
             # If the column is empty, it returns np.float64(nan)
-            if (col in list(self.pipeline_output.index)) and (pd.notna(self.pipeline_output[col])):
-                return self.pipeline_output[col]
+            if (col in list(self.terra_data_record.index)) and (pd.notna(self.terra_data_record[col])):
+                return self.terra_data_record[col]
         raise ValueError(
             'No valid GS path found in the Terra data record for workflow UUID parsing.')
 
@@ -144,16 +138,16 @@ class TerraOutputMetadata:
         # Build the derived from file info
         # Get sequence file accessions from the Terra table
         seqfile_accessions = self._parse_terra_str_list(
-            terra_str_lists=[self.pipeline_output[seqfile_col] for seqfile_col in input_file_info.sequence_file_headers])
+            terra_str_lists=[self.terra_data_record[seqfile_col] for seqfile_col in input_file_info.sequence_file_headers])
         # Get sequence specification file accessions from the file URLs in the Terra table
         seqspec_accessions = self._parse_igvf_accessions_from_urls(
-            igvf_file_urls=[self.pipeline_output[input_file_info.seqspec_file_header]])
+            igvf_file_urls=[self.terra_data_record[input_file_info.seqspec_file_header]])
         # Get RNA barcode replacement accessions from the file URLs in the Terra table (can be empty for non-Parse)
         barcode_replacement_accession = self._parse_igvf_accessions_from_urls(
-            igvf_file_urls=[self.pipeline_output.get(input_file_info.barcode_replacement_file_header)])
+            igvf_file_urls=[self.terra_data_record.get(input_file_info.barcode_replacement_file_header)])
         # Get reference files from the file URLs in the Terra table
         reference_files = self._parse_igvf_accessions_from_urls(
-            igvf_file_urls=[self.pipeline_output[ref_file_header] for ref_file_header in input_file_info.reference_file_headers])
+            igvf_file_urls=[self.terra_data_record[ref_file_header] for ref_file_header in input_file_info.reference_file_headers])
         # Build the InputFileAccs dataclass
         return InputFileAccs(sequence_files=seqfile_accessions,
                              seqspec_files=seqspec_accessions,
