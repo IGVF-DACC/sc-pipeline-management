@@ -12,9 +12,18 @@ from sc_pipe_management.accession.parse_terra_metadata import (
     TerraOutputMetadata
 )
 
+from constants import (
+    POSTING_LAB,
+    POSTING_AWARD,
+    OUTPUT_SUBMITTER_INFO,
+    FileObjMetadata,
+    ALIGNMENT_FILETYPES,
+    INDEX_FILETYPES,
+    TABULAR_FILETYPES,
+    GENOME_ASSEMBLY_INFO
+)
+
 # NOTE: These may end up not being needed if genome tsv reference and assembly column is available in input
-# Convert Terra table's info to portal enum
-GENOME_ASSEMBLY_INFO = {'Homo sapiens': 'GRCh38', 'Mus musculus': 'GRCm39'}
 
 fapi._set_session()
 
@@ -47,76 +56,34 @@ def _dump_json(input_json: dict, analysis_set_acc: str, output_root_dir: str = '
     return output_file_path
 
 
-class TerraJobInputParams:
-    def __init__(self, terra_metadata: TerraOutputMetadata, output_root_dir: str = '/igvf/data/'):
-        self.terra_namespace = 'DACC_ANVIL'
-        self.terra_workspace = 'IGVF Single-Cell Data Processing'
-        self.output_root_dir = output_root_dir
-        self.terra_metadata = terra_metadata
-        self.terra_data_record = terra_metadata.pipeline_output
-        self.anaset_accession = self.terra_data_record['analysis_set_acc']
-        self.terra_uuids = self.terra_metadata._parse_workflow_uuids_from_gs_path()
+def _mk_doc_aliases(curr_workflow_config: TerraJobUUIDs) -> list:
+    """Create a list of document aliases for the workflow configuration.
 
-    def _get_workflow_input_config(self) -> dict:
-        """Get the workflow input configuration JSON for a given submission and workflow ID."""
-        workflow_data_request = fapi.get_workflow_metadata(namespace=self.terra_namespace,
-                                                           workspace=self.terra_workspace,
-                                                           submission_id=self.terra_uuids.submission_id,
-                                                           workflow_id=self.terra_uuids.workflow_id
-                                                           )
-        if workflow_data_request.status_code != 200:
-            raise FireCloudServerError(code=workflow_data_request.status_code,
-                                       message=f'Error fetching workflow data: {self.terra_uuids.workflow_id} for submission: {self.terra_uuids.submission_id}.')
-        workflow_data_res = workflow_data_request.json()
-        try:
-            workflow_input_config = workflow_data_res.get('inputs')
-            # Remove one of the keys that is not needed in the config
-            workflow_input_config['igvf_credentials'] = 'Google cloud path to a txt file with credentials to access the IGVF data portal.'
-            # Set up output directory for the JSON file
-            json_output_dir = os.path.join(
-                self.output_root_dir, self.anaset_accession)
-            # Dumpt the config to a local JSON file
-            local_file_path = _dump_json(input_json=workflow_input_config,
-                                         analysis_set_acc=self.anaset_accession,
-                                         output_root_dir=json_output_dir)
-            workflow_input_config_aliases = [
-                f'igvf-dacc-processing-pipeline:{curr_workflow_config.config_aliases()}_pipeline_config']
-            return WorkflowConfigInfo(doc_aliases=mk_doc_aliases(curr_workflow_config=workflow_input_config),
-                                      download_path=local_file_path)
-        except KeyError:
-            raise FireCloudServerError(code=workflow_data_request.status_code,
-                                       message=f'Error parsing workflow input config for workflow: {self.terra_uuids.workflow_id} in submission: {self.terra_uuids.submission_id}. No inputs found.')
+    Args:
+        curr_workflow_config (TerraJobUUIDs): The current workflow configuration
 
-    def _download_workflow_config_json(self) -> str:
-        """Download the workflow configuration JSON file for a given Terra data record.
-
-        Args:
-            terra_data_record (pd.Series): One Terra pipeline (i.e., one row in the data table)
-            terra_namespace (str): Terra project namespace, e.g., DACC_ANVIL
-            terra_workspace (str): Terra workspace name, e.g., IGVF Single-Cell Data Processing
-            output_root_dir (str, optional): Where the file will be saved to. Defaults to '/igvf/data/'.
-
-        Returns:
-            str: path to the saved JSON file
-        """
-        # NOTE: A bit of hack here to get submission ID (Check RNA data first, then ATAC)
-        terra_ids = self._parse_workflow_uuids_from_gs_path()
-        curr_workflow_config = self._get_workflow_input_config(terra_namespace=self.terra_namespace,
-                                                               terra_workspace=self.terra_workspace,
-                                                               submission_id=terra_ids.submission_id,
-                                                               workflow_id=terra_ids.workflow_id)
-        # Remove one of the keys that is not needed in the config
-        curr_workflow_config['igvf_credentials'] = 'Google cloud path to a txt file with credentials to access the IGVF data portal.'
-        json_output_dir = os.path.join(
-            output_root_dir, terra_data_record['analysis_set_acc'])
-        local_file_path = dump_json(input_json=curr_workflow_config,
-                                    analysis_set_acc=terra_data_record['analysis_set_acc'],
-                                    output_root_dir=json_output_dir)
-        return WorkflowConfigInfo(doc_aliases=mk_doc_aliases(curr_workflow_config=terra_ids),
-                                  download_path=local_file_path)
+    Returns:
+        list: A list of document aliases
+    """
+    return [f'igvf-dacc-processing-pipeline:{curr_workflow_config.input_param_aliases()}_pipeline_config']
 
 
-def get_file_aliases(col_header: str, lab: str, terra_data_record: pd.Series, terra_uuids: str) -> list:
+def _mk_qc_obj_aliases(curr_workflow_config: TerraJobUUIDs, analysis_set_acc: str, qc_prefix: str, lab: str) -> list:
+    """Create a list of QC objects aliases for the workflow configuration.
+
+    Args:
+        curr_workflow_config (TerraJobUUIDs): The current workflow configuration
+        analysis_set_acc (str): The analysis set accession
+        qc_prefix (str): The prefix for the QC object (fragment, gene count, etc.)
+        lab (str): The lab name
+
+    Returns:
+        list: A list of QC objects aliases
+    """
+    return [f'{lab.split("/")[-2]}:{analysis_set_acc}_{curr_workflow_config.aliases()}_{qc_prefix}_uniform-pipeline']
+
+
+def _get_file_aliases(col_header: str, lab: str, terra_data_record: pd.Series, terra_uuids: str) -> list:
     """ Generate a file alias based on the output data name, lab, analysis set accession, and Terra UUIDs.
 
     Args:
@@ -131,31 +98,68 @@ def get_file_aliases(col_header: str, lab: str, terra_data_record: pd.Series, te
     return [f'{lab.split("/")[-2]}:{terra_data_record["analysis_set_acc"]}_{terra_uuids}_{col_header}_uniform-pipeline']
 
 
-def mk_doc_aliases(curr_workflow_config: TerraJobUUIDs) -> list:
-    """Create a list of document aliases for the workflow configuration.
+class PipelineParamInfo:
+    def __init__(self, terra_datable: pd.DataFrame, output_root_dir: str = '/igvf/data/'):
+        self.terra_namespace = 'DACC_ANVIL'
+        self.terra_workspace = 'IGVF Single-Cell Data Processing'
+        self.output_root_dir = output_root_dir
+        # Initialize with Terra metadata class object
+        self.terra_datable = terra_datable
 
-    Args:
-        curr_workflow_config (TerraJobUUIDs): The current workflow configuration
+    def _get_single_input_params(self, terra_metadata: TerraOutputMetadata) -> dict:
+        """Get the workflow input configuration JSON for a given submission and workflow ID."""
+        terra_uuids = terra_metadata._parse_workflow_uuids_from_gs_path()
+        anaset_accession = terra_metadata.analysis_set_acc
+        # Firecloud API call to get the workflow metadata
+        input_params_request = fapi.get_workflow_metadata(namespace=self.terra_namespace,
+                                                          workspace=self.terra_workspace,
+                                                          submission_id=terra_uuids.submission_id,
+                                                          workflow_id=terra_uuids.workflow_id
+                                                          )
+        if input_params_request.status_code != 200:
+            raise FireCloudServerError(code=input_params_request.status_code,
+                                       message=f'Error fetching input params data for {anaset_accession}.')
+        # Parse the response JSON to get the workflow input configuration
+        workflow_data_res = input_params_request.json()
+        try:
+            input_params = workflow_data_res.get('inputs')
+            # Remove one of the keys that is not needed in the config
+            input_params['igvf_credentials'] = 'Google cloud path to a txt file with credentials to access the IGVF data portal.'
+            # Set up output directory for the JSON file
+            json_output_dir = os.path.join(
+                self.output_root_dir, anaset_accession)
+            # Dumpt the config to a local JSON file
+            local_file_path = _dump_json(input_json=input_params,
+                                         analysis_set_acc=anaset_accession,
+                                         output_root_dir=json_output_dir)
+            return WorkflowConfigInfo(doc_aliases=_mk_doc_aliases(curr_workflow_config=input_params),
+                                      download_path=local_file_path)
+        except KeyError:
+            raise FireCloudServerError(code=input_params_request.status_code,
+                                       message=f'Error parsing workflow input params for{anaset_accession}. No inputs found.')
 
-    Returns:
-        list: A list of document aliases
-    """
-    return [f'igvf-dacc-processing-pipeline:{curr_workflow_config.config_aliases()}_pipeline_config']
+    def _get_all_input_params(self) -> dict:
+        """Get the workflow input configuration JSON for all submissions and workflow IDs."""
+        all_input_params = {}
+        for terra_data_record in self.terra_datable.iterrows():
+            terra_metadata = TerraOutputMetadata(terra_data_record)
+            try:
+                input_params = self._get_single_input_params(terra_metadata)
+                all_input_params[terra_metadata.analysis_set_acc] = input_params
+            except FireCloudServerError as e:
+                print(
+                    f'Error fetching input params for {terra_metadata.analysis_set_acc}: {e.message}')
+        return all_input_params
 
 
-def mk_qc_obj_aliases(curr_workflow_config: TerraJobUUIDs, analysis_set_acc: str, qc_prefix: str, lab: str) -> list:
-    """Create a list of QC objects aliases for the workflow configuration.
-
-    Args:
-        curr_workflow_config (TerraJobUUIDs): The current workflow configuration
-        analysis_set_acc (str): The analysis set accession
-        qc_prefix (str): The prefix for the QC object (fragment, gene count, etc.)
-        lab (str): The lab name
-
-    Returns:
-        list: A list of QC objects aliases
-    """
-    return [f'{lab.split("/")[-2]}:{analysis_set_acc}_{curr_workflow_config.aliases()}_{qc_prefix}_uniform-pipeline']
+class MatrixFilePayload:
+    def __init__(self, terra_metadata: TerraOutputMetadata, File):
+        self.terra_metadata = terra_metadata
+        self.lab = lab
+        self.analysis_set_acc = terra_metadata.analysis_set_acc
+        self.terra_uuids = terra_metadata._parse_workflow_uuids_from_gs_path()
+        self.file_aliases = _get_file_aliases(
+            col_header=terra_metadata.output_data_name, lab=lab, terra_data_record=terra_metadata, terra_uuids=self.terra_uuids)
 
 # Download QC files and workflow config JSONs from Terra GCP bucket
 
@@ -246,25 +250,3 @@ def read_json_file(json_file_paths: str) -> dict:
         with open(json_file_path, 'r') as file:
             json_dict.update(json.load(file))
     return json_dict
-
-
-def dump_json(input_json: dict, analysis_set_acc: str, output_root_dir: str = './run_config') -> str:
-    """Save a JSON object to a file in the specified output directory.
-
-    Args:
-        input_json (dict): The JSON object to save (workflow config json)
-        analysis_set_acc (str): Analysis set accession, used to name the output file
-        output_root_dir (str, optional): Where the file will be saved to. Defaults to './run_config'.
-
-    Returns:
-        str: path to the saved JSON file
-    """
-    file_dir = os.path.join(
-        output_root_dir, datetime.datetime.now().strftime("%m%d%Y"))
-    if not os.path.exists(file_dir):
-        os.makedirs(file_dir)
-    output_file_path = os.path.join(
-        file_dir, f'{analysis_set_acc}_run_config.json')
-    with open(output_file_path, 'w') as file:
-        json.dump(input_json, file)
-    return output_file_path

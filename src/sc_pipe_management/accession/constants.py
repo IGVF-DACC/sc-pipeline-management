@@ -11,6 +11,12 @@ OUTPUT_SUBMITTER_INFO = {
 }
 
 
+# Convert Terra table's info to portal enum
+GENOME_ASSEMBLY_INFO = {'Homo sapiens': 'GRCh38',
+                        'Mus musculus': 'GRCm39'
+                        }
+
+
 @dataclasses.dataclass(frozen=True)
 class FileObjMetadata:
     """Payload metadata for file objects that will be accessioned to the IGVF portal."""

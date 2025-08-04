@@ -29,6 +29,14 @@ class TerraJobUUIDs:
     workflow_id: str
     subworkflow_id: str
 
+    def aliases(self) -> str:
+        """Generate a string of the form submissionID_workflowID_subworkflowID as file."""
+        return f'{self.gcloud_bucket}_{self.submission_id}_{self.workflow_id}_{self.subworkflow_id}'
+
+    def input_param_aliases(self) -> str:
+        """Generate a string of the form submissionID_workflowID."""
+        return f'{self.submission_id}_{self.workflow_id}'
+
 
 @dataclasses.dataclass(frozen=True)
 class InputFileAccs:
