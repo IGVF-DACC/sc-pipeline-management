@@ -51,7 +51,7 @@ def get_parser():
                         help="""If True, upload the file to the portal.""")
     parser.add_argument('--output_dir', type=str, default=None,
                         help="""Path to the output directory. Defaults to $(pwd)/terra_datatables/output/$(date +%m%d%Y)""")
-    parser.add_argument('--patch_existing_post', action='store_true',
+    parser.add_argument('--resumed_posting', action='store_true',
                         help="""Whether to patch an existing post. Defaults to False. See `single_post_to_portal` for more details.""")
     parser.add_argument('--tries', type=int, default=3,
                         help="""Number of tries to attempt the API calls. Default is 3.""")
@@ -180,7 +180,7 @@ def main():
                                                            upload_file=args.upload_file,
                                                            config_file_collection=config_file_collection,
                                                            output_root_dir=args.output_dir,
-                                                           patch_existing_post=args.patch_existing_post)
+                                                           resumed_posting=args.resumed_posting)
 
     # Summarize into a table
     portal_post_summary = acc_utils.summarize_post_status(
