@@ -26,6 +26,7 @@ class FileObjMetadata:
     # file format specification documents' aliases for the output file
     file_specifications: list
     analysis_step_version: str  # ASV used for for the output file
+    assay_type: str
 
 # The following is a mapping of file types to their metadata.
 # The dict key is the name of the Terra data table column that hosts the GCP path to the file.
@@ -38,7 +39,8 @@ ALIGNMENT_FILETYPES = {
                                 content_type='alignments',
                                 file_specifications=[
                                     'buenrostro-bernstein:igvf-sc-pipeline-alignment-bam-specification'],
-                                analysis_step_version='igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0'
+                                analysis_step_version='igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0',
+                                assay_type='atac'
                                 )
 }
 
@@ -49,14 +51,16 @@ INDEX_FILETYPES = {
                                             content_type='index',
                                             file_specifications=[
                                                 'buenrostro-bernstein:igvf-sc-pipeline-fragment-file-specification'],
-                                            analysis_step_version='igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0'
+                                            analysis_step_version='igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0',
+                                            assay_type='atac'
                                             ),
     'atac_bam_index': FileObjMetadata(file_format='bai',
                                       description='Raw Aligned bam file index from Chromap',
                                       content_type='index',
                                       file_specifications=[
                                           'buenrostro-bernstein:igvf-sc-pipeline-alignment-bam-index-specification'],
-                                      analysis_step_version='igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0'
+                                      analysis_step_version='igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0',
+                                      assay_type='atac'
                                       )
 }
 
@@ -67,7 +71,8 @@ TABULAR_FILETYPES = {
                                       content_type='fragments',
                                       file_format_specifications=[
                                           'buenrostro-bernstein:igvf-single-cell-pipeline-fragment-file-specification'],
-                                      analysis_step_version='igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0'
+                                      analysis_step_version='igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0',
+                                      assay_type='atac'
                                       )
 }
 
@@ -79,7 +84,8 @@ MATRIX_FILETYPES = {
         content_type='kallisto single cell RNAseq output',
         file_format_specifications=['buenrostro-bernstein:igvf-sc-pipeline-matrix-tar-specification',
                                     'igvf:igvf-sc-pipeline-rna-tar-mtx-per-file-specification'],
-        analysis_step_version='igvf:single-cell-uniform-pipeline-kallisto-bustools-rnaseq-step-v1.1.0'
+        analysis_step_version='igvf:single-cell-uniform-pipeline-kallisto-bustools-rnaseq-step-v1.1.0',
+        assay_type='rna'
     ),
     'rna_kb_h5ad': FileObjMetadata(
         file_format='h5ad',
@@ -87,7 +93,8 @@ MATRIX_FILETYPES = {
         content_type='sparse gene count matrix',
         file_format_specifications=[
             'buenrostro-bernstein:igvf-sc-pipeline-matrix-h5-specification'],
-        analysis_step_version='igvf:single-cell-uniform-pipeline-kalliso-bustools-rnaseq-step-v1.1.0'
+        analysis_step_version='igvf:single-cell-uniform-pipeline-kalliso-bustools-rnaseq-step-v1.1.0',
+        assay_type='rna'
     )
 }
 
