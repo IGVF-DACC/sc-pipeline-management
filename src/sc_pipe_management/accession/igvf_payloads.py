@@ -127,9 +127,9 @@ class MatrixFilePayload:
         # Terra output metadata for this pipeline run
         self.terra_metadata = terra_metadata
         # The actual pipeline output data Series (one row in the Terra data table)
-        self.terra_data_record = terra_metadata.terra_data_record
+        self.terra_data_record = self.terra_metadata.terra_data_record
         # The Terra UUIDs for this pipeline run
-        self.terra_uuids = terra_metadata._parse_workflow_uuids_from_gs_path()
+        self.terra_uuids = self.terra_metadata._parse_workflow_uuids_from_gs_path()
         # The matrix file data class object based on the Terra output name
         self._terra_output_name = terra_output_name
         self.file_obj_metadata = const.MATRIX_FILETYPES[self._terra_output_name]
@@ -143,7 +143,7 @@ class MatrixFilePayload:
         return _get_file_aliases(col_header=self.terra_output_name,
                                  lab=self.lab,
                                  terra_data_record=self.terra_metadata.terra_data_record,
-                                 terra_uuids=self.terra_uuids)
+                                 terra_uuids=self.terra_uuids.aliases())
 
     @property
     def submitted_file_name(self) -> str:
@@ -164,23 +164,19 @@ class MatrixFilePayload:
 
     def get_payload(self):
         """Get the matrix file payload for the given Terra output name."""
-        # Get the file aliases
-        mtx_file_aliases = self.aliases
-        # Compute MD5
-        mtx_file_md5sum = self.md5sum
         # Compute derived_from and reference files
-        mtx_file_input_files = self.terra_metatadata._get_input_file_accs_from_table(
+        mtx_file_input_files = self.terra_metadata._get_input_file_accs_from_table(
             assay_type=self.file_obj_metadata.assay_type)
         # Make Mtx file payload
         mtx_file_payload = dict(award=self.award,
                                 lab=self.lab,
                                 analysis_step_version=self.file_obj_metadata.analysis_step_version,
-                                aliases=mtx_file_aliases,
+                                aliases=self.aliases,
                                 content_type=self.file_obj_metadata.content_type,
-                                md5sum=mtx_file_md5sum,
+                                md5sum=self.md5sum,
                                 file_format=self.file_obj_metadata.file_format,
                                 derived_from=mtx_file_input_files.get_derived_from(),
-                                submitted_file_name=mtx_file_md5sum,
+                                submitted_file_name=self.submitted_file_name,
                                 file_set=self.terra_metadata.anaset_accession,
                                 principal_dimension='cell',
                                 secondary_dimensions=['gene'],
@@ -206,7 +202,7 @@ class AlignmentFilePayload:
         # Terra output metadata for this pipeline run
         self.terra_metadata = terra_metadata
         # The actual pipeline output data Series (one row in the Terra data table)
-        self.terra_data_record = terra_metadata.terra_data_record
+        self.terra_data_record = self.terra_metadata.terra_data_record
         # The Terra UUIDs for this pipeline run
         self.terra_uuids = terra_metadata._parse_workflow_uuids_from_gs_path()
         # Input file accessions
@@ -241,7 +237,7 @@ class AlignmentFilePayload:
         return _get_file_aliases(col_header=self.terra_output_name,
                                  lab=self.lab,
                                  terra_data_record=self.terra_metadata.terra_data_record,
-                                 terra_uuids=self.terra_uuids)
+                                 terra_uuids=self.terra_uuids.aliases())
 
     @property
     def submitted_file_name(self) -> str:
@@ -297,7 +293,7 @@ class FragmentFilePayload:
         # Terra output metadata for this pipeline run
         self.terra_metadata = terra_metadata
         # The actual pipeline output data Series (one row in the Terra data table)
-        self.terra_data_record = terra_metadata.terra_data_record
+        self.terra_data_record = self.terra_metadata.terra_data_record
         # The Terra UUIDs for this pipeline run
         self.terra_uuids = terra_metadata._parse_workflow_uuids_from_gs_path()
         # Input file accessions
@@ -312,7 +308,7 @@ class FragmentFilePayload:
         return _get_file_aliases(col_header=self.terra_output_name,
                                  lab=self.lab,
                                  terra_data_record=self.terra_metadata.terra_data_record,
-                                 terra_uuids=self.terra_uuids)
+                                 terra_uuids=self.terra_uuids.aliases())
 
     @property
     def submitted_file_name(self) -> str:
@@ -369,7 +365,7 @@ class IndexFilePayload:
         # Terra output metadata for this pipeline run
         self.terra_metadata = terra_metadata
         # The actual pipeline output data Series (one row in the Terra data table)
-        self.terra_data_record = terra_metadata.terra_data_record
+        self.terra_data_record = self.terra_metadata.terra_data_record
         # The Terra UUIDs for this pipeline run
         self.terra_uuids = terra_metadata._parse_workflow_uuids_from_gs_path()
         # The tabular file data class object based on the Terra output name
@@ -384,7 +380,7 @@ class IndexFilePayload:
         return _get_file_aliases(col_header=self.terra_output_name,
                                  lab=self.lab,
                                  terra_data_record=self.terra_metadata.terra_data_record,
-                                 terra_uuids=self.terra_uuids)
+                                 terra_uuids=self.terra_uuids.aliases())
 
     @property
     def submitted_file_name(self) -> str:
@@ -441,9 +437,9 @@ class QCMetricsPayload:
         # Terra output metadata for this pipeline run
         self.terra_metadata = terra_metadata
         # The actual pipeline output data Series (one row in the Terra data table)
-        self.terra_data_record = terra_metadata.terra_data_record
+        self.terra_data_record = self.terra_metadata.terra_data_record
         # The Terra UUIDs for this pipeline run
-        self.terra_uuids = terra_metadata._parse_workflow_uuids_from_gs_path()
+        self.terra_uuids = self.terra_metadata._parse_workflow_uuids_from_gs_path()
         # Output root directory
         self.output_root_dir = root_output_dir
 
@@ -505,7 +501,7 @@ class QCMetricsPayload:
     @property
     def alias(self) -> list[str]:
         return self._mk_qc_obj_aliases(
-            curr_workflow_config=self.terra_uuids,
+            curr_workflow_config=self.terra_uuids.aliases,
             analysis_set_acc=self.terra_data_record['analysis_set_acc'],
             qc_prefix=self.terra_output_name,
             lab=self.lab

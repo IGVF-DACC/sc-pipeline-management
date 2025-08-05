@@ -105,6 +105,13 @@ class TestMatrixFilePayload:
     """Test cases for MatrixFilePayload class using real test data."""
 
     @pytest.fixture
+    def mock_igvf_api(self):
+        """Mock IGVF API client."""
+        mock_api = Mock()
+        mock_api.get.return_value = {'controlled_access': False}
+        return mock_api
+
+    @pytest.fixture
     def sample_terra_record(self):
         """Load test data record."""
         test_file_path = Path(__file__).parent / \
@@ -112,79 +119,53 @@ class TestMatrixFilePayload:
         if test_file_path.exists():
             terra_data_table = pd.read_csv(test_file_path, sep='\t')
             return terra_data_table.iloc[0]
-        else:
-            return pd.Series({
-                'analysis_set_acc': 'IGVFDS123ABC',
-                'taxa': 'Homo sapiens',
-                'rna_kb_h5ad': 'gs://fc-secure-bucket/submissions/12345/workflow_67890/call-aggregate_metrics/subwf_abcde/output.h5ad'
-            })
 
     @pytest.fixture
-    def mock_terra_metadata(self, sample_terra_record):
-        """Mock TerraOutputMetadata instance."""
-        mock_metadata = Mock()
-        mock_metadata.terra_data_record = sample_terra_record
-        mock_metadata.taxa = sample_terra_record.get('taxa', 'Homo sapiens')
-        mock_metadata._parse_workflow_uuids_from_gs_path.return_value = parse_terra.PipelineOutputIds(
-            gcloud_bucket='fc-secure-bucket',
-            submission_id='12345',
-            workflow_id='67890',
-            subworkflow_id='abcde'
-        )
-        mock_metadata._get_input_file_accs_from_table.return_value = parse_terra.InputFileAccs(
-            derived_from_accessions=['IGVFFF001AAA', 'IGVFFF002BBB'],
-            reference_files=['IGVFFF003CCC']
-        )
-        return mock_metadata
+    def terra_metadata(self, sample_terra_record, mock_igvf_api):
+        """Create TerraOutputMetadata instance."""
+        return parse_terra.TerraOutputMetadata(sample_terra_record, mock_igvf_api)
 
-    def test_init_with_real_terra_output_name(self, mock_terra_metadata, sample_terra_record):
-        """Test MatrixFilePayload initialization with real Terra output names."""
-        # Test with RNA output
-        if 'rna_kb_h5ad' in sample_terra_record:
-            payload = igvf_payloads.MatrixFilePayload(
-                mock_terra_metadata, 'rna_kb_h5ad')
-            assert payload.terra_output_name == 'rna_kb_h5ad'
-            assert payload.lab is not None
-            assert payload.award is not None
+    @pytest.fixture
+    def matrix_payload_cls(self, terra_metadata):
+        if 'rna_kb_h5ad' in terra_metadata.terra_data_record:
+            return igvf_payloads.MatrixFilePayload(
+                terra_metadata, 'rna_kb_h5ad')
 
-    def test_terra_output_name_property(self, mock_terra_metadata):
+    @pytest.fixture
+    def expected_matrix_payload(self):
+        """Load expected payload data."""
+        test_file_path = Path(__file__).parent / \
+            'test_files' / 'expected_payloads.json'
+        with open(test_file_path, 'r') as f:
+            return json.load(f)['rna_kb_h5ad']
+
+    def test_terra_output_name_property(self, matrix_payload_cls):
         """Test terra_output_name property."""
-        payload = igvf_payloads.MatrixFilePayload(
-            mock_terra_metadata, 'rna_kb_h5ad')
-        assert payload.terra_output_name == 'rna_kb_h5ad'
+        assert matrix_payload_cls.terra_output_name == 'rna_kb_h5ad'
 
-    def test_submitted_file_name_property_with_real_data(self, mock_terra_metadata, sample_terra_record):
+    def test_submitted_file_name_property(self, matrix_payload_cls, sample_terra_record):
         """Test submitted_file_name property with real data."""
-        if 'rna_kb_h5ad' in sample_terra_record:
-            payload = igvf_payloads.MatrixFilePayload(
-                mock_terra_metadata, 'rna_kb_h5ad')
+        if 'rna_kb_h5ad' in matrix_payload_cls.terra_data_record:
             expected_file_name = sample_terra_record['rna_kb_h5ad']
-            assert payload.submitted_file_name == expected_file_name
+            assert matrix_payload_cls.submitted_file_name == expected_file_name
 
-    @patch('sc_pipe_management.accession.igvf_payloads.api_tools.calculate_gsfile_hex_hash')
-    def test_md5sum_property(self, mock_hash, mock_terra_metadata, sample_terra_record):
-        """Test md5sum property."""
-        mock_hash.return_value = 'abc123def456'
-        payload = igvf_payloads.MatrixFilePayload(
-            mock_terra_metadata, 'rna_kb_h5ad')
-
-        result = payload.md5sum
-        assert result == 'abc123def456'
-
-        if 'rna_kb_h5ad' in sample_terra_record:
-            mock_hash.assert_called_once_with(
+    def test_file_md5sum_property(self, matrix_payload_cls, sample_terra_record):
+        """Test file_md5sum property."""
+        if 'rna_kb_h5ad' in matrix_payload_cls.terra_data_record:
+            calc_md5 = api_tools.calculate_gsfile_hex_hash(
                 file_path=sample_terra_record['rna_kb_h5ad'])
+            assert matrix_payload_cls.md5sum == calc_md5
 
-    @patch('sc_pipe_management.accession.igvf_payloads._get_file_aliases')
-    def test_aliases_property(self, mock_get_aliases, mock_terra_metadata):
+    def test_aliases_property(self, matrix_payload_cls):
         """Test aliases property."""
-        mock_get_aliases.return_value = [
-            'test-lab:rna_kb_h5ad_IGVFDS123ABC_12345']
-        payload = igvf_payloads.MatrixFilePayload(
-            mock_terra_metadata, 'rna_kb_h5ad')
+        expected_aliases = ['igvf-dacc-processing-pipeline:IGVFDS0657NHTA_fc-secure-de19fd29-2253-41cd-9751-1788cf7ad1a5_f6921ff1-998d-4faf-a638-9b7d9e55820c_e2d9739d-6423-4051-b065-0575c840fba2_e856c806-001d-4c7d-9c67-dc8054e6c241_rna_kb_h5ad_uniform-pipeline']
+        assert matrix_payload_cls.aliases == expected_aliases
 
-        result = payload.aliases
-        assert result == ['test-lab:rna_kb_h5ad_IGVFDS123ABC_12345']
+    def test_matrix_payload(self, matrix_payload_cls, expected_matrix_payload):
+        """Test MatrixFilePayload initialization."""
+        generated_payload = matrix_payload_cls.get_payload()
+        for key, value in expected_matrix_payload.items():
+            assert generated_payload[key] == value
 
 
 class TestQCMetricsPayload:
