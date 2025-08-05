@@ -111,6 +111,11 @@ class Payload(Protocol):
         """Property to get the Terra output name of the payload."""
         pass
 
+    @property
+    def submitted_file_name(self) -> str | None:
+        """Property to get the submitted file name of the payload."""
+        pass
+
 
 class MatrixFilePayload:
     """Class to create a matrix file payload for a given Terra output name."""
@@ -141,10 +146,15 @@ class MatrixFilePayload:
                                  terra_uuids=self.terra_uuids)
 
     @property
+    def submitted_file_name(self) -> str:
+        """Property to get the submitted file name of the payload."""
+        return self.terra_data_record[self.terra_output_name]
+
+    @property
     def md5sum(self) -> str:
         """Property to get the MD5 sum of the payload."""
         return api_tools.calculate_gsfile_hex_hash(
-            file_path=self.terra_data_record[self.terra_output_name]
+            file_path=self.submitted_file_name
         )
 
     @property
@@ -234,10 +244,15 @@ class AlignmentFilePayload:
                                  terra_uuids=self.terra_uuids)
 
     @property
+    def submitted_file_name(self) -> str:
+        """Property to get the submitted file name of the payload."""
+        return self.terra_data_record[self.terra_output_name]
+
+    @property
     def md5sum(self) -> str | None:
         """Property to get the MD5 sum of the payload."""
         return api_tools.calculate_gsfile_hex_hash(
-            file_path=self.terra_data_record[self.terra_output_name]
+            file_path=self.submitted_file_name
         )
 
     @property
@@ -300,10 +315,15 @@ class FragmentFilePayload:
                                  terra_uuids=self.terra_uuids)
 
     @property
+    def submitted_file_name(self) -> str:
+        """Property to get the submitted file name of the payload."""
+        return self.terra_data_record[self.terra_output_name]
+
+    @property
     def md5sum(self) -> str | None:
         """Property to get the MD5 sum of the payload."""
         return api_tools.calculate_gsfile_hex_hash(
-            file_path=self.terra_data_record[self.terra_output_name]
+            file_path=self.submitted_file_name
         )
 
     @property
@@ -366,10 +386,15 @@ class IndexFilePayload:
                                  terra_uuids=self.terra_uuids)
 
     @property
+    def submitted_file_name(self) -> str:
+        """Property to get the submitted file name of the payload."""
+        return self.terra_data_record[self.terra_output_name]
+
+    @property
     def md5sum(self) -> str | None:
         """Property to get the MD5 sum of the payload."""
         return api_tools.calculate_gsfile_hex_hash(
-            file_path=self.terra_data_record[self.terra_output_name]
+            file_path=self.submitted_file_name
         )
 
     @property
@@ -486,7 +511,13 @@ class QCMetricsPayload:
         )
 
     @property
+    def submitted_file_name(self) -> str:
+        """Property to get the submitted file name of the payload."""
+        return None
+
+    @property
     def md5sum(self):
+        """Property to get the MD5 sum of the payload."""
         return None
 
     @property
@@ -604,7 +635,13 @@ class DocumentPayload:
         return self._mk_doc_aliases()
 
     @property
-    def md5sum(self) -> None:
+    def submitted_file_name(self) -> str:
+        """Property to get the submitted file name of the payload."""
+        return None
+
+    @property
+    def md5sum(self):
+        """Property to get the MD5 sum of the payload."""
         return None
 
     @property
