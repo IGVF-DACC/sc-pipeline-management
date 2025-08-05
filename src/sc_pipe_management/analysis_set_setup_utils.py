@@ -1,5 +1,5 @@
 import igvf_and_terra_api_tools as api_tools
-import terra_to_portal_posting as t2portal
+import accession.terra_to_portal_posting as t2portal
 import argparse
 from functools import wraps
 from datetime import datetime
@@ -303,8 +303,12 @@ def create_all_analysis_set_payload(all_input_file_sets: list[list], lab: str, a
     for input_file_sets in all_input_file_sets:
         curr_payload = create_analysis_set_payload(
             input_file_sets, lab, award, igvf_client_api)
-        post_res.append(t2portal.single_post_to_portal(
-            igvf_data_payload=curr_payload, igvf_utils_api=igvf_utils_api, upload_file=False))
+        igvf_post_mthd = t2portal.IGVFPostService(igvf_utils_api=igvf_utils_api,
+                                                  data_obj_payload=curr_payload,
+                                                  upload_file=False,
+                                                  resumed_posting=False
+                                                  )
+        post_res.append(igvf_post_mthd.single_post_to_portal())
     return post_res
 
 
