@@ -10,28 +10,7 @@ import requests
 import time
 from itertools import chain
 
-from constants import (
-    TERRA_OUTPUT_TABLE_COLUMN_TYPES,
-    ACCESSION_HEADERS_BY_ASSAY_TYPES,
-    ANALYSIS_STEP_VERSIONS_BY_ASSAY_TYPES,
-    TERRA_QC_OUTPUTS,
-    POSTING_LAB,
-    POSTING_AWARD
-)
-
-from sc_pipe_management.accession.parse_terra_metadata import (
-    parse_workflow_uuids_from_gs_path,
-    parse_igvf_accessions_from_urls,
-    get_genome_assembly,
-    check_single_or_multiome,
-    get_seqfile_accs_from_table,
-    get_seqfile_access_lvl_and_accessions,
-    get_file_aliases,
-    download_qc_file_from_gcp,
-    read_json_file,
-    mk_qc_obj_aliases,
-    get_existing_analysis_set_docs
-)
+import sc_pipe_management.accession.igvf_payloads as igvf_payloads
 
 
 # TODO:\
@@ -76,68 +55,63 @@ class PortalConflictError(Exception):
     pass
 
 
-def mk_doc_payload(lab: str, award: str, doc_aliases: list, local_file_path: str) -> dict:
-    """Create a document payload for posting to the portal.
+class IGVFPostService:
+    """Service class to handle posting data to the portal."""
 
-    Args:
-        lab (str): The data submitter lab
-        award (str): The data submitter lab's award
-        doc_aliases (list): Document aliases
-        local_file_path (str): Path to the document attachment
+    def __init__(self, igvf_utils_api, data_obj_payload: igvf_payloads.Payload, upload_file: bool = False, resumed_posting: bool = False):
+        """
+        Initialize the IGVFPostService.
+        """
+        self.igvf_utils_api = igvf_utils_api
+        self.data_obj_payload = data_obj_payload
+        self.upload_file = upload_file
+        self.resumed_posting = resumed_posting
 
-    Returns:
-        dict: Document payload ready for posting
-    """
-    return dict(
-        aliases=doc_aliases,
-        lab=lab,
-        award=award,
-        document_type='pipeline parameters',
-        description='Terra workflow configuration for the single-cell pipeline run',
-        attachment={'path': local_file_path},
-        _profile='document'
-    )
+    def _get_conflict_object_id(self) -> str | None:
+        """Get the ID of a conflicting object, if it exists by aliases or MD5."""
+        # Check by alias first (preferred method)
+        if self.data_obj_payload.aliases:
+            existing_file = self.igvf_utils_api.get(
+                f"aliases:{self.data_obj_payload.aliases[0]}")
+            return existing_file.get('@id') if existing_file else None
 
+        # Fall back to MD5 check
+        if self.data_obj_payload.md5sum:
+            existing_file = self.igvf_utils_api.get(
+                f"md5:{self.data_obj_payload.md5sum}")
+            return existing_file.get('@id') if existing_file else None
 
-# Functions to create payloads
-def mk_anaset_docs_patching_payload(doc_aliases: list, analysis_set_acc: str, igvf_utils_api) -> dict:
-    """Create a payload for patching the analysis set with the document accession.
+        return None
 
-    Args:
-        doc_aliases (str): Document aliases
-        analysis_set_acc (str): Analysis set accession
-        igvf_utils_api (_type_): igvf utils API client
+    def _single_post_to_portal(self) -> str:
+        """POST a single data object to the portal, after checking for conflicts by MD5 or aliases."""
+        _schema_property = self.igvf_utils_api.get_profile_from_payload(
+            self.data_obj_payload).properties
+        # First check payload MD5 and aliases to see if the object already exists
+        existing_object_id = self._get_conflict_object_id(
+            self.igvf_utils_api, self.data_obj_payload)
+        # If conflict exists and not expecting it to, raise an error
+        if (existing_object_id is not None) and (not self.resumed_posting):
+            raise PortalConflictError(
+                f'{self.data_obj_payload.get("_profile").capitalize().replace("_", " ")} failed to accession due to conflict with an existing object: {existing_object_id}.')
+        # If conflict exists and patching is expected, return the existing object ID
+        if (existing_object_id is not None) and (self.resumed_posting):
+            return existing_object_id
+        # Post new object to portal if no conflict is expected
+        stdout = self.igvf_utils_api.post(
+            self.data_obj_payload, upload_file=self.upload_file, return_original_status_code=True, truncate_long_strings_in_payload_log=True)
+        return stdout[0]['uuid']
 
-    Returns:
-        dict: Payload for patching the analysis set
-    """
-    existing_docs = get_existing_analysis_set_docs(analysis_set_acc=analysis_set_acc,
-                                                   igvf_utils_api=igvf_utils_api)
-    if set(doc_aliases).issubset(set(existing_docs)):
-        return {}
-    new_docs_aliases = list(set(doc_aliases).union(set(existing_docs)))
-    return {
-        'documents': new_docs_aliases,
-        igvf_utils_api.IGVFID_KEY: f"/analysis-sets/{analysis_set_acc}/",
-        'uniform_pipeline_status': 'completed',
-        '_profile': 'analysis_set'
-    }
+    def post_payload(self, payload: dict, upload_file: bool = False, resumed_posting: bool = False) -> str:
+        """Post data to the portal."""
+        return self._single_post_to_portal(
+            igvf_data_payload=payload,
+            igvf_utils_api=self.igvf_utils_api,
+            upload_file=upload_file,
+            resumed_posting=resumed_posting
+        )
 
-
-# Functions to do IGVF portal posting and error handling
-def get_conflict_object_id(igvf_utils_api, igvf_data_payload: dict) -> str | None:
-    """Get the ID of a conflicting object, if it exists by aliases or MD5."""
-    if igvf_data_payload.get('aliases'):
-        existing_file_by_alias = igvf_utils_api.get(
-            f"aliases:{igvf_data_payload['aliases'][0]}")
-        if existing_file_by_alias:
-            return existing_file_by_alias['@id']
-    if igvf_data_payload.get('md5sum'):
-        existing_file_by_md5 = igvf_utils_api.get(
-            f"md5:{igvf_data_payload['md5sum']}")
-        if existing_file_by_md5:
-            return existing_file_by_md5['@id']
-    return None
+    def
 
 
 def single_post_to_portal(igvf_data_payload: dict, igvf_utils_api, upload_file: bool = False, resumed_posting: bool = False) -> str:
@@ -307,47 +281,6 @@ def post_single_qc_metric_to_portal(terra_data_record: pd.Series, qc_data_info: 
         return PostResult.Success(col_header=f'{qc_prefix}:{qc_data_info["object_type"]}', uuid=curr_post_res)
     except (requests.exceptions.HTTPError, PortalConflictError) as e:
         return PostResult.Failure(col_header=f'{qc_prefix}:{qc_data_info["object_type"]}', error=e)
-
-
-class PostService:
-    """Service class to handle posting data to the portal."""
-
-    def __init__(self, igvf_utils_api):
-        self.igvf_utils_api = igvf_utils_api
-
-    def post(self, payload: dict, upload_file: bool = False, resumed_posting: bool = False) -> str:
-        """Post data to the portal."""
-        return single_post_to_portal(
-            igvf_data_payload=payload,
-            igvf_utils_api=self.igvf_utils_api,
-            upload_file=upload_file,
-            resumed_posting=resumed_posting
-        )
-
-
-class TerraMetadata:
-    """Class to hold Terra metadata for posting to the portal."""
-
-    def __init__(self, workflow_id: str, workflow_name: str, workflow_version: str):
-        self.workflow_id = workflow_id
-        self.workflow_name = workflow_name
-        self.workflow_version = workflow_version
-
-    def get_workflow_info(self) -> dict:
-        return string_value_1
-
-    def get_file_path(self, col_header: str) -> str:
-        """Get the file path for a given column header."""
-        return f"gs://{self.workflow_id}/{col_header}"
-
-
-class MatrixFile:
-
-    def __init__(self, file_metadata: FileMetadata,):
-        self.file_metadata = file_metadata
-
-    def payload_mtx():
-        return dict(prop1=self.file_metadata.file_format, pro2=, pro3=)
 
 
 # Posting RNA data to the portal
