@@ -327,12 +327,69 @@ class IGVFAccessioning:
         return doc_post_mthd.post_to_portal()
 
 
-def post_single_pipeline_run(
-    terra_data_record: pd.Series, igvf_client_api, igvf_utils_api, upload_file: bool, config_file_path: str, doc_aliases: list[str], output_root_dir: str = '/igvf/data/', resumed_posting: bool = False
-) -> RunResult:
+def post_single_pipeline_run(terra_data_record: pd.Series,
+                             pipeline_params_info: igvf_payloads.PipelineParamsInfo,
+                             igvf_client_api,
+                             igvf_utils_api,
+                             output_root_dir: str = '/igvf/data/',
+                             upload_file: bool = False,
+                             resumed_posting: bool = False
+                             ) -> list[PostResult]:
+    """Post a single pipeline run to the portal.
+
+    Args:
+        terra_data_record (pd.Series): Single row of the Terra data table containing metadata for a pipeline run.
+        pipeline_params_info (igvf_payloads.PipelineParamsInfo): Information about the pipeline parameters.
+        igvf_client_api (_type_): IGVF client API instance.
+        igvf_utils_api (_type_): IGVF utils API instance.
+        output_root_dir (str, optional): Root directory for output files. Defaults to '/igvf/data/'.
+        upload_file (bool, optional): Whether to upload files. Defaults to False.
+        resumed_posting (bool, optional): Whether to resume posting. Defaults to False.
+
+    Returns:
+        list[PostResult]: List of PostResults.
+    """
+    # Terra metadata parsing
+    terra_metadata = terra_parse.TerraOutputMetadata(
+        terra_data_record=terra_data_record,
+        igvf_client_api=igvf_client_api
+    )
+    # Initialize IGVFAccessioning
+    igvf_accessioning = IGVFAccessioning(
+        igvf_utils_api=igvf_utils_api,
+        igvf_client_api=igvf_client_api,
+        terra_metadata=terra_metadata,
+        pipeline_params_info=pipeline_params_info,
+        upload_file=upload_file,
+        resumed_posting=resumed_posting,
+        root_output_dir=output_root_dir
+    )
+    # Post all relevant results
+    assays_to_post = terra_metadata.multiome_types
+
+    post_results = []
+    # Post RNAseq output if applicable
+    if 'RNAseq' in assays_to_post:
+        post_results += igvf_accessioning.post_rnaseq_output()
+
+    # Post ATACseq alignment output if applicable
+    if 'ATACseq' in assays_to_post:
+        post_results += igvf_accessioning.post_all_atac_alignment_output()
+        post_results += igvf_accessioning.post_all_atac_fragment_output()
+
+    # Post input pipe params document
+    post_results.append(igvf_accessioning.post_document())
+    return post_results
 
 
-def post_all_successful_runs(full_terra_data_table: pd.DataFrame, igvf_api, igvf_utils_api, upload_file: bool, config_file_collection: dict, output_root_dir: str = '/igvf/data/', resumed_posting: bool = False) -> list[PostResult]:
+def post_all_pipeline_runs_from_one_submission(terra_data_table: pd.DataFrame,
+                                               pipeline_params_info: igvf_payloads.PipelineParamsInfo,
+                                               igvf_client_api,
+                                               igvf_utils_api,
+                                               output_root_dir: str = '/igvf/data/',
+                                               upload_file: bool = False,
+                                               resumed_posting: bool = False
+                                               ) -> list[RunResult]:
     """Post all successful runs from a Terra data table to the portal.
 
     Args:
@@ -345,35 +402,37 @@ def post_all_successful_runs(full_terra_data_table: pd.DataFrame, igvf_api, igvf
         resumed_posting (bool, optional): Whether to patch an existing post. Defaults to False. See `single_post_to_portal` for more details.
 
     Returns:
-        list[PostResult]: PostResult objects
+        list[RunResult]: RunResult objects
     """
     midpt_post_anasets_file = os.path.join(
         output_root_dir, 'midpoint_posted_analysis_sets.txt')
     with open(midpt_post_anasets_file, 'a+') as f:
-        results = []
-        for _, curr_pipeline in full_terra_data_table.iterrows():
-            curr_config_file_info = config_file_collection[curr_pipeline['analysis_set_acc']]
-            pipeline_post_res = post_all_data_from_one_run(
+        run_results = []
+        for _, curr_pipeline in terra_data_table.iterrows():
+            pipeline_post_res = post_single_pipeline_run(
                 terra_data_record=curr_pipeline,
-                igvf_api=igvf_api,
+                pipeline_params_info=pipeline_params_info,
+                igvf_client_api=igvf_client_api,
                 igvf_utils_api=igvf_utils_api,
-                upload_file=upload_file,
-                config_file_path=curr_config_file_info.download_path,
-                doc_aliases=curr_config_file_info.doc_aliases,
                 output_root_dir=output_root_dir,
+                upload_file=upload_file,
                 resumed_posting=resumed_posting
             )
             # Once a full run is posted, write the AnaSet accession to a file
             # In case of interruption, we can skip those already posted
             f.write(f"{pipeline_post_res.analysis_set_acc}\n")
             f.flush()
-            results.append(pipeline_post_res)
+            run_results.append(RunResult(
+                analysis_set_acc=curr_pipeline['analysis_set_acc'],
+                post_results=pipeline_post_res,
+                finish_time=datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            ))
             time.sleep(0.1)  # Sleep to avoid hitting API rate limits
-    return results
+    return run_results
 
 
 # Functions to summarize POST status and add it to the output data table
-def summarize_post_status(post_results: list) -> pd.DataFrame:
+def summarize_post_status(run_results: list[RunResult]) -> pd.DataFrame:
     """Summarize the POST status of all data from a single pipeline run.
 
     Args:
@@ -383,7 +442,7 @@ def summarize_post_status(post_results: list) -> pd.DataFrame:
         pd.DataFrame: The POST status summary DataFrame
     """
     post_status_summary = {}
-    for result in post_results:
+    for result in run_results:
         accession_results = post_status_summary.setdefault(
             result.analysis_set_acc, {'time_stamp': result.finish_time})
         for post_res in result.post_results:
