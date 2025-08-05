@@ -122,7 +122,7 @@ class TerraOutputMetadata:
         self.igvf_api = igvf_client_api
         self.anaset_accession = self.terra_data_record['analysis_set_acc']
         self.taxa = self.terra_data_record['taxa']
-        self.multiome_type = _get_multiome_types(
+        self.multiome_types = _get_multiome_types(
             terra_data_record=self.terra_data_record)
 
     def _get_gs_path_for_terra_output_cols(self) -> str:
