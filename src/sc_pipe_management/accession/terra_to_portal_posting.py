@@ -90,7 +90,7 @@ class IGVFPostService:
 
         return None
 
-    def _single_post_to_portal(self) -> str:
+    def _single_post_to_portal(self) -> PostResult:
         """POST a single data object to the portal, after checking for conflicts by MD5 or aliases."""
         try:
             _schema_property = self.igvf_utils_api.get_profile_from_payload(
@@ -117,6 +117,16 @@ class IGVFPostService:
                 col_header=self.data_obj_payload.terra_output_name, uuid=new_uuid_generated)
         except (requests.exceptions.HTTPError, PortalConflictError) as e:
             # Handle errors
+            return PostResult.Failure(
+                col_header=self.data_obj_payload.terra_output_name, error=e)
+
+    def _single_patch_to_portal(self, analysis_set_acc: str) -> PostResult:
+        """PATCH a single data object to the portal, after checking for conflicts by MD5 or aliases."""
+        try:
+            self.igvf_utils_api.patch(self.data_obj_payload)
+            PostResult.Success(
+                col_header=self.data_obj_payload['_profile'], accession=analysis_set_acc)
+        except (requests.exceptions.HTTPError, PortalConflictError) as e:
             return PostResult.Failure(
                 col_header=self.data_obj_payload.terra_output_name, error=e)
 
@@ -326,6 +336,31 @@ class IGVFAccessioning:
 
         return doc_post_mthd.post_to_portal()
 
+    def patch_analysis_set(self, document_uuid: str) -> PostResult:
+        """Patch the analysis set with the new data."""
+        # Patch the analysis set with the new data
+        patch_payload = igvf_payloads.AnalysisSetPatchingPayload(
+            terra_metadata=self.terra_metadata,
+            input_params_doc_uuid=document_uuid,
+            igvf_api=self.igvf_client_api
+        )._get_patch_payload()
+
+        # If no patch payload is generated, return a failure result
+        if patch_payload is None:
+            return PostResult.Failure(
+                col_header='Analysis Set Patch',
+                error='No patch payload generated, possibly due to no changes in the analysis set.'
+            )
+
+        patch_mthd = IGVFPostService(
+            igvf_utils_api=self.igvf_utils_api,
+            data_obj_payload=patch_payload,
+            upload_file=False,
+            resumed_posting=self.resumed_posting
+        )
+
+        return patch_mthd._single_patch_to_portal(analysis_set_acc=self.terra_metadata.anaset_accession)
+
 
 def post_single_pipeline_run(terra_data_record: pd.Series,
                              pipeline_params_info: igvf_payloads.PipelineParamsInfo,
@@ -378,7 +413,14 @@ def post_single_pipeline_run(terra_data_record: pd.Series,
         post_results += igvf_accessioning.post_all_atac_fragment_output()
 
     # Post input pipe params document
-    post_results.append(igvf_accessioning.post_document())
+    document_post_result = igvf_accessioning.post_document()
+    post_results.append(document_post_result)
+
+    # Patch the analysis set with the new data
+    anaset_patch_result = igvf_accessioning.patch_analysis_set(
+        document_uuid=document_post_result.accession)
+    post_results.append(anaset_patch_result)
+
     return post_results
 
 
