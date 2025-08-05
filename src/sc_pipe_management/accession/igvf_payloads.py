@@ -296,11 +296,11 @@ class FragmentFilePayload:
         self.terra_data_record = self.terra_metadata.terra_data_record
         # The Terra UUIDs for this pipeline run
         self.terra_uuids = terra_metadata._parse_workflow_uuids_from_gs_path()
-        # Input file accessions
-        self.input_file_accessions = terra_metadata._get_input_file_accs_from_table(
-            assay_type=self.file_obj_metadata.assay_type)
         # The tabular file data class object based on the Terra output name
         self.file_obj_metadata = const.TABULAR_FILETYPES[self._terra_output_name]
+        # Input file accessions
+        self.input_file_accessions = self.terra_metadata._get_input_file_accs_from_table(
+            assay_type=self.file_obj_metadata.assay_type)
 
     @property
     def aliases(self) -> list[str]:
