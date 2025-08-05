@@ -8,6 +8,7 @@ import firecloud.api as fapi
 import os
 from datetime import datetime
 from functools import wraps
+import logging
 
 
 def read_exclusion_file(file_path: str) -> list:
@@ -154,7 +155,7 @@ def main():
         num_excluded = 0
     else:
         num_excluded = len(args.excluded_accs)
-    print(
+    logging.info(
         f'>>>>>>>>>>>>>> A total of {terra_table.shape[0]} pipeline runs found with {num_excluded} of which excluded.')
 
     # Download all workflow configs first (firecloud times out)
@@ -163,7 +164,8 @@ def main():
         terra_workspace=args.terra_workspace,
         terra_data_table=terra_table,
         output_root_dir=os.path.join(args.output_dir, 'workflow_configs'))
-    print(f'>>>>>>>>>>>>>> {len(pipeline_params_info)} configs downloaded')
+    logging.info(
+        f'>>>>>>>>>>>>>> {len(pipeline_params_info)} configs downloaded')
 
     # Get the IGVF API keys
     igvf_api_keys = api_tools.set_up_api_keys(
@@ -175,24 +177,29 @@ def main():
     igvf_utils_api = do_igvf_utils_api(
         igvf_api_keys=igvf_api_keys, post_endpoint=args.post_endpoint)
 
-    # Will return a list of Postres
-    portal_post_results = tr2igvf.post_all_successful_runs(full_terra_data_table=terra_table,
-                                                           igvf_api=igvf_client_api,
-                                                           igvf_utils_api=igvf_utils_api,
-                                                           upload_file=args.upload_file,
-                                                           pipeline_params_info=pipeline_params_info,
-                                                           output_root_dir=args.output_dir,
-                                                           resumed_posting=args.resumed_posting)
+    # Will return a list of accessioning results
+    portal_post_results = tr2igvf.post_all_pipeline_runs_from_one_submission(terra_data_table=terra_table,
+                                                                             igvf_api=igvf_client_api, pipeline_params_info=pipeline_params_info,
+                                                                             igvf_utils_api=igvf_utils_api,
+                                                                             output_root_dir=args.output_dir,
+                                                                             upload_file=args.upload_file,
+                                                                             resumed_posting=args.resumed_posting)
+
+    logging.info(
+        f'>>>>>>>>>>>>>> A total of {len(portal_post_results)} pipeline runs posted to the portal.')
 
     # Summarize into a table
-    portal_post_summary = acc_utils.summarize_post_status(
+    portal_post_summary = tr2igvf.summarize_post_status(
         post_results=portal_post_results)
-    updated_terra_table = acc_utils.add_post_status_summary_to_output_data_table(
+    updated_terra_table = tr2igvf.add_post_status_summary_to_output_data_table(
         full_terra_data_table=terra_table, post_status_df=portal_post_summary)
 
     # Save the updated terra table
-    acc_utils.save_pipeline_postres_tables(
+    tr2igvf.save_pipeline_postres_tables(
         pipeline_postres_table=portal_post_summary, updated_full_data_table=updated_terra_table, output_root_dir=args.output_dir)
+
+    logging.info(
+        f'>>>>>>>>>>>>>> Pipeline post results saved to {args.output_dir}')
 
 
 if __name__ == '__main__':
