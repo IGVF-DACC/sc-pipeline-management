@@ -534,10 +534,10 @@ class QCMetricsPayload:
         qc_payload = dict(lab=self.lab,
                           award=self.award,
                           aliases=self.alias,
-                          analysis_step_version=self.qc_data_info['analysis_step_version'],
-                          description=self.qc_data_info['description'],
+                          analysis_step_version=self.qc_data_info.analysis_step_version,
+                          description=self.qc_data_info.description,
                           quality_metric_of=self.qc_of,
-                          _profile=self.qc_data_info['object_type']
+                          _profile=self.qc_data_info.object_type
                           )
         # Downloaded QC files
         qc_file_download_info = self._get_qc_files()
