@@ -6,6 +6,7 @@ import firecloud.api as fapi
 import firecloud.errors as FireCloudServerError
 import json
 import dataclasses
+from typing import Protocol
 
 from sc_pipe_management.accession.parse_terra_metadata import (
     TerraJobUUIDs,
@@ -103,6 +104,24 @@ def _download_qc_file_from_gcp(gs_file_path: str, downloaded_dir: str) -> str:
     return downloaded_file_path
 
 
+class Payload(Protocol):
+    """Protocol for payload classes to implement."""
+
+    def get_payload(self) -> dict[str, any]:
+        """Method to get the payload as a dictionary."""
+        pass
+
+    @property
+    def aliases(self) -> list[str]:
+        """Property to get the aliases of the payload."""
+        pass
+
+    @property
+    def md5sum(self) -> str | None:
+        """Property to get the MD5 sum of the payload."""
+        pass
+
+
 class MatrixFilePayload:
     """Class to create a matrix file payload for a given Terra output name."""
 
@@ -121,17 +140,27 @@ class MatrixFilePayload:
         # The genome assembly info
         self.assembly = GENOME_ASSEMBLY_INFO.get(self.terra_metadata.taxa)
 
-    def _get_payload(self):
-        """Get the matrix file payload for the given Terra output name."""
-        # Get the file aliases
-        mtx_file_aliases = _get_file_aliases(col_header=self.terra_output_name,
-                                             lab=self.lab,
-                                             terra_data_record=self.terra_metadata.terra_data_record,
-                                             terra_uuids=self.terra_uuids)
-        # Compute MD5
-        mtx_file_md5sum = calculate_gsfile_hex_hash(
+    @property
+    def aliases(self) -> list[str]:
+        """Property to get the aliases of the payload."""
+        return _get_file_aliases(col_header=self.terra_output_name,
+                                 lab=self.lab,
+                                 terra_data_record=self.terra_metadata.terra_data_record,
+                                 terra_uuids=self.terra_uuids)
+
+    @property
+    def md5sum(self) -> str:
+        """Property to get the MD5 sum of the payload."""
+        return calculate_gsfile_hex_hash(
             file_path=self.terra_data_record[self.terra_output_name]
         )
+
+    def get_payload(self):
+        """Get the matrix file payload for the given Terra output name."""
+        # Get the file aliases
+        mtx_file_aliases = self.aliases
+        # Compute MD5
+        mtx_file_md5sum = self.md5sum
         # Compute derived_from and reference files
         mtx_file_input_files = self.terra_metatadata._get_input_file_accs_from_table(
             assay_type=self.file_obj_metadata.assay_type)
@@ -199,29 +228,35 @@ class AlignmentFilePayload:
         else:
             return False
 
-    def _get_payload(self):
-        """Get the tabular file payload for the given Terra output name."""
-        # Get the file aliases
-        alignment_file_aliases = _get_file_aliases(col_header=self.terra_output_name,
-                                                   lab=self.lab,
-                                                   terra_data_record=self.terra_metadata.terra_data_record,
-                                                   terra_uuids=self.terra_uuids)
-        # Compute MD5
-        alignment_file_md5sum = calculate_gsfile_hex_hash(
+    @property
+    def aliases(self) -> list[str]:
+        """Property to get the aliases of the payload."""
+        return _get_file_aliases(col_header=self.terra_output_name,
+                                 lab=self.lab,
+                                 terra_data_record=self.terra_metadata.terra_data_record,
+                                 terra_uuids=self.terra_uuids)
+
+    @property
+    def md5sum(self) -> str | None:
+        """Property to get the MD5 sum of the payload."""
+        return calculate_gsfile_hex_hash(
             file_path=self.terra_data_record[self.terra_output_name]
         )
+
+    def get_payload(self):
+        """Get the tabular file payload for the given Terra output name."""
         # Make Alignment file payload
         alignment_file_payload = dict(award=self.award,
                                       lab=self.lab,
                                       analysis_step_version=self.file_obj_metadata.analysis_step_version,
-                                      aliases=alignment_file_aliases,
+                                      aliases=self.aliases,
                                       controlled_access=self._get_access_status(),
                                       file_format=self.file_obj_metadata.file_format,
                                       content_type=self.file_obj_metadata.content_type,
                                       filtered=False,
                                       derived_from=self.input_file_accessions.get_derived_from(),
                                       file_set=self.terra_data_record['analysis_set_acc'],
-                                      md5sum=alignment_file_md5sum,
+                                      md5sum=self.md5sum,
                                       submitted_file_name=self.terra_data_record[self.terra_output_name],
                                       reference_files=self.input_file_accessions.reference_files,
                                       redacted=False,
@@ -254,26 +289,32 @@ class FragmentFilePayload:
         # The tabular file data class object based on the Terra output name
         self.file_obj_metadata = TABULAR_FILETYPES[self.terra_output_name]
 
-    def _get_payload(self):
-        """Get the tabular file payload for the given Terra output name."""
-        # Get the file aliases
-        fragment_file_aliases = _get_file_aliases(col_header=self.terra_output_name,
-                                                  lab=self.lab,
-                                                  terra_data_record=self.terra_metadata.terra_data_record,
-                                                  terra_uuids=self.terra_uuids)
-        # Compute MD5
-        fragment_file_md5sum = calculate_gsfile_hex_hash(
+    @property
+    def aliases(self) -> list[str]:
+        """Property to get the aliases of the payload."""
+        return _get_file_aliases(col_header=self.terra_output_name,
+                                 lab=self.lab,
+                                 terra_data_record=self.terra_metadata.terra_data_record,
+                                 terra_uuids=self.terra_uuids)
+
+    @property
+    def md5sum(self) -> str | None:
+        """Property to get the MD5 sum of the payload."""
+        return calculate_gsfile_hex_hash(
             file_path=self.terra_data_record[self.terra_output_name]
         )
+
+    def get_payload(self):
+        """Get the tabular file payload for the given Terra output name."""
         # Make Fragment file payload
         fragment_file_payload = dict(award=self.award,
                                      lab=self.lab,
                                      analysis_step_version=self.file_obj_metadata.analysis_step_version,
-                                     aliases=fragment_file_aliases,
+                                     aliases=self.aliases,
                                      content_type=self.file_obj_metadata.content_type,
                                      controlled_access=False,
                                      file_format=self.file_obj_metadata.file_format,
-                                     md5sum=fragment_file_md5sum,
+                                     md5sum=self.md5sum,
                                      derived_from=self.input_file_accessions.get_derived_from(),
                                      submitted_file_name=self.terra_data_record[self.terra_output_name],
                                      file_set=self.terra_data_record['analysis_set_acc'],
@@ -308,26 +349,32 @@ class IndexFilePayload:
         # The derived_from file accession
         self.derived_from = list(set(derived_from))
 
-    def _get_payload(self):
-        """Get the tabular file payload for the given Terra output name."""
-        # Get the file aliases
-        index_file_aliases = _get_file_aliases(col_header=self.terra_output_name,
-                                               lab=self.lab,
-                                               terra_data_record=self.terra_data_record,
-                                               terra_uuids=self.terra_uuids)
-        # Compute MD5
-        index_file_md5sum = calculate_gsfile_hex_hash(
+    @property
+    def aliases(self) -> list[str]:
+        """Property to get the aliases of the payload."""
+        return _get_file_aliases(col_header=self.terra_output_name,
+                                 lab=self.lab,
+                                 terra_data_record=self.terra_metadata.terra_data_record,
+                                 terra_uuids=self.terra_uuids)
+
+    @property
+    def md5sum(self) -> str | None:
+        """Property to get the MD5 sum of the payload."""
+        return calculate_gsfile_hex_hash(
             file_path=self.terra_data_record[self.terra_output_name]
         )
+
+    def get_payload(self):
+        """Get the tabular file payload for the given Terra output name."""
         # Make Index file payload
         index_file_payload = dict(award=self.award,
                                   lab=self.lab,
                                   analysis_step_version=self.file_obj_metadata.analysis_step_version,
-                                  aliases=index_file_aliases,
+                                  aliases=self.aliases,
                                   content_type='index',
                                   controlled_access=self.file_obj_metadata.controlled_access,
                                   file_format=self.file_obj_metadata.file_format,
-                                  md5sum=index_file_md5sum,
+                                  md5sum=self.md5sum,
                                   derived_from=self.derived_from,
                                   submitted_file_name=self.terra_data_record[self.terra_output_name],
                                   file_set=self.terra_data_record['analysis_set_acc'],
@@ -416,22 +463,28 @@ class QCMetricsPayload:
             paths_of_attachment_files=download_attachment_files
         )
 
-    def _make_payload(self):
-        curr_qc_file_dir = os.path.join(
-            self.output_root_dir, 'qc_metrics', self.terra_data_record['analysis_set_acc'])
-        if not os.path.exists(curr_qc_file_dir):
-            os.makedirs(curr_qc_file_dir)
-        # QC object aliases
-        self._qc_obj_aliases = self._mk_qc_obj_aliases(
+    @property
+    def alias(self) -> list[str]:
+        return self._mk_qc_obj_aliases(
             curr_workflow_config=self.terra_uuids,
             analysis_set_acc=self.terra_data_record['analysis_set_acc'],
             qc_prefix=self.terra_output_name,
             lab=self.lab
         )
-        # Base QC object payload
+
+    @property
+    def md5sum(self):
+        return None
+
+    def make_payload(self):
+        curr_qc_file_dir = os.path.join(
+            self.output_root_dir, 'qc_metrics', self.terra_data_record['analysis_set_acc'])
+        if not os.path.exists(curr_qc_file_dir):
+            os.makedirs(curr_qc_file_dir)
+        # QC object payload
         qc_payload = dict(lab=self.lab,
                           award=self.award,
-                          aliases=self.qc_obj_aliases,
+                          aliases=self.alias,
                           analysis_step_version=self.qc_data_info['analysis_step_version'],
                           description=self.qc_data_info['description'],
                           quality_metric_of=self.qc_of,
@@ -494,7 +547,7 @@ class PipelineParamsInfo:
             raise FireCloudServerError(code=input_params_request.status_code,
                                        message=f'Error parsing workflow input params for{anaset_accession}. No inputs found.')
 
-    def _get_all_input_params(self) -> dict:
+    def get_all_input_params(self) -> dict:
         """Get the workflow input configuration JSON for all submissions and workflow IDs."""
         all_input_params = {}
         for terra_data_record in self.terra_datable.iterrows():
@@ -526,12 +579,21 @@ class DocumentPayload:
         """Create a list of document aliases for the workflow configuration."""
         return [f'igvf-dacc-processing-pipeline:{self.terra_uuids.input_param_aliases()}_pipeline_config']
 
-    def _get_payload(self) -> dict:
+    @property
+    def aliases(self) -> list[str]:
+        """Property to get the aliases of the payload."""
+        return self._mk_doc_aliases()
+
+    @property
+    def md5sum(self) -> None:
+        return None
+
+    def get_payload(self) -> dict:
         """Get the document payload for the given Terra output name."""
         # local file path for the workflow configuration JSON
         doc_payload = dict(award=self.award,
                            lab=self.lab,
-                           aliases=self._mk_doc_aliases(),
+                           aliases=self.aliases,
                            content_type='application/json',
                            document_type='pipeline parameters',
                            file_format='json',
