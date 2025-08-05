@@ -11,6 +11,8 @@ import time
 from itertools import chain
 
 import sc_pipe_management.accession.igvf_payloads as igvf_payloads
+import sc_pipe_management.accession.parse_terra_metadata as terra_parse
+import sc_pipe_management.accession.constants as const
 
 
 # TODO:\
@@ -83,6 +85,15 @@ class IGVFPostService:
 
         return None
 
+    def _midway_failing_chained_posting(will_fail_col_headers: list[str]) -> PostResult:
+        """Return a PostResult indicating that the posting failed midway due to some objects already posted."""
+        midway_fail_results = []
+        for col_header in will_fail_col_headers:
+            midway_fail_results.append(PostResult.Failure(
+                col_header=col_header,
+                error=f'Cannot post {col_header} because its linked object failed to post.'))
+        return midway_fail_results
+
     def _single_post_to_portal(self) -> str:
         """POST a single data object to the portal, after checking for conflicts by MD5 or aliases."""
         _schema_property = self.igvf_utils_api.get_profile_from_payload(
@@ -102,16 +113,56 @@ class IGVFPostService:
             self.data_obj_payload, upload_file=self.upload_file, return_original_status_code=True, truncate_long_strings_in_payload_log=True)
         return stdout[0]['uuid']
 
-    def post_payload(self, payload: dict, upload_file: bool = False, resumed_posting: bool = False) -> str:
+    def get_unchained_new_uuid_generated(self) -> str:
         """Post data to the portal."""
-        return self._single_post_to_portal(
-            igvf_data_payload=payload,
-            igvf_utils_api=self.igvf_utils_api,
-            upload_file=upload_file,
-            resumed_posting=resumed_posting
-        )
+        try:
+            new_uuid_generated = self._single_post_to_portal()
+            return PostResult.Success(
+                col_header=self.data_obj_payload.terra_output_name, uuid=new_uuid_generated)
+        except (requests.exceptions.HTTPError, PortalConflictError) as e:
+            # Handle errors
+            return PostResult.Failure(col_header=self.data_obj_payload.terra_output_name, error=e)
 
-    def
+    def get_chained_new_uuid_generated(self, lead_chain_post_results: list[PostResult]) -> list[PostResult]:
+        """Post data to the portal, handling chained objects."""
+        # Get a list of new UUIDs generated from the first order of post results
+        new_uuid_generated = [
+            res.uuid for res in lead_chain_post_results if res.error is None]
+
+        # If Post failed (returned an empty list), return failure results
+        if not new_uuid_generated:
+            lead_chain_post_results.append(PostResult.Failure(
+                col_header=self.data_obj_payload.terra_output_name,
+                error='Cannot post QC metrics because the lead object failed to post.'))
+            return lead_chain_post_results
+
+
+class PostOneFullRun:
+
+    def __init__(self, igvf_utils_api, terra_metadata: terra_parse.TerraOutputMetadata, output_root_dir: str = '/igvf/data/', upload_file: bool = False, resumed_posting: bool = False):
+        """
+        Initialize the PostOneFullRun.
+        """
+        self.igvf_utils_api = igvf_utils_api
+        self.terra_metadata = terra_metadata
+        self.terra_data_record = self.terra_metadata.terra_data_record
+        self.output_root_dir = output_root_dir
+        self.upload_file = upload_file
+        self.resumed_posting = resumed_posting
+
+    def get_matrix_file_post_results(self) -> list[PostResult]:
+        """Post all RNA data as matrix files to the portal (H5AD, tarball, and QC metrics)."""
+        # Post RNA data
+        for terra_output_name in terra_parse.TERRA_OUTPUT_TABLE_COLUMN_TYPES['matrix_file'].keys():
+        return terra_parse.post_all_rna_data_to_portal(
+            terra_data_record=self.terra_data_record,
+            lab=self.terra_metadata.lab,
+            award=self.terra_metadata.award,
+            igvf_utils_api=self.igvf_utils_api,
+            upload_file=self.upload_file,
+            output_root_dir=self.output_root_dir,
+            resumed_posting=self.resumed_posting
+        )
 
 
 def single_post_to_portal(igvf_data_payload: dict, igvf_utils_api, upload_file: bool = False, resumed_posting: bool = False) -> str:
