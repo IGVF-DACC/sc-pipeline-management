@@ -53,7 +53,7 @@ class InputFileAccs:
             self.rna_barcode_replacement
         derived_from_accessions = [
             acc for acc in all_accessions if acc is not None]
-        return derived_from_accessions
+        return sorted(derived_from_accessions)
 
 
 @dataclasses.dataclass(frozen=True)
