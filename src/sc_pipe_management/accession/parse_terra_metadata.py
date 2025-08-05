@@ -149,6 +149,13 @@ class TerraOutputMetadata:
                              workflow_id=uuids[2],
                              subworkflow_id=uuids[3])
 
+    def _parse_igvf_accessions_from_urls(self, igvf_file_urls: list[str]) -> list[str]:
+        """Parse IGVF accessions from file URLs."""
+        igvf_file_urls = [url for url in igvf_file_urls if url is not None]
+        cleaned_igvf_file_urls = _parse_terra_str_list(
+            terra_str_lists=igvf_file_urls)
+        return [IGVF_URL_PATH_REGEX.search(str(url)).group(1) for url in cleaned_igvf_file_urls if IGVF_URL_PATH_REGEX.search(str(url)) is not None]
+
     def _get_input_file_accs_from_table(self, assay_type: str) -> list:
         """Get a list of sequence file accessions (for derived_from) from Terra table."""
         input_file_info = INPUT_FILE_HEADERS_BY_ASSAY_TYPE.get(assay_type)
