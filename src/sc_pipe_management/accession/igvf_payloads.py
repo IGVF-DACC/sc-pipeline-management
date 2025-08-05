@@ -205,11 +205,11 @@ class AlignmentFilePayload:
         self.terra_data_record = self.terra_metadata.terra_data_record
         # The Terra UUIDs for this pipeline run
         self.terra_uuids = terra_metadata._parse_workflow_uuids_from_gs_path()
-        # Input file accessions
-        self.input_file_accessions = terra_metadata._get_input_file_accs_from_table(
-            assay_type=self.file_obj_metadata.assay_type)
         # The tabular file data class object based on the Terra output name
         self.file_obj_metadata = const.ALIGNMENT_FILETYPES[self._terra_output_name]
+        # Input file accessions
+        self.input_file_accessions = self.terra_metadata._get_input_file_accs_from_table(
+            assay_type=self.file_obj_metadata.assay_type)
 
     def _get_access_status(self) -> bool:
         """Get file controlled_access status. If any seq data is controlled access, the output data inherit that.
@@ -380,7 +380,7 @@ class IndexFilePayload:
         return _get_file_aliases(col_header=self.terra_output_name,
                                  lab=self.lab,
                                  terra_data_record=self.terra_metadata.terra_data_record,
-                                 terra_uuids=self.terra_uuids)
+                                 terra_uuids=self.terra_uuids.aliases())
 
     @property
     def submitted_file_name(self) -> str:

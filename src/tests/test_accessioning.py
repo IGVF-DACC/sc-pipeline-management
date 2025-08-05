@@ -297,20 +297,24 @@ class TestAlignmentFilePayload:
 
     def test_get_payload(self, alignment_payload):
         """Test get_payload method."""
-        with patch.object(alignment_payload, 'aliases', ['test-alias']):
-            with patch.object(alignment_payload, 'md5sum', 'abc123'):
-                payload = alignment_payload.get_payload()
+        with patch('sc_pipe_management.accession.igvf_payloads._get_file_aliases') as mock_aliases, \
+                patch('sc_pipe_management.accession.igvf_payloads.api_tools.calculate_gsfile_hex_hash') as mock_hash:
 
-                # Check required fields
-                assert payload['award'] == '/awards/test-award/'
-                assert payload['lab'] == '/labs/test-lab/'
-                assert payload['aliases'] == ['test-alias']
-                assert payload['md5sum'] == 'abc123'
-                assert payload['file_set'] == 'IGVFDS123ABC'
-                assert payload['_profile'] == 'alignment_file'
-                assert payload['filtered'] is False
-                assert payload['redacted'] is False
-                assert 'controlled_access' in payload
+            mock_aliases.return_value = ['test-alias']
+            mock_hash.return_value = 'abc123'
+
+            payload = alignment_payload.get_payload()
+
+            # Check required fields
+            assert payload['award'] == '/awards/test-award/'
+            assert payload['lab'] == '/labs/test-lab/'
+            assert payload['aliases'] == ['test-alias']
+            assert payload['md5sum'] == 'abc123'
+            assert payload['file_set'] == 'IGVFDS123ABC'
+            assert payload['_profile'] == 'alignment_file'
+            assert payload['filtered'] is False
+            assert payload['redacted'] is False
+            assert 'controlled_access' in payload
 
 
 class TestFragmentFilePayload:
