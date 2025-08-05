@@ -31,12 +31,6 @@ fapi._set_session()
 
 
 @dataclasses.dataclass(frozen=True)
-class WorkflowConfigInfo:
-    doc_aliases: list[str]
-    download_path: str
-
-
-@dataclasses.dataclass(frozen=True)
 class QCFileDownloadInfo:
     paths_of_metadata_files: list[str]
     paths_of_attachment_files: list[str]
