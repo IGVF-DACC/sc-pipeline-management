@@ -526,7 +526,7 @@ class TestQCMetricsPayload:
                 root_output_dir=temp_dir
             )
 
-    def test_init(self, qc_payload, mock_terra_metadata, mock_igvf_api):
+    def test_init(self, qc_payload, mock_igvf_api):
         """Test QCMetricsPayload initialization."""
         assert qc_payload.terra_output_name == 'gene_count_metrics'
         assert qc_payload.lab == '/labs/test-lab/'
@@ -669,6 +669,35 @@ class TestPipelineParamsInfo:
 
         with pytest.raises(Exception):  # FireCloudServerError
             pipeline_params._get_single_input_params(mock_terra_metadata)
+
+    def test_get_all_input_params_success(self, pipeline_params, sample_terra_datable):
+        """Test PipelineParamsInfo.get_all_input_params loops over terra data table and collects input params."""
+        # Prepare two mock TerraOutputMetadata objects
+        mock_terra_metadata_1 = Mock()
+        mock_terra_metadata_1.analysis_set_acc = 'IGVFDS123ABC'
+        mock_terra_metadata_2 = Mock()
+        mock_terra_metadata_2.analysis_set_acc = 'IGVFDS456DEF'
+
+        # Patch TerraOutputMetadata to return the correct mock for each row
+        with patch('sc_pipe_management.accession.parse_terra_metadata.TerraOutputMetadata') as mock_constructor, \
+                patch.object(pipeline_params, '_get_single_input_params') as mock_get_single:
+            mock_constructor.side_effect = [
+                mock_terra_metadata_1, mock_terra_metadata_2]
+            mock_get_single.side_effect = [
+                '/path/to/config1.json', '/path/to/config2.json']
+
+            # Call the actual method under test
+            result = pipeline_params.get_all_input_params()
+
+            # Assertions
+            assert result == {
+                'IGVFDS123ABC': '/path/to/config1.json',
+                'IGVFDS456DEF': '/path/to/config2.json'
+            }
+            assert mock_constructor.call_count == 2
+            assert mock_get_single.call_count == 2
+            mock_get_single.assert_any_call(mock_terra_metadata_1)
+            mock_get_single.assert_any_call(mock_terra_metadata_2)
 
 
 class TestDocumentPayload:

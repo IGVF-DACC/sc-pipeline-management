@@ -558,7 +558,7 @@ class PipelineParamsInfo:
         self.terra_datable = terra_datable
 
     def _get_single_input_params(self, terra_metadata: terra_parse.TerraOutputMetadata) -> str:
-        """Get the workflow input configuration JSON for a given submission and workflow ID."""
+        """Get the workflow input configuration JSON file path for a given submission and workflow ID."""
         terra_uuids = terra_metadata._parse_workflow_uuids_from_gs_path()
         anaset_accession = terra_metadata.analysis_set_acc
         # Firecloud API call to get the workflow metadata
