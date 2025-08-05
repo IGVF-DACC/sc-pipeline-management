@@ -680,6 +680,8 @@ class AnalysisSetPatchingPayload:
 
     def _get_patch_payload(self) -> dict | None:
         """Get the patch payload for the analysis set."""
+        if self.input_params_doc_uuid is None:
+            return None
         existing_anaset_doc_uuids = self._get_existing_analysis_set_docs()
         if self.input_params_doc_uuid in existing_anaset_doc_uuids:
             return None
