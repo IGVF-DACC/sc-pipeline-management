@@ -57,6 +57,11 @@ class PortalConflictError(Exception):
     pass
 
 
+class PortalPostError(Exception):
+    """Custom exception for when a POST to the portal fails."""
+    pass
+
+
 class IGVFPostService:
     """Service class to handle posting data to the portal."""
 
@@ -85,15 +90,6 @@ class IGVFPostService:
 
         return None
 
-    def _midway_failing_chained_posting(will_fail_col_headers: list[str]) -> PostResult:
-        """Return a PostResult indicating that the posting failed midway due to some objects already posted."""
-        midway_fail_results = []
-        for col_header in will_fail_col_headers:
-            midway_fail_results.append(PostResult.Failure(
-                col_header=col_header,
-                error=f'Cannot post {col_header} because its linked object failed to post.'))
-        return midway_fail_results
-
     def _single_post_to_portal(self) -> str:
         """POST a single data object to the portal, after checking for conflicts by MD5 or aliases."""
         _schema_property = self.igvf_utils_api.get_profile_from_payload(
@@ -110,15 +106,23 @@ class IGVFPostService:
             return existing_object_id
         # Post new object to portal if no conflict is expected
         stdout = self.igvf_utils_api.post(
-            self.data_obj_payload, upload_file=self.upload_file, return_original_status_code=True, truncate_long_strings_in_payload_log=True)
-        return stdout[0]['uuid']
+            self.data_obj_payload, upload_file=False, return_original_status_code=True, truncate_long_strings_in_payload_log=True)
+        new_uuid_generated = stdout[0]['uuid']
+        if not new_uuid_generated:
+            raise PortalPostError(
+                f'Failed to accession data object {self.data_obj_payload.get("_profile")} to the portal.')
+        if self.upload_file:
+            self.igvf_utils_api.upload_file(
+                file_id=new_uuid_generated, file_path=self.data_obj_payload.submitted_file_name)
+        return new_uuid_generated
 
     def get_unchained_new_uuid_generated(self) -> str:
         """Post data to the portal."""
         try:
             new_uuid_generated = self._single_post_to_portal()
-            return PostResult.Success(
-                col_header=self.data_obj_payload.terra_output_name, uuid=new_uuid_generated)
+            if new_uuid_generated:
+                return PostResult.Success(
+                    col_header=self.data_obj_payload.terra_output_name, uuid=new_uuid_generated)
         except (requests.exceptions.HTTPError, PortalConflictError) as e:
             # Handle errors
             return PostResult.Failure(col_header=self.data_obj_payload.terra_output_name, error=e)
@@ -137,7 +141,11 @@ class IGVFPostService:
             return lead_chain_post_results
 
 
-class PostOneFullRun:
+def post_one_full_run(terra_data_record: pd.Series, igvf_client_api, igvf_utils_api, output_root_dir: str = '/igvf/data/', upload_file: bool = False, resumed_posting: bool = False) -> list[RunResult]:
+    terra_metadata = terra_parse.TerraOutputMetadata(
+        terra_data_record=terra_data_record,
+        igvf_client_api=igvf_utils_api
+    )
 
     def __init__(self, igvf_utils_api, terra_metadata: terra_parse.TerraOutputMetadata, output_root_dir: str = '/igvf/data/', upload_file: bool = False, resumed_posting: bool = False):
         """
@@ -152,8 +160,18 @@ class PostOneFullRun:
 
     def get_matrix_file_post_results(self) -> list[PostResult]:
         """Post all RNA data as matrix files to the portal (H5AD, tarball, and QC metrics)."""
-        # Post RNA data
-        for terra_output_name in terra_parse.TERRA_OUTPUT_TABLE_COLUMN_TYPES['matrix_file'].keys():
+        mtx_files_post_res = []
+        for terra_output_name in list(const.MATRIX_FILETYPES.keys()):
+            curr_mtx_file_payload = igvf_payloads.MatrixFilePayload(
+                terra_data_record=self.terra_data_record,
+                terra_output_name=terra_output_name
+            )
+            curr_post_mthd = IGVFPostService(
+                igvf_utils_api=self.igvf_utils_api,
+                data_obj_payload=curr_mtx_file_payload,
+                upload_file=self.upload_file,
+                resumed_posting=self.resumed_posting
+            )
         return terra_parse.post_all_rna_data_to_portal(
             terra_data_record=self.terra_data_record,
             lab=self.terra_metadata.lab,
