@@ -796,46 +796,37 @@ class TestAnalysisSetPatchingPayload:
         )
 
     def test_init(self, patching_payload, mock_terra_metadata, mock_igvf_utils_api):
-        """Test AnalysisSetPatchingPayload initialization."""
+        """Test initialization."""
         assert patching_payload.analysis_set_acc == 'IGVFDS123ABC'
         assert patching_payload.input_params_doc_uuid == 'doc-uuid-123'
         assert patching_payload.igvf_utils_api == mock_igvf_utils_api
 
     def test_get_existing_analysis_set_docs_no_docs(self, patching_payload):
-        """Test _get_existing_analysis_set_docs when no documents exist."""
-        # Mock analysis set with no documents
+        """Should return empty list if no documents exist."""
         patching_payload.igvf_utils_api.get.return_value = {'documents': None}
-
         result = patching_payload._get_existing_analysis_set_docs()
         assert result == []
 
     def test_get_existing_analysis_set_docs_with_docs(self, patching_payload):
-        """Test _get_existing_analysis_set_docs with existing documents."""
-        # Mock analysis set with documents
+        """Should return UUIDs for existing documents."""
         patching_payload.igvf_utils_api.get.side_effect = [
-            {'documents': ['/documents/doc1/', '/documents/doc2/']},
+            {'documents': ['/documents/uuid1/', '/documents/uuid2/']},
             {'uuid': 'uuid1'},
             {'uuid': 'uuid2'}
         ]
-
         result = patching_payload._get_existing_analysis_set_docs()
-        assert len(result) == 2
-        assert 'uuid1' in result
-        assert 'uuid2' in result
+        assert result == ['uuid1', 'uuid2']
 
     def test_get_patch_payload_doc_already_exists(self, patching_payload):
-        """Test _get_patch_payload when document already exists."""
-        with patch.object(patching_payload, '_get_existing_analysis_set_docs',
-                          return_value=['doc-uuid-123', 'other-uuid']):
+        """Should return None if doc already exists."""
+        with patch.object(patching_payload, '_get_existing_analysis_set_docs', return_value=['doc-uuid-123', 'other-uuid']):
             result = patching_payload._get_patch_payload()
             assert result is None
 
     def test_get_patch_payload_new_doc(self, patching_payload):
-        """Test _get_patch_payload when document is new."""
-        with patch.object(patching_payload, '_get_existing_analysis_set_docs',
-                          return_value=['other-uuid']):
+        """Should return patch payload if doc is new."""
+        with patch.object(patching_payload, '_get_existing_analysis_set_docs', return_value=['other-uuid']):
             result = patching_payload._get_patch_payload()
-
             assert result is not None
             assert result['@id'] == '/analysis-sets/IGVFDS123ABC/'
             assert result['uniform_pipeline_status'] == 'completed'

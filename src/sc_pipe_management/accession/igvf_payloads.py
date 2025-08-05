@@ -671,12 +671,7 @@ class AnalysisSetPatchingPayload:
             f'/analysis-sets/{self.analysis_set_acc}')
         if not analysis_set_obj.get('documents'):
             return []
-        existing_doc_ids = analysis_set_obj['documents']
-        all_existing_doc_uuids = set()
-        for doc_id in existing_doc_ids:
-            doc_obj = self.igvf_utils_api.get(doc_id)
-            all_existing_doc_uuids.update(doc_obj['uuid'])
-        return sorted(all_existing_doc_uuids)
+        return sorted([doc_uuid.split('/')[-2] for doc_uuid in analysis_set_obj['documents']])
 
     def _get_patch_payload(self) -> dict | None:
         """Get the patch payload for the analysis set."""
