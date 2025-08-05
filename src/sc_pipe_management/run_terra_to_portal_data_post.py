@@ -1,6 +1,8 @@
 import igvf_and_terra_api_tools as api_tools
-import terra_to_portal_posting as tr2igvf
-import accessioning_utils as acc_utils
+import sc_pipe_management.accession.igvf_payloads as igvf_payloads
+import sc_pipe_management.accession.parse_terra_metadata as terra_parse
+import sc_pipe_management.accession.constants as const
+import sc_pipe_management.accession.terra_to_portal_posting as tr2igvf
 import argparse
 import firecloud.api as fapi
 import os
@@ -156,12 +158,12 @@ def main():
         f'>>>>>>>>>>>>>> A total of {terra_table.shape[0]} pipeline runs found with {num_excluded} of which excluded.')
 
     # Download all workflow configs first (firecloud times out)
-    config_file_collection = acc_utils.download_all_workflow_config_jsons(
+    pipeline_params_info = igvf_payloads.PipelineParamsInfo(
         terra_namespace=args.terra_namespace,
         terra_workspace=args.terra_workspace,
         terra_data_table=terra_table,
         output_root_dir=os.path.join(args.output_dir, 'workflow_configs'))
-    print(f'>>>>>>>>>>>>>> {len(config_file_collection)} configs downloaded')
+    print(f'>>>>>>>>>>>>>> {len(pipeline_params_info)} configs downloaded')
 
     # Get the IGVF API keys
     igvf_api_keys = api_tools.set_up_api_keys(
@@ -178,7 +180,7 @@ def main():
                                                            igvf_api=igvf_client_api,
                                                            igvf_utils_api=igvf_utils_api,
                                                            upload_file=args.upload_file,
-                                                           config_file_collection=config_file_collection,
+                                                           pipeline_params_info=pipeline_params_info,
                                                            output_root_dir=args.output_dir,
                                                            resumed_posting=args.resumed_posting)
 

@@ -559,9 +559,9 @@ class QCMetricsPayload:
 
 
 class PipelineParamsInfo:
-    def __init__(self, terra_datable: pd.DataFrame, output_root_dir: str = '/igvf/data/'):
-        self.terra_namespace = 'DACC_ANVIL'
-        self.terra_workspace = 'IGVF Single-Cell Data Processing'
+    def __init__(self, terra_datable: pd.DataFrame, terra_namespace: str = 'DACC_ANVIL', terra_workspace: str = 'IGVF Single-Cell Data Processing', output_root_dir: str = '/igvf/data/'):
+        self.terra_namespace = terra_namespace
+        self.terra_workspace = terra_workspace
         self.output_root_dir = output_root_dir
         # Initialize with Terra metadata class object
         self.terra_datable = terra_datable
