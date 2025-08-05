@@ -463,22 +463,21 @@ class QCMetricsPayload:
         if not os.path.exists(curr_qc_file_dir):
             os.makedirs(curr_qc_file_dir)
         # Download attachment files
-        if self.qc_data_info['attachment'] is not None:
+        if self.qc_info_map['attachment'] is not None:
             download_attachment_files = []
-            for key, value in self.qc_data_info['attachment'].items():
+            for key, value in self.qc_info_map['attachment'].items():
                 # Download the file first
-                curr_attachment_file = self._download_qc_file_from_gcp(
+                curr_attachment_file = _download_qc_file_from_gcp(
                     gs_file_path=self.terra_data_record[value], downloaded_dir=curr_qc_file_dir)
                 download_attachment_files.append(
                     {key: {'path': curr_attachment_file}})
         # Download QC files that will be converted to payloads
-        if self.qc_data_info['metadata'] is not None:
+        if self.qc_info_map['metadata'] is not None:
             downloaded_metadata_files = []
             # Downloaded JSON file paths
-            for metadata_qc_file_name in self.qc_data_info['metadata']:
-                curr_metadata_file = _download_qc_file_from_gcp(
-                    gs_file_path=self.terra_data_record[metadata_qc_file_name], downloaded_dir=curr_qc_file_dir)
-                downloaded_metadata_files.append(curr_metadata_file)
+            for metadata_qc_file_name in self.qc_info_map['metadata']:
+                downloaded_metadata_files.append(_download_qc_file_from_gcp(
+                    gs_file_path=self.terra_data_record[metadata_qc_file_name], downloaded_dir=curr_qc_file_dir))
         return QCFileDownloadInfo(
             paths_of_metadata_files=downloaded_metadata_files,
             paths_of_attachment_files=download_attachment_files

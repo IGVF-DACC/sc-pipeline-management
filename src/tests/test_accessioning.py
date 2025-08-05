@@ -552,18 +552,21 @@ class TestQCMetricsPayload:
         assert 'gene_count_metrics' in result[0]
 
     @patch('sc_pipe_management.accession.igvf_payloads._download_qc_file_from_gcp')
-    def test_get_qc_files(self, mock_download, qc_payload):
+    def test_get_qc_files(self, mock_download, qc_payload, mock_qc_info_map):
         """Test _get_qc_files method."""
-        # Mock successful downloads
+        # Mock successful downloads (attachment first, then metadata)
         mock_download.side_effect = [
-            '/tmp/qc_metrics.json', '/tmp/parameters.json']
+            '/tmp/parameters.json', '/tmp/qc_metrics.json']
 
         result = qc_payload._get_qc_files()
 
         assert isinstance(result, igvf_payloads.QCFileDownloadInfo)
         assert len(result.paths_of_metadata_files) == 1
         assert len(result.paths_of_attachment_files) == 1
-        assert result.paths_of_metadata_files[0] == '/tmp/qc_metrics.json'
+        assert set(result.paths_of_metadata_files) == {'/tmp/qc_metrics.json'}
+        # attachment file looks like {'rnaseq_kb_info': {'path': '/tmp/parameters.json'}}
+        assert [v['path'] for f in result.paths_of_attachment_files for v in f.values()] == [
+            '/tmp/parameters.json']
 
     def test_read_json_file(self):
         """Test _read_json_file static method."""
