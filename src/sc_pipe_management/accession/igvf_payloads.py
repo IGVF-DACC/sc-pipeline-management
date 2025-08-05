@@ -443,20 +443,6 @@ class QCMetricsPayload:
         # Output root directory
         self.output_root_dir = root_output_dir
 
-    # def _mk_qc_obj_aliases(curr_workflow_config: terra_parse.TerraJobUUIDs, analysis_set_acc: str, qc_prefix: str, lab: str) -> list:
-    #     """Create a list of QC objects aliases for the workflow configuration.
-
-    #     Args:
-    #         curr_workflow_config (terra_parse.TerraJobUUIDs): The current workflow configuration
-    #         analysis_set_acc (str): The analysis set accession
-    #         qc_prefix (str): The prefix for the QC object (fragment, gene count, etc.)
-    #         lab (str): The lab name
-
-    #     Returns:
-    #         list: A list of QC objects aliases
-    #     """
-    #     return [f'{lab.split("/")[-2]}:{self.terra_data_record['analysis_set_acc']}_{curr_workflow_config.aliases()}_{qc_prefix}_uniform-pipeline']
-
     def _read_json_file(json_file_paths: str) -> dict:
         """Read a JSON file and return its content as a dictionary.
         Args:
