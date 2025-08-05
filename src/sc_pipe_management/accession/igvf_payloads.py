@@ -9,7 +9,7 @@ import dataclasses
 from typing import Protocol
 
 import sc_pipe_management.accession.parse_terra_metadata as terra_parse
-import src.sc_pipe_management.constants as const
+import src.sc_pipe_management.accession.constants as const
 import sc_pipe_management.igvf_and_terra_api_tools as api_tools
 
 

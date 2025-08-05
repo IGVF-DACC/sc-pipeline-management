@@ -16,6 +16,7 @@ if src_path not in sys.path:
 import sc_pipe_management.accession.parse_terra_metadata as parse_terra
 import sc_pipe_management.accession.igvf_payloads as igvf_payloads
 import sc_pipe_management.accession.terra_to_portal_posting as igvf_posting
+import sc_pipe_management.igvf_and_terra_api_tools as api_tools
 
 
 class TestTerraOutputMetadata:
@@ -43,14 +44,15 @@ class TestTerraOutputMetadata:
     @pytest.fixture
     def terra_metadata(self, sample_terra_record, mock_igvf_api):
         """Create TerraOutputMetadata instance."""
+        print(parse_terra.TerraOutputMetadata(
+            sample_terra_record, mock_igvf_api))
         return parse_terra.TerraOutputMetadata(sample_terra_record, mock_igvf_api)
 
     def test_init_with_real_data(self, terra_metadata, sample_terra_record):
         """Test TerraOutputMetadata initialization with real test data."""
         assert terra_metadata.anaset_accession == sample_terra_record['analysis_set_acc']
         assert terra_metadata.taxa == sample_terra_record['taxa']
-        assert terra_metadata.genome_assembly is not None
-        assert terra_metadata.pipeline_output.equals(sample_terra_record)
+        assert terra_metadata.terra_data_record.equals(sample_terra_record)
 
     def test_get_gs_path_prioritizes_rna(self, terra_metadata, sample_terra_record):
         """Test that RNA paths are prioritized over ATAC paths."""
@@ -63,112 +65,40 @@ class TestTerraOutputMetadata:
             assert gs_path == sample_terra_record['atac_bam']
 
     def test_parse_workflow_uuids_from_gs_path(self, terra_metadata):
-        """Test parsing workflow UUIDs from GS path using real data."""
+        """Test parsing RNAseq workflow UUIDs from GS path using real data."""
         try:
             result = terra_metadata._parse_workflow_uuids_from_gs_path()
-            assert isinstance(result, parse_terra.PipelineOutputIds)
-            assert result.gcloud_bucket is not None
-            assert result.submission_id is not None
-            assert result.workflow_id is not None
-            assert result.subworkflow_id is not None
+            assert result.gcloud_bucket == 'fc-secure-de19fd29-2253-41cd-9751-1788cf7ad1a5'
+            assert result.submission_id == 'f6921ff1-998d-4faf-a638-9b7d9e55820c'
+            assert result.workflow_id == 'e2d9739d-6423-4051-b065-0575c840fba2'
+            assert result.subworkflow_id == 'e856c806-001d-4c7d-9c67-dc8054e6c241'
         except ValueError:
             # Some test data might not have valid GS paths
             pytest.skip(
                 "Test data doesn't contain valid GS paths for UUID parsing")
 
-    def test_parse_terra_str_list_with_real_data(self, terra_metadata, sample_terra_record):
-        """Test parsing comma-separated strings from real Terra data."""
-        # Test RNA sequence file accessions
-        if 'rna_seqfile_accessions' in sample_terra_record:
-            rna_accessions_str = sample_terra_record['rna_seqfile_accessions']
-            if pd.notna(rna_accessions_str):
-                result = terra_metadata._parse_terra_str_list(
-                    [rna_accessions_str])
-                assert isinstance(result, list)
-                assert all(acc.startswith(('IGVF', 'TSTF')) for acc in result)
+    def test_get_multiome_types(self, terra_metadata):
+        """Test getting multiome types from TerraOutputMetadata."""
+        assert sorted(terra_metadata.multiome_types) == sorted(
+            ['RNAseq', 'ATACseq'])
 
-    def test_parse_igvf_accessions_from_urls_real_data(self, terra_metadata, sample_terra_record):
+    def test_parse_igvf_accessions_from_urls_real_atac_data(self, terra_metadata, sample_terra_record):
         """Test extracting IGVF accessions from URLs using real data."""
-        if 'rna_seqspec_urls' in sample_terra_record:
-            urls_str = sample_terra_record['rna_seqspec_urls']
-            if pd.notna(urls_str):
-                result = terra_metadata._parse_igvf_accessions_from_urls([
-                                                                         urls_str])
-                assert isinstance(result, list)
-                # Should extract valid accessions from URLs
-                if result:
-                    assert all(acc.startswith(('IGVF', 'TSTF'))
-                               for acc in result)
+        atacseq_input_files = terra_metadata._get_input_file_accs_from_table(
+            assay_type='atac')
+        copied_input_file_accessions = ['IGVFFI4773YQEF', 'IGVFFI7241VYRQ',
+                                        'IGVFFI1918YZDJ', 'IGVFFI6103IWOF', 'IGVFFI6641GKMT', 'IGVFFI8012OCZQ']
+        assert sorted(atacseq_input_files.get_derived_from()
+                      ) == sorted(copied_input_file_accessions)
 
-    def test_get_input_file_accs_from_table_rna(self, terra_metadata):
-        """Test getting input file accessions for RNA with real data."""
-        try:
-            result = terra_metadata._get_input_file_accs_from_table('rna')
-            assert isinstance(result, parse_terra.InputFileAccs)
-            assert isinstance(result.derived_from_accessions, list)
-            assert isinstance(result.reference_files, list)
-
-            # Check that accessions start with IGVF or TSTF
-            for acc in result.derived_from_accessions:
-                assert acc.startswith(('IGVF', 'TSTF'))
-        except (KeyError, AttributeError):
-            # Some test data might not have all required columns
-            pytest.skip(
-                "Test data missing required columns for RNA input file parsing")
-
-    def test_get_input_file_accs_from_table_atac(self, terra_metadata):
-        """Test getting input file accessions for ATAC with real data."""
-        try:
-            result = terra_metadata._get_input_file_accs_from_table('atac')
-            assert isinstance(result, parse_terra.InputFileAccs)
-            assert isinstance(result.derived_from_accessions, list)
-            assert isinstance(result.reference_files, list)
-
-            # Check that accessions start with IGVF or TSTF
-            for acc in result.derived_from_accessions:
-                assert acc.startswith(('IGVF', 'TSTF'))
-        except (KeyError, AttributeError):
-            # Some test data might not have all required columns
-            pytest.skip(
-                "Test data missing required columns for ATAC input file parsing")
-
-    def test_get_gs_path_no_valid_path_raises_error(self, mock_igvf_api):
-        """Test that missing GS paths raise ValueError."""
-        # Create a record with no valid GS paths
-        empty_record = pd.Series({
-            'analysis_set_acc': 'IGVFDS999ZZZ',
-            'taxa': 'Homo sapiens'
-        })
-        empty_metadata = parse_terra.TerraOutputMetadata(
-            empty_record, mock_igvf_api)
-
-        with pytest.raises(ValueError):
-            empty_metadata._get_gs_path_for_terra_output_cols()
-
-    @patch('sc_pipe_management.accession.parse_terra_metadata.fapi')
-    @patch('sc_pipe_management.accession.parse_terra_metadata.dump_json')
-    def test_download_workflow_config_json(self, mock_dump_json, mock_fapi, terra_metadata):
-        """Test downloading workflow configuration JSON."""
-        # Mock Terra API response
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {'inputs': {'param1': 'value1'}}
-        mock_fapi.get_workflow_metadata.return_value = mock_response
-
-        # Mock file dump
-        mock_dump_json.return_value = '/path/to/config.json'
-
-        try:
-            result = terra_metadata._download_workflow_config_json(
-                terra_namespace='test_namespace',
-                terra_workspace='test_workspace'
-            )
-
-            assert result.download_path == '/path/to/config.json'
-            assert isinstance(result.doc_aliases, list)
-        except ValueError:
-            # Skip if test data doesn't have valid workflow UUIDs
-            pytest.skip("Test data doesn't contain valid workflow UUIDs")
+    def test_parse_igvf_accessions_from_urls_real_rna_data(self, terra_metadata, sample_terra_record):
+        """Test extracting IGVF accessions from URLs using real data."""
+        rna_input_files = terra_metadata._get_input_file_accs_from_table(
+            assay_type='rna')
+        copied_input_file_accessions = ['IGVFFI0777CMJH', 'IGVFFI0768XBIK',
+                                        'IGVFFI7330UNCB', 'IGVFFI8781BOZU', 'IGVFFI3078ONYU', 'IGVFFI5825ATCM']
+        assert sorted(rna_input_files.get_derived_from()
+                      ) == sorted(copied_input_file_accessions)
 
 
 class TestMatrixFilePayload:

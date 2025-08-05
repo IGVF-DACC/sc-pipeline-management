@@ -50,7 +50,7 @@ class InputFileAccs:
         """Get a list of derived from accessions."""
         # Combine all derived from files, filtering out None values
         all_accessions = self.sequence_files + self.seqspec_files + \
-            self.rna_barcode_replacement + self.reference_files
+            self.rna_barcode_replacement
         derived_from_accessions = [
             acc for acc in all_accessions if acc is not None]
         return derived_from_accessions
@@ -59,7 +59,7 @@ class InputFileAccs:
 @dataclasses.dataclass(frozen=True)
 class InputFileInfo:
     sequence_file_headers: list[str]
-    seqspec_file_headers: str
+    seqspec_file_header: str
     reference_file_headers: list[str]
     barcode_replacement_file_header: str | None
 
@@ -161,7 +161,7 @@ class TerraOutputMetadata:
         input_file_info = INPUT_FILE_HEADERS_BY_ASSAY_TYPE.get(assay_type)
         # Build the derived from file info
         # Get sequence file accessions from the Terra table
-        seqfile_accessions = self._parse_terra_str_list(
+        seqfile_accessions = _parse_terra_str_list(
             terra_str_lists=[self.terra_data_record[seqfile_col] for seqfile_col in input_file_info.sequence_file_headers])
         # Get sequence specification file accessions from the file URLs in the Terra table
         seqspec_accessions = self._parse_igvf_accessions_from_urls(
@@ -173,7 +173,7 @@ class TerraOutputMetadata:
         reference_files = self._parse_igvf_accessions_from_urls(
             igvf_file_urls=[self.terra_data_record[ref_file_header] for ref_file_header in input_file_info.reference_file_headers])
         # Build the InputFileAccs dataclass
-        return InputFileAccs(sequence_files=seqfile_accessions,
-                             seqspec_files=seqspec_accessions,
+        return InputFileAccs(sequence_files=sorted(set(seqfile_accessions)),
+                             seqspec_files=sorted(set(seqspec_accessions)),
                              rna_barcode_replacement=barcode_replacement_accession,
-                             reference_files=reference_files)
+                             reference_files=sorted(set(reference_files)))
