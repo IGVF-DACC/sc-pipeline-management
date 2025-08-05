@@ -341,6 +341,7 @@ class FragmentFilePayload:
                                      content_type=self.file_obj_metadata.content_type,
                                      controlled_access=False,
                                      file_format=self.file_obj_metadata.file_format,
+                                     file_format_type='bed3+',
                                      md5sum=self.md5sum,
                                      derived_from=self.input_file_accessions.get_derived_from(),
                                      submitted_file_name=self.terra_data_record[self.terra_output_name],
