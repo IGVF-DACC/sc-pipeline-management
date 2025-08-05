@@ -17,6 +17,13 @@ GENOME_ASSEMBLY_INFO = {'Homo sapiens': 'GRCh38',
                         }
 
 
+# AnalysisStepVersion
+ANALYSIS_STEP_VERSION = {
+    'atacseq': 'igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0',
+    'rnaseq': 'igvf:single-cell-uniform-pipeline-kallisto-bustools-rnaseq-step-v1.1.0'
+}
+
+
 @dataclasses.dataclass(frozen=True)
 class FileObjMetadata:
     """Payload metadata for file objects that will be accessioned to the IGVF portal."""
@@ -39,7 +46,7 @@ ALIGNMENT_FILETYPES = {
                                 content_type='alignments',
                                 file_specifications=[
                                     'buenrostro-bernstein:igvf-sc-pipeline-alignment-bam-specification'],
-                                analysis_step_version='igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0',
+                                analysis_step_version=ANALYSIS_STEP_VERSION['atacseq'],
                                 assay_type='atac'
                                 )
 }
@@ -51,7 +58,7 @@ INDEX_FILETYPES = {
                                             content_type='index',
                                             file_specifications=[
                                                 'buenrostro-bernstein:igvf-sc-pipeline-fragment-file-specification'],
-                                            analysis_step_version='igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0',
+                                            analysis_step_version=ANALYSIS_STEP_VERSION['atacseq'],
                                             assay_type='atac'
                                             ),
     'atac_bam_index': FileObjMetadata(file_format='bai',
@@ -59,7 +66,7 @@ INDEX_FILETYPES = {
                                       content_type='index',
                                       file_specifications=[
                                           'buenrostro-bernstein:igvf-sc-pipeline-alignment-bam-index-specification'],
-                                      analysis_step_version='igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0',
+                                      analysis_step_version=ANALYSIS_STEP_VERSION['atacseq'],
                                       assay_type='atac'
                                       )
 }
@@ -71,7 +78,7 @@ TABULAR_FILETYPES = {
                                       content_type='fragments',
                                       file_format_specifications=[
                                           'buenrostro-bernstein:igvf-single-cell-pipeline-fragment-file-specification'],
-                                      analysis_step_version='igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0',
+                                      analysis_step_version=ANALYSIS_STEP_VERSION['atacseq'],
                                       assay_type='atac'
                                       )
 }
@@ -84,7 +91,7 @@ MATRIX_FILETYPES = {
         content_type='kallisto single cell RNAseq output',
         file_format_specifications=['buenrostro-bernstein:igvf-sc-pipeline-matrix-tar-specification',
                                     'igvf:igvf-sc-pipeline-rna-tar-mtx-per-file-specification'],
-        analysis_step_version='igvf:single-cell-uniform-pipeline-kallisto-bustools-rnaseq-step-v1.1.0',
+        analysis_step_version=ANALYSIS_STEP_VERSION['rnaseq'],
         assay_type='rna'
     ),
     'rna_kb_h5ad': FileObjMetadata(
@@ -93,7 +100,7 @@ MATRIX_FILETYPES = {
         content_type='sparse gene count matrix',
         file_format_specifications=[
             'buenrostro-bernstein:igvf-sc-pipeline-matrix-h5-specification'],
-        analysis_step_version='igvf:single-cell-uniform-pipeline-kalliso-bustools-rnaseq-step-v1.1.0',
+        analysis_step_version=ANALYSIS_STEP_VERSION['rnaseq'],
         assay_type='rna'
     )
 }
@@ -108,6 +115,7 @@ class QCInfoMap:
     attachment: dict    # The output files that will be uploaded as attachments
     metadata_map: dict  # The metadata map to convert the QC JSON files to the portal schema
     description: str    # Description of the QC metrics
+    analysis_step_version: str  # The analysis step version for the QC metrics
 
 
 # QC objects using QCInfoMap dataclass
@@ -143,7 +151,8 @@ TERRA_QC_OUTPUTS = {
                 'p_unique': 'p_unique',
                 'index_version': 'index_version',
                 'k-mer length': 'kmer_length'
-            }
+            },
+            analysis_step_version=ANALYSIS_STEP_VERSION['rnaseq']
         )
     },
     'atacseq': {
@@ -152,7 +161,8 @@ TERRA_QC_OUTPUTS = {
             description='ATACseq chromap alignment QC metric',
             attachment={'atac_bam_summary_stats': 'atac_bam_summary_stats'},
             object_type='single_cell_atac_seq_quality_metric',
-            metadata_map={}  # No metadata mapping for alignment QC
+            metadata_map={},  # No metadata mapping for alignment QC
+            analysis_step_version=ANALYSIS_STEP_VERSION['atacseq']
         ),
         'fragment': QCInfoMap(
             metadata=['atac_fragments_metrics'],
@@ -178,7 +188,8 @@ TERRA_QC_OUTPUTS = {
                 'multi-mappings': 'multi_mappings',
                 'total': 'total',
                 'percentage_duplicates': 'pct_duplicates',
-            }
+            },
+            analysis_step_version=ANALYSIS_STEP_VERSION['atacseq']
         )
     }
 }
