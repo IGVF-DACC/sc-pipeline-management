@@ -8,25 +8,10 @@ import json
 import dataclasses
 from typing import Protocol
 
-from sc_pipe_management.accession.parse_terra_metadata import (
-    TerraJobUUIDs,
-    TerraOutputMetadata
-)
+import sc_pipe_management.accession.parse_terra_metadata as terra_parse
+import src.sc_pipe_management.constants as const
+import sc_pipe_management.igvf_and_terra_api_tools as api_tools
 
-from constants import (
-    OUTPUT_SUBMITTER_INFO,
-    ALIGNMENT_FILETYPES,
-    INDEX_FILETYPES,
-    TABULAR_FILETYPES,
-    GENOME_ASSEMBLY_INFO,
-    MATRIX_FILETYPES,
-    QCInfoMap
-)
-
-from sc_pipe_management.igvf_and_terra_api_tools import (
-    calculate_gsfile_hex_hash
-)
-# NOTE: These may end up not being needed if genome tsv reference and assembly column is available in input
 
 fapi._set_session()
 
@@ -125,10 +110,10 @@ class Payload(Protocol):
 class MatrixFilePayload:
     """Class to create a matrix file payload for a given Terra output name."""
 
-    def __init__(self, terra_metadata: TerraOutputMetadata, terra_output_name: str):
+    def __init__(self, terra_metadata: terra_parse.TerraOutputMetadata, terra_output_name: str):
         # Data object lab and award
-        self.lab = OUTPUT_SUBMITTER_INFO['lab']
-        self.award = OUTPUT_SUBMITTER_INFO['award']
+        self.lab = const.OUTPUT_SUBMITTER_INFO['lab']
+        self.award = const.OUTPUT_SUBMITTER_INFO['award']
         # Terra output metadata for this pipeline run
         self.terra_metadata = terra_metadata
         # The actual pipeline output data Series (one row in the Terra data table)
@@ -136,9 +121,10 @@ class MatrixFilePayload:
         # The Terra UUIDs for this pipeline run
         self.terra_uuids = terra_metadata._parse_workflow_uuids_from_gs_path()
         # The matrix file data class object based on the Terra output name
-        self.file_obj_metadata = MATRIX_FILETYPES[terra_output_name]
+        self.file_obj_metadata = const.MATRIX_FILETYPES[terra_output_name]
         # The genome assembly info
-        self.assembly = GENOME_ASSEMBLY_INFO.get(self.terra_metadata.taxa)
+        self.assembly = const.GENOME_ASSEMBLY_INFO.get(
+            self.terra_metadata.taxa)
 
     @property
     def aliases(self) -> list[str]:
@@ -151,7 +137,7 @@ class MatrixFilePayload:
     @property
     def md5sum(self) -> str:
         """Property to get the MD5 sum of the payload."""
-        return calculate_gsfile_hex_hash(
+        return api_tools.calculate_gsfile_hex_hash(
             file_path=self.terra_data_record[self.terra_output_name]
         )
 
@@ -188,10 +174,10 @@ class MatrixFilePayload:
 class AlignmentFilePayload:
     """Class to create a tabular file payload for a given Terra output name."""
 
-    def __init__(self, terra_metadata: TerraOutputMetadata, igvf_api):
+    def __init__(self, terra_metadata: terra_parse.TerraOutputMetadata, igvf_api):
         # Data object lab and award
-        self.lab = OUTPUT_SUBMITTER_INFO['lab']
-        self.award = OUTPUT_SUBMITTER_INFO['award']
+        self.lab = const.OUTPUT_SUBMITTER_INFO['lab']
+        self.award = const.OUTPUT_SUBMITTER_INFO['award']
         # IGVF client API for data access
         self.igvf_api = igvf_api
         # Data column name
@@ -206,7 +192,7 @@ class AlignmentFilePayload:
         self.input_file_accessions = terra_metadata._get_input_file_accs_from_table(
             assay_type=self.file_obj_metadata.assay_type)
         # The tabular file data class object based on the Terra output name
-        self.file_obj_metadata = ALIGNMENT_FILETYPES[self.terra_output_name]
+        self.file_obj_metadata = const.ALIGNMENT_FILETYPES[self.terra_output_name]
 
     def _get_access_status(self) -> bool:
         """Get file controlled_access status. If any seq data is controlled access, the output data inherit that.
@@ -239,7 +225,7 @@ class AlignmentFilePayload:
     @property
     def md5sum(self) -> str | None:
         """Property to get the MD5 sum of the payload."""
-        return calculate_gsfile_hex_hash(
+        return api_tools.calculate_gsfile_hex_hash(
             file_path=self.terra_data_record[self.terra_output_name]
         )
 
@@ -269,10 +255,10 @@ class AlignmentFilePayload:
 class FragmentFilePayload:
     """Class to create a fragment file payload for a given Terra output name."""
 
-    def __init__(self, terra_metadata: TerraOutputMetadata, igvf_api):
+    def __init__(self, terra_metadata: terra_parse.TerraOutputMetadata, igvf_api):
         # Data object lab and award
-        self.lab = OUTPUT_SUBMITTER_INFO['lab']
-        self.award = OUTPUT_SUBMITTER_INFO['award']
+        self.lab = const.OUTPUT_SUBMITTER_INFO['lab']
+        self.award = const.OUTPUT_SUBMITTER_INFO['award']
         # IGVF client API for data access
         self.igvf_api = igvf_api
         # Data column name
@@ -287,7 +273,7 @@ class FragmentFilePayload:
         self.input_file_accessions = terra_metadata._get_input_file_accs_from_table(
             assay_type=self.file_obj_metadata.assay_type)
         # The tabular file data class object based on the Terra output name
-        self.file_obj_metadata = TABULAR_FILETYPES[self.terra_output_name]
+        self.file_obj_metadata = const.TABULAR_FILETYPES[self.terra_output_name]
 
     @property
     def aliases(self) -> list[str]:
@@ -300,7 +286,7 @@ class FragmentFilePayload:
     @property
     def md5sum(self) -> str | None:
         """Property to get the MD5 sum of the payload."""
-        return calculate_gsfile_hex_hash(
+        return api_tools.calculate_gsfile_hex_hash(
             file_path=self.terra_data_record[self.terra_output_name]
         )
 
@@ -320,7 +306,7 @@ class FragmentFilePayload:
                                      file_set=self.terra_data_record['analysis_set_acc'],
                                      description=self.input_file_accessions.description,
                                      filtered=False,
-                                     assembly=GENOME_ASSEMBLY_INFO.get(
+                                     assembly=const.GENOME_ASSEMBLY_INFO.get(
                                          self.terra_metadata.taxa),
                                      file_format_specifications=self.file_obj_metadata.file_format_specifications,
                                      _profile='tabular_file'
@@ -331,11 +317,11 @@ class FragmentFilePayload:
 class IndexFilePayload:
     """Class to create an index file payload for a given Terra output name."""
 
-    def __init__(self, terra_metadata: TerraOutputMetadata, QC, derived_from: list[str], igvf_api):
+    def __init__(self, terra_metadata: terra_parse.TerraOutputMetadata, QC, derived_from: list[str], igvf_api):
         """Initialize the IndexFilePayload class."""
         # Data object lab and award
-        self.lab = OUTPUT_SUBMITTER_INFO['lab']
-        self.award = OUTPUT_SUBMITTER_INFO['award']
+        self.lab = const.OUTPUT_SUBMITTER_INFO['lab']
+        self.award = const.OUTPUT_SUBMITTER_INFO['award']
         # IGVF client API for data access
         self.igvf_api = igvf_api
         # Terra output metadata for this pipeline run
@@ -345,7 +331,7 @@ class IndexFilePayload:
         # The Terra UUIDs for this pipeline run
         self.terra_uuids = terra_metadata._parse_workflow_uuids_from_gs_path()
         # The tabular file data class object based on the Terra output name
-        self.file_obj_metadata = INDEX_FILETYPES[self.terra_output_name]
+        self.file_obj_metadata = const.INDEX_FILETYPES[self.terra_output_name]
         # The derived_from file accession
         self.derived_from = list(set(derived_from))
 
@@ -360,7 +346,7 @@ class IndexFilePayload:
     @property
     def md5sum(self) -> str | None:
         """Property to get the MD5 sum of the payload."""
-        return calculate_gsfile_hex_hash(
+        return api_tools.calculate_gsfile_hex_hash(
             file_path=self.terra_data_record[self.terra_output_name]
         )
 
@@ -387,10 +373,10 @@ class IndexFilePayload:
 class QCMetricsPayload:
     """Class to create a QC metrics payload for a given Terra output name."""
 
-    def __init__(self, terra_metadata: TerraOutputMetadata, qc_info_map: QCInfoMap, qc_prefix: str, qc_of: list[str], igvf_api, root_output_dir: str = '/igvf/data/'):
+    def __init__(self, terra_metadata: terra_parse.TerraOutputMetadata, qc_info_map: const.QCInfoMap, qc_prefix: str, qc_of: list[str], igvf_api, root_output_dir: str = '/igvf/data/'):
         # Data object lab and award
-        self.lab = OUTPUT_SUBMITTER_INFO['lab']
-        self.award = OUTPUT_SUBMITTER_INFO['award']
+        self.lab = const.OUTPUT_SUBMITTER_INFO['lab']
+        self.award = const.OUTPUT_SUBMITTER_INFO['award']
         # IGVF client API for data access
         self.igvf_api = igvf_api
         # QC info map for this pipeline run
@@ -408,11 +394,11 @@ class QCMetricsPayload:
         # Output root directory
         self.output_root_dir = root_output_dir
 
-    def _mk_qc_obj_aliases(curr_workflow_config: TerraJobUUIDs, analysis_set_acc: str, qc_prefix: str, lab: str) -> list:
+    def _mk_qc_obj_aliases(curr_workflow_config: terra_parse.TerraJobUUIDs, analysis_set_acc: str, qc_prefix: str, lab: str) -> list:
         """Create a list of QC objects aliases for the workflow configuration.
 
         Args:
-            curr_workflow_config (TerraJobUUIDs): The current workflow configuration
+            curr_workflow_config (terra_parse.TerraJobUUIDs): The current workflow configuration
             analysis_set_acc (str): The analysis set accession
             qc_prefix (str): The prefix for the QC object (fragment, gene count, etc.)
             lab (str): The lab name
@@ -516,7 +502,7 @@ class PipelineParamsInfo:
         # Initialize with Terra metadata class object
         self.terra_datable = terra_datable
 
-    def _get_single_input_params(self, terra_metadata: TerraOutputMetadata) -> str:
+    def _get_single_input_params(self, terra_metadata: terra_parse.TerraOutputMetadata) -> str:
         """Get the workflow input configuration JSON for a given submission and workflow ID."""
         terra_uuids = terra_metadata._parse_workflow_uuids_from_gs_path()
         anaset_accession = terra_metadata.analysis_set_acc
@@ -551,7 +537,7 @@ class PipelineParamsInfo:
         """Get the workflow input configuration JSON for all submissions and workflow IDs."""
         all_input_params = {}
         for terra_data_record in self.terra_datable.iterrows():
-            terra_metadata = TerraOutputMetadata(terra_data_record)
+            terra_metadata = terra_parse.TerraOutputMetadata(terra_data_record)
             try:
                 input_params = self._get_single_input_params(terra_metadata)
                 all_input_params[terra_metadata.analysis_set_acc] = input_params
@@ -564,10 +550,10 @@ class PipelineParamsInfo:
 class DocumentPayload:
     """Class to create a document payload for a given Terra output name."""
 
-    def __init__(self, terra_metadata: TerraOutputMetadata, pipeline_params_info: PipelineParamsInfo, igvf_api):
+    def __init__(self, terra_metadata: terra_parse.TerraOutputMetadata, pipeline_params_info: PipelineParamsInfo, igvf_api):
         # Data object lab and award
-        self.lab = OUTPUT_SUBMITTER_INFO['lab']
-        self.award = OUTPUT_SUBMITTER_INFO['award']
+        self.lab = const.OUTPUT_SUBMITTER_INFO['lab']
+        self.award = const.OUTPUT_SUBMITTER_INFO['award']
         # IGVF client API for data access
         self.igvf_api = igvf_api
         # The Terra UUIDs for this pipeline run
@@ -606,7 +592,7 @@ class DocumentPayload:
 class AnalysisSetPatchingPayload:
     """Class to create a patching payload for an analysis set."""
 
-    def __init__(self, terra_metadata: TerraOutputMetadata, input_params_doc_uuid: str, igvf_utils_api):
+    def __init__(self, terra_metadata: terra_parse.TerraOutputMetadata, input_params_doc_uuid: str, igvf_utils_api):
         self.terra_metadata = terra_metadata
         self.analysis_set_acc = terra_metadata.analysis_set_acc
         self.input_params_doc_uuid = input_params_doc_uuid
