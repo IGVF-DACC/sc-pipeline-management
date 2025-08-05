@@ -21,3 +21,4 @@ terra_datatables/
 terra_post_report_tables/
 .vscode/
 coverage.xml
+.coverage
