@@ -369,7 +369,7 @@ class TestFragmentFilePayload:
 
         return igvf_payloads.FragmentFilePayload(mock_terra_metadata, mock_igvf_api)
 
-    def test_init(self, fragment_payload, mock_terra_metadata, mock_igvf_api):
+    def test_init(self, fragment_payload, mock_igvf_api):
         """Test FragmentFilePayload initialization."""
         assert fragment_payload.terra_output_name == 'atac_fragments'
         assert fragment_payload.lab == '/labs/test-lab/'
@@ -383,6 +383,7 @@ class TestFragmentFilePayload:
 
             mock_aliases.return_value = ['test-alias']
             mock_hash.return_value = 'abc123'
+
             payload = fragment_payload.get_payload()
 
             # Check required fields
@@ -442,7 +443,7 @@ class TestIndexFilePayload:
             mock_terra_metadata, derived_from, 'atac_bam_index', mock_igvf_api
         )
 
-    def test_init(self, index_payload, mock_terra_metadata, mock_igvf_api):
+    def test_init(self, index_payload):
         """Test IndexFilePayload initialization."""
         assert index_payload.terra_output_name == 'atac_bam_index'
         assert index_payload.lab == '/labs/test-lab/'
@@ -451,20 +452,24 @@ class TestIndexFilePayload:
 
     def test_get_payload(self, index_payload):
         """Test get_payload method."""
-        with patch.object(index_payload, 'aliases', ['test-alias']):
-            with patch.object(index_payload, 'md5sum', 'abc123'):
-                payload = index_payload.get_payload()
+        with patch('sc_pipe_management.accession.igvf_payloads._get_file_aliases') as mock_aliases, \
+                patch('sc_pipe_management.accession.igvf_payloads.api_tools.calculate_gsfile_hex_hash') as mock_hash:
 
-                # Check required fields
-                assert payload['award'] == '/awards/test-award/'
-                assert payload['lab'] == '/labs/test-lab/'
-                assert payload['aliases'] == ['test-alias']
-                assert payload['md5sum'] == 'abc123'
-                assert payload['file_set'] == 'IGVFDS123ABC'
-                assert payload['_profile'] == 'index_file'
-                assert payload['content_type'] == 'index'
-                assert payload['controlled_access'] is False
-                assert payload['derived_from'] == ['IGVFFF001AAA']
+            mock_aliases.return_value = ['test-alias']
+            mock_hash.return_value = 'abc123'
+
+            payload = index_payload.get_payload()
+
+            # Check required fields
+            assert payload['award'] == '/awards/test-award/'
+            assert payload['lab'] == '/labs/test-lab/'
+            assert payload['aliases'] == ['test-alias']
+            assert payload['md5sum'] == 'abc123'
+            assert payload['file_set'] == 'IGVFDS123ABC'
+            assert payload['_profile'] == 'index_file'
+            assert payload['content_type'] == 'index'
+            assert payload['controlled_access'] is False
+            assert payload['derived_from'] == ['IGVFFF001AAA']
 
 
 class TestQCMetricsPayload:
