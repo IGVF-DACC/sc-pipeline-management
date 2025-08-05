@@ -44,7 +44,7 @@ def _dump_json(input_json: dict, analysis_set_acc: str, output_root_dir: str = '
     return output_file_path
 
 
-def _get_file_aliases(col_header: str, lab: str, terra_data_record: pd.Series, terra_uuids: str) -> list:
+def _get_file_aliases(col_header: str, lab: str, terra_data_record: pd.Series, terra_uuids: terra_parse.TerraJobUUIDs) -> list:
     """ Generate a file alias based on the output data name, lab, analysis set accession, and Terra UUIDs.
 
     Args:
@@ -56,7 +56,7 @@ def _get_file_aliases(col_header: str, lab: str, terra_data_record: pd.Series, t
     Returns:
         list: A file alias in the form of lab:analysis-set-acc_terra-uuids_col-header_uniform-pipeline
     """
-    return [f'{lab.split("/")[-2]}:{terra_data_record["analysis_set_acc"]}_{terra_uuids}_{col_header}_uniform-pipeline']
+    return [f'{lab.split("/")[-2]}:{terra_data_record["analysis_set_acc"]}_{terra_uuids.aliases()}_{col_header}_uniform-pipeline']
 
 
 def _download_qc_file_from_gcp(gs_file_path: str, downloaded_dir: str) -> str:
@@ -143,7 +143,7 @@ class MatrixFilePayload:
         return _get_file_aliases(col_header=self.terra_output_name,
                                  lab=self.lab,
                                  terra_data_record=self.terra_metadata.terra_data_record,
-                                 terra_uuids=self.terra_uuids.aliases())
+                                 terra_uuids=self.terra_uuids)
 
     @property
     def submitted_file_name(self) -> str:
@@ -237,7 +237,7 @@ class AlignmentFilePayload:
         return _get_file_aliases(col_header=self.terra_output_name,
                                  lab=self.lab,
                                  terra_data_record=self.terra_metadata.terra_data_record,
-                                 terra_uuids=self.terra_uuids.aliases())
+                                 terra_uuids=self.terra_uuids)
 
     @property
     def submitted_file_name(self) -> str:
@@ -308,7 +308,7 @@ class FragmentFilePayload:
         return _get_file_aliases(col_header=self.terra_output_name,
                                  lab=self.lab,
                                  terra_data_record=self.terra_metadata.terra_data_record,
-                                 terra_uuids=self.terra_uuids.aliases())
+                                 terra_uuids=self.terra_uuids)
 
     @property
     def submitted_file_name(self) -> str:
@@ -380,7 +380,7 @@ class IndexFilePayload:
         return _get_file_aliases(col_header=self.terra_output_name,
                                  lab=self.lab,
                                  terra_data_record=self.terra_metadata.terra_data_record,
-                                 terra_uuids=self.terra_uuids.aliases())
+                                 terra_uuids=self.terra_uuids)
 
     @property
     def submitted_file_name(self) -> str:
@@ -443,19 +443,19 @@ class QCMetricsPayload:
         # Output root directory
         self.output_root_dir = root_output_dir
 
-    def _mk_qc_obj_aliases(curr_workflow_config: terra_parse.TerraJobUUIDs, analysis_set_acc: str, qc_prefix: str, lab: str) -> list:
-        """Create a list of QC objects aliases for the workflow configuration.
+    # def _mk_qc_obj_aliases(curr_workflow_config: terra_parse.TerraJobUUIDs, analysis_set_acc: str, qc_prefix: str, lab: str) -> list:
+    #     """Create a list of QC objects aliases for the workflow configuration.
 
-        Args:
-            curr_workflow_config (terra_parse.TerraJobUUIDs): The current workflow configuration
-            analysis_set_acc (str): The analysis set accession
-            qc_prefix (str): The prefix for the QC object (fragment, gene count, etc.)
-            lab (str): The lab name
+    #     Args:
+    #         curr_workflow_config (terra_parse.TerraJobUUIDs): The current workflow configuration
+    #         analysis_set_acc (str): The analysis set accession
+    #         qc_prefix (str): The prefix for the QC object (fragment, gene count, etc.)
+    #         lab (str): The lab name
 
-        Returns:
-            list: A list of QC objects aliases
-        """
-        return [f'{lab.split("/")[-2]}:{analysis_set_acc}_{curr_workflow_config.aliases()}_{qc_prefix}_uniform-pipeline']
+    #     Returns:
+    #         list: A list of QC objects aliases
+    #     """
+    #     return [f'{lab.split("/")[-2]}:{self.terra_data_record['analysis_set_acc']}_{curr_workflow_config.aliases()}_{qc_prefix}_uniform-pipeline']
 
     def _read_json_file(json_file_paths: str) -> dict:
         """Read a JSON file and return its content as a dictionary.
@@ -499,13 +499,8 @@ class QCMetricsPayload:
         )
 
     @property
-    def alias(self) -> list[str]:
-        return self._mk_qc_obj_aliases(
-            curr_workflow_config=self.terra_uuids.aliases,
-            analysis_set_acc=self.terra_data_record['analysis_set_acc'],
-            qc_prefix=self.terra_output_name,
-            lab=self.lab
-        )
+    def aliases(self) -> list[str]:
+        return [f'{self.lab.split("/")[-2]}:{self.terra_data_record["analysis_set_acc"]}_{self.terra_uuids.aliases()}_{self._terra_output_name}_uniform-pipeline']
 
     @property
     def submitted_file_name(self) -> str:
@@ -530,7 +525,7 @@ class QCMetricsPayload:
         # QC object payload
         qc_payload = dict(lab=self.lab,
                           award=self.award,
-                          aliases=self.alias,
+                          aliases=self.aliases,
                           analysis_step_version=self.qc_data_info.analysis_step_version,
                           description=self.qc_data_info.description,
                           quality_metric_of=self.qc_of,

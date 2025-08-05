@@ -1,259 +1,343 @@
-import sys
-import os
 import pytest
 import pandas as pd
-from unittest.mock import Mock, patch, MagicMock, mock_open
 import json
+import os
+import tempfile
+from unittest.mock import Mock, patch, MagicMock, mock_open
 from pathlib import Path
 
-# Get the absolute path to the 'src' directory (one level up from the 'tests' directory)
-src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-
-# Add the 'src' directory to sys.path if it's not already there
-if src_path not in sys.path:
-    sys.path.insert(0, src_path)
-
-import sc_pipe_management.accession.parse_terra_metadata as parse_terra
+# Import the modules to test
 import sc_pipe_management.accession.igvf_payloads as igvf_payloads
-import sc_pipe_management.accession.terra_to_portal_posting as igvf_posting
-import sc_pipe_management.igvf_and_terra_api_tools as api_tools
+import sc_pipe_management.accession.parse_terra_metadata as parse_terra
 
 
-class TestTerraOutputMetadata:
-    """Test cases for TerraOutputMetadata class using real test data."""
+class TestUtilityFunctions:
+    """Test utility functions in igvf_payloads module."""
 
-    @pytest.fixture(scope="class")
-    def terra_data_table(self):
-        """Load the Terra test data table once for all tests."""
-        test_file_path = Path(__file__).parent / \
-            'test_files' / 'DACC_post_testcases.tsv'
-        return pd.read_csv(test_file_path, sep='\t')
+    def test_dump_json(self):
+        """Test _dump_json function."""
+        test_json = {"key1": "value1", "key2": "value2"}
+        analysis_set_acc = "IGVFDS123ABC"
 
-    @pytest.fixture
-    def mock_igvf_api(self):
-        """Mock IGVF API client."""
-        mock_api = Mock()
-        mock_api.get.return_value = {'controlled_access': False}
-        return mock_api
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result_path = igvf_payloads._dump_json(
+                input_json=test_json,
+                analysis_set_acc=analysis_set_acc,
+                output_root_dir=temp_dir
+            )
 
-    @pytest.fixture
-    def sample_terra_record(self, terra_data_table):
-        """Get the first row of test data."""
-        return terra_data_table.iloc[0]
+            # Check that file was created
+            assert os.path.exists(result_path)
 
-    @pytest.fixture
-    def terra_metadata(self, sample_terra_record, mock_igvf_api):
-        """Create TerraOutputMetadata instance."""
-        print(parse_terra.TerraOutputMetadata(
-            sample_terra_record, mock_igvf_api))
-        return parse_terra.TerraOutputMetadata(sample_terra_record, mock_igvf_api)
+            # Check file content
+            with open(result_path, 'r') as f:
+                saved_json = json.load(f)
+            assert saved_json == test_json
 
-    def test_init_with_real_data(self, terra_metadata, sample_terra_record):
-        """Test TerraOutputMetadata initialization with real test data."""
-        assert terra_metadata.anaset_accession == sample_terra_record['analysis_set_acc']
-        assert terra_metadata.taxa == sample_terra_record['taxa']
-        assert terra_metadata.terra_data_record.equals(sample_terra_record)
+            # Check file path structure
+            assert analysis_set_acc in result_path
+            assert result_path.endswith('.json')
 
-    def test_get_gs_path_prioritizes_rna(self, terra_metadata, sample_terra_record):
-        """Test that RNA paths are prioritized over ATAC paths."""
-        gs_path = terra_metadata._get_gs_path_for_terra_output_cols()
+    def test_get_file_aliases(self):
+        """Test _get_file_aliases function."""
+        col_header = "rna_kb_h5ad"
+        lab = "/labs/test-lab/"
+        terra_data_record = pd.Series({
+            'analysis_set_acc': 'IGVFDS123ABC'
+        })
+        terra_uuids = parse_terra.TerraJobUUIDs(
+            gcloud_bucket='bucket',
+            submission_id='sub123',
+            workflow_id='wf456',
+            subworkflow_id='subwf789'
+        )
 
-        # Should return RNA path if available
-        if pd.notna(sample_terra_record.get('rna_kb_h5ad')):
-            assert gs_path == sample_terra_record['rna_kb_h5ad']
-        elif pd.notna(sample_terra_record.get('atac_bam')):
-            assert gs_path == sample_terra_record['atac_bam']
+        result = igvf_payloads._get_file_aliases(
+            col_header=col_header,
+            lab=lab,
+            terra_data_record=terra_data_record,
+            terra_uuids=terra_uuids
+        )
 
-    def test_parse_workflow_uuids_from_gs_path(self, terra_metadata):
-        """Test parsing RNAseq workflow UUIDs from GS path using real data."""
-        try:
-            result = terra_metadata._parse_workflow_uuids_from_gs_path()
-            assert result.gcloud_bucket == 'fc-secure-de19fd29-2253-41cd-9751-1788cf7ad1a5'
-            assert result.submission_id == 'f6921ff1-998d-4faf-a638-9b7d9e55820c'
-            assert result.workflow_id == 'e2d9739d-6423-4051-b065-0575c840fba2'
-            assert result.subworkflow_id == 'e856c806-001d-4c7d-9c67-dc8054e6c241'
-        except ValueError:
-            # Some test data might not have valid GS paths
-            pytest.skip(
-                "Test data doesn't contain valid GS paths for UUID parsing")
+        expected = [
+            'test-lab:IGVFDS123ABC_bucket_sub123_wf456_subwf789_rna_kb_h5ad_uniform-pipeline']
+        assert result == expected
 
-    def test_get_multiome_types(self, terra_metadata):
-        """Test getting multiome types from TerraOutputMetadata."""
-        assert sorted(terra_metadata.multiome_types) == sorted(
-            ['RNAseq', 'ATACseq'])
+    @patch('subprocess.run')
+    def test_download_qc_file_from_gcp_success(self, mock_subprocess):
+        """Test successful GCP file download."""
+        # Mock successful subprocess
+        mock_subprocess.return_value.returncode = 0
 
-    def test_parse_igvf_accessions_from_urls_real_atac_data(self, terra_metadata, sample_terra_record):
-        """Test extracting IGVF accessions from URLs using real data."""
-        atacseq_input_files = terra_metadata._get_input_file_accs_from_table(
-            assay_type='atac')
-        copied_input_file_accessions = ['IGVFFI4773YQEF', 'IGVFFI7241VYRQ',
-                                        'IGVFFI1918YZDJ', 'IGVFFI6103IWOF', 'IGVFFI6641GKMT', 'IGVFFI8012OCZQ']
-        assert sorted(atacseq_input_files.get_derived_from()
-                      ) == sorted(copied_input_file_accessions)
+        gs_file_path = "gs://bucket/path/file.json"
 
-    def test_parse_igvf_accessions_from_urls_real_rna_data(self, terra_metadata, sample_terra_record):
-        """Test extracting IGVF accessions from URLs using real data."""
-        rna_input_files = terra_metadata._get_input_file_accs_from_table(
-            assay_type='rna')
-        copied_input_file_accessions = ['IGVFFI0777CMJH', 'IGVFFI0768XBIK',
-                                        'IGVFFI7330UNCB', 'IGVFFI8781BOZU', 'IGVFFI3078ONYU', 'IGVFFI5825ATCM']
-        assert sorted(rna_input_files.get_derived_from()
-                      ) == sorted(copied_input_file_accessions)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = igvf_payloads._download_qc_file_from_gcp(
+                gs_file_path=gs_file_path,
+                downloaded_dir=temp_dir
+            )
+
+            expected_path = os.path.join(temp_dir, "file.json")
+            assert result == expected_path
+
+            # Check subprocess was called correctly
+            mock_subprocess.assert_called_once_with(
+                ['gcloud', 'storage', 'cp', gs_file_path, expected_path],
+                capture_output=True
+            )
+
+    @patch('subprocess.run')
+    def test_download_qc_file_from_gcp_failure(self, mock_subprocess):
+        """Test failed GCP file download."""
+        # Mock failed subprocess
+        mock_subprocess.return_value.returncode = 1
+        mock_subprocess.return_value.stderr.decode.return_value = "ERROR: File not found\n"
+
+        gs_file_path = "gs://bucket/path/nonexistent.json"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with pytest.raises(Exception, match="GCP download error"):
+                igvf_payloads._download_qc_file_from_gcp(
+                    gs_file_path=gs_file_path,
+                    downloaded_dir=temp_dir
+                )
+
+    def test_download_qc_file_invalid_path(self):
+        """Test download with invalid GCP path."""
+        invalid_path = "/local/path/file.json"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with pytest.raises(Exception, match="not a valid GCP file path"):
+                igvf_payloads._download_qc_file_from_gcp(
+                    gs_file_path=invalid_path,
+                    downloaded_dir=temp_dir
+                )
 
 
 class TestMatrixFilePayload:
-    """Test cases for MatrixFilePayload class using real test data."""
+    """Test MatrixFilePayload class."""
+
+    @pytest.fixture
+    def mock_terra_metadata(self):
+        """Mock TerraOutputMetadata instance."""
+        mock_metadata = Mock()
+        mock_metadata.terra_data_record = pd.Series({
+            'analysis_set_acc': 'IGVFDS123ABC',
+            'rna_kb_h5ad': 'gs://bucket/file.h5ad'
+        })
+        mock_metadata.taxa = 'Homo sapiens'
+        mock_metadata.anaset_accession = 'IGVFDS123ABC'
+
+        # Mock UUIDs
+        mock_uuids = Mock()
+        mock_uuids.aliases.return_value = 'bucket_sub123_wf456_subwf789'
+        mock_metadata._parse_workflow_uuids_from_gs_path.return_value = mock_uuids
+
+        # Mock input file accessions
+        mock_input_files = Mock()
+        mock_input_files.get_derived_from.return_value = [
+            'IGVFFF001AAA', 'IGVFFF002BBB']
+        mock_input_files.reference_files = ['IGVFFF003CCC']
+        mock_metadata._get_input_file_accs_from_table.return_value = mock_input_files
+
+        return mock_metadata
+
+    @pytest.fixture
+    @patch('sc_pipe_management.accession.igvf_payloads.const.OUTPUT_SUBMITTER_INFO',
+           {'lab': '/labs/test-lab/', 'award': '/awards/test-award/'})
+    @patch('sc_pipe_management.accession.igvf_payloads.const.MATRIX_FILETYPES')
+    @patch('sc_pipe_management.accession.igvf_payloads.const.GENOME_ASSEMBLY_INFO')
+    def matrix_payload(self, mock_genome_info, mock_matrix_types, mock_terra_metadata):
+        """Create MatrixFilePayload instance for testing."""
+        # Mock file metadata
+        mock_file_metadata = Mock()
+        mock_file_metadata.assay_type = 'rna'
+        mock_file_metadata.analysis_step_version = '/analysis-step-versions/test/'
+        mock_file_metadata.content_type = 'intermediate file'
+        mock_file_metadata.file_format = 'h5ad'
+        mock_file_metadata.description = 'Test matrix file'
+        mock_file_metadata.file_format_specifications = [
+            '/file-format-specifications/test/']
+
+        mock_matrix_types.__getitem__.return_value = mock_file_metadata
+        mock_genome_info.get.return_value = 'GRCh38'
+
+        return igvf_payloads.MatrixFilePayload(mock_terra_metadata, 'rna_kb_h5ad')
+
+    def test_init(self, matrix_payload, mock_terra_metadata):
+        """Test MatrixFilePayload initialization."""
+        assert matrix_payload.terra_output_name == 'rna_kb_h5ad'
+        assert matrix_payload.lab == '/labs/test-lab/'
+        assert matrix_payload.award == '/awards/test-award/'
+        assert matrix_payload.terra_metadata == mock_terra_metadata
+
+    def test_aliases_property(self, matrix_payload):
+        """Test aliases property."""
+        with patch('sc_pipe_management.accession.igvf_payloads._get_file_aliases') as mock_aliases:
+            mock_aliases.return_value = [
+                'test-lab:IGVFDS123ABC_bucket_sub123_wf456_subwf789_rna_kb_h5ad_uniform-pipeline']
+
+            result = matrix_payload.aliases
+            assert len(result) == 1
+            assert 'test-lab:' in result[0]
+            assert 'IGVFDS123ABC' in result[0]
+
+    def test_submitted_file_name_property(self, matrix_payload):
+        """Test submitted_file_name property."""
+        result = matrix_payload.submitted_file_name
+        assert result == 'gs://bucket/file.h5ad'
+
+    @patch('sc_pipe_management.accession.igvf_payloads.api_tools.calculate_gsfile_hex_hash')
+    def test_md5sum_property(self, mock_hash, matrix_payload):
+        """Test md5sum property."""
+        mock_hash.return_value = 'abc123def456'
+
+        result = matrix_payload.md5sum
+        assert result == 'abc123def456'
+        mock_hash.assert_called_once_with(file_path='gs://bucket/file.h5ad')
+
+    def test_get_payload(self, matrix_payload):
+        """Test get_payload method."""
+        with patch('sc_pipe_management.accession.igvf_payloads._get_file_aliases') as mock_aliases, \
+                patch('sc_pipe_management.accession.igvf_payloads.api_tools.calculate_gsfile_hex_hash') as mock_hash:
+
+            mock_aliases.return_value = ['test-alias']
+            mock_hash.return_value = 'abc123'
+
+            payload = matrix_payload.get_payload()
+
+            # Check required fields
+            assert payload['award'] == '/awards/test-award/'
+            assert payload['lab'] == '/labs/test-lab/'
+            assert payload['aliases'] == ['test-alias']
+            assert payload['md5sum'] == 'abc123'
+            assert payload['file_set'] == 'IGVFDS123ABC'
+            assert payload['submitted_file_name'] == 'gs://bucket/file.h5ad'
+            assert payload['_profile'] == 'matrix_file'
+            assert payload['principal_dimension'] == 'cell'
+            assert payload['secondary_dimensions'] == ['gene']
+            assert payload['filtered'] is False
+
+
+class TestAlignmentFilePayload:
+    """Test AlignmentFilePayload class."""
+
+    @pytest.fixture
+    def mock_terra_metadata(self):
+        """Mock TerraOutputMetadata instance for alignment files."""
+        mock_metadata = Mock()
+        mock_metadata.terra_data_record = pd.Series({
+            'analysis_set_acc': 'IGVFDS123ABC',
+            'atac_bam': 'gs://bucket/alignment.bam'
+        })
+
+        # Mock UUIDs
+        mock_uuids = Mock()
+        mock_uuids.aliases.return_value = 'bucket_sub123_wf456_subwf789'
+        mock_metadata._parse_workflow_uuids_from_gs_path.return_value = mock_uuids
+
+        # Mock input file accessions
+        mock_input_files = Mock()
+        mock_input_files.get_derived_from.return_value = ['IGVFFF001AAA']
+        mock_input_files.reference_files = ['IGVFFF002BBB']
+        mock_input_files.sequence_files = ['IGVFFF003CCC']
+        mock_metadata._get_input_file_accs_from_table.return_value = mock_input_files
+
+        return mock_metadata
 
     @pytest.fixture
     def mock_igvf_api(self):
-        """Mock IGVF API client."""
+        """Mock IGVF API."""
         mock_api = Mock()
-        mock_api.get.return_value = {'controlled_access': False}
+        # Mock sequence file response
+        mock_seq_file = Mock()
+        mock_seq_file.controlled_access = False
+        mock_api.get_by_id.return_value.actual_instance = mock_seq_file
         return mock_api
 
     @pytest.fixture
-    def sample_terra_record(self):
-        """Load test data record."""
-        test_file_path = Path(__file__).parent / \
-            'test_files' / 'DACC_post_testcases.tsv'
-        if test_file_path.exists():
-            terra_data_table = pd.read_csv(test_file_path, sep='\t')
-            return terra_data_table.iloc[0]
+    @patch('sc_pipe_management.accession.igvf_payloads.const.OUTPUT_SUBMITTER_INFO',
+           {'lab': '/labs/test-lab/', 'award': '/awards/test-award/'})
+    @patch('sc_pipe_management.accession.igvf_payloads.const.ALIGNMENT_FILETYPES')
+    def alignment_payload(self, mock_alignment_types, mock_terra_metadata, mock_igvf_api):
+        """Create AlignmentFilePayload instance for testing."""
+        # Mock file metadata
+        mock_file_metadata = Mock()
+        mock_file_metadata.assay_type = 'atac'
+        mock_file_metadata.analysis_step_version = '/analysis-step-versions/test/'
+        mock_file_metadata.file_format = 'bam'
+        mock_file_metadata.content_type = 'alignments'
+        mock_file_metadata.description = 'Test alignment file'
+
+        mock_alignment_types.__getitem__.return_value = mock_file_metadata
+
+        return igvf_payloads.AlignmentFilePayload(mock_terra_metadata, mock_igvf_api)
+
+    def test_init(self, alignment_payload, mock_terra_metadata, mock_igvf_api):
+        """Test AlignmentFilePayload initialization."""
+        assert alignment_payload.terra_output_name == 'atac_bam'
+        assert alignment_payload.lab == '/labs/test-lab/'
+        assert alignment_payload.award == '/awards/test-award/'
+        assert alignment_payload.igvf_api == mock_igvf_api
+
+    def test_get_access_status_open_access(self, alignment_payload):
+        """Test _get_access_status returns False for open access files."""
+        result = alignment_payload._get_access_status()
+        assert result is False
+
+    def test_get_access_status_controlled_access(self, alignment_payload):
+        """Test _get_access_status returns True when any file is controlled access."""
+        # Mock one controlled access file
+        mock_seq_file = Mock()
+        mock_seq_file.controlled_access = True
+        alignment_payload.igvf_api.get_by_id.return_value.actual_instance = mock_seq_file
+
+        result = alignment_payload._get_access_status()
+        assert result is True
+
+    def test_get_payload(self, alignment_payload):
+        """Test get_payload method."""
+        with patch.object(alignment_payload, 'aliases', ['test-alias']):
+            with patch.object(alignment_payload, 'md5sum', 'abc123'):
+                payload = alignment_payload.get_payload()
+
+                # Check required fields
+                assert payload['award'] == '/awards/test-award/'
+                assert payload['lab'] == '/labs/test-lab/'
+                assert payload['aliases'] == ['test-alias']
+                assert payload['md5sum'] == 'abc123'
+                assert payload['file_set'] == 'IGVFDS123ABC'
+                assert payload['_profile'] == 'alignment_file'
+                assert payload['filtered'] is False
+                assert payload['redacted'] is False
+                assert 'controlled_access' in payload
+
+
+class TestFragmentFilePayload:
+    """Test FragmentFilePayload class."""
 
     @pytest.fixture
-    def terra_metadata(self, sample_terra_record, mock_igvf_api):
-        """Create TerraOutputMetadata instance."""
-        return parse_terra.TerraOutputMetadata(sample_terra_record, mock_igvf_api)
+    def mock_terra_metadata(self):
+        """Mock TerraOutputMetadata instance for fragment files."""
+        mock_metadata = Mock()
+        mock_metadata.terra_data_record = pd.Series({
+            'analysis_set_acc': 'IGVFDS123ABC',
+            'atac_fragments': 'gs://bucket/fragments.tsv.gz'
+        })
+        mock_metadata.taxa = 'Homo sapiens'
 
-    @pytest.fixture
-    def matrix_payload_cls(self, terra_metadata):
-        if 'rna_kb_h5ad' in terra_metadata.terra_data_record:
-            return igvf_payloads.MatrixFilePayload(
-                terra_metadata, 'rna_kb_h5ad')
+        # Mock UUIDs
+        mock_uuids = Mock()
+        mock_uuids.aliases.return_value = 'bucket_sub123_wf456_subwf789'
+        mock_metadata._parse_workflow_uuids_from_gs_path.return_value = mock_uuids
 
-    @pytest.fixture
-    def expected_matrix_payload(self):
-        """Load expected payload data."""
-        test_file_path = Path(__file__).parent / \
-            'test_files' / 'expected_payloads.json'
-        with open(test_file_path, 'r') as f:
-            return json.load(f)['rna_kb_h5ad']
+        # Mock input file accessions
+        mock_input_files = Mock()
+        mock_input_files.get_derived_from.return_value = ['IGVFFF001AAA']
+        mock_input_files.description = 'Test fragment file'
+        mock_metadata._get_input_file_accs_from_table.return_value = mock_input_files
 
-    def test_terra_output_name_property(self, matrix_payload_cls):
-        """Test terra_output_name property."""
-        assert matrix_payload_cls.terra_output_name == 'rna_kb_h5ad'
-
-    def test_submitted_file_name_property(self, matrix_payload_cls, sample_terra_record):
-        """Test submitted_file_name property with real data."""
-        if 'rna_kb_h5ad' in matrix_payload_cls.terra_data_record:
-            expected_file_name = sample_terra_record['rna_kb_h5ad']
-            assert matrix_payload_cls.submitted_file_name == expected_file_name
-
-    def test_file_md5sum_property(self, matrix_payload_cls, sample_terra_record):
-        """Test file_md5sum property."""
-        if 'rna_kb_h5ad' in matrix_payload_cls.terra_data_record:
-            calc_md5 = api_tools.calculate_gsfile_hex_hash(
-                file_path=sample_terra_record['rna_kb_h5ad'])
-            assert matrix_payload_cls.md5sum == calc_md5
-
-    def test_aliases_property(self, matrix_payload_cls):
-        """Test aliases property."""
-        expected_aliases = ['igvf-dacc-processing-pipeline:IGVFDS0657NHTA_fc-secure-de19fd29-2253-41cd-9751-1788cf7ad1a5_f6921ff1-998d-4faf-a638-9b7d9e55820c_e2d9739d-6423-4051-b065-0575c840fba2_e856c806-001d-4c7d-9c67-dc8054e6c241_rna_kb_h5ad_uniform-pipeline']
-        assert matrix_payload_cls.aliases == expected_aliases
-
-    def test_matrix_payload(self, matrix_payload_cls, expected_matrix_payload):
-        """Test MatrixFilePayload initialization."""
-        generated_payload = matrix_payload_cls.get_payload()
-        for key, value in expected_matrix_payload.items():
-            assert generated_payload[key] == value
-
-
-class TestQCMetricsPayload:
-    """Test cases for QCMetricsPayload class."""
-
-    @pytest.fixture
-    def sample_terra_record(self):
-        """Load test data record."""
-        test_file_path = Path(__file__).parent / \
-            'test_files' / 'DACC_post_testcases.tsv'
-        if test_file_path.exists():
-            terra_data_table = pd.read_csv(test_file_path, sep='\t')
-            return terra_data_table.iloc[0]
-        else:
-            return pd.Series({
-                'analysis_set_acc': 'IGVFDS123ABC',
-                'rna_kb_library_qc_metrics_json': 'gs://bucket/qc_metrics.json'
-            })
-
-    @pytest.fixture
-    def mock_qc_data_info(self):
-        """Mock QC data info."""
-        mock_info = Mock()
-        mock_info.metadata = ['rna_kb_library_qc_metrics_json']
-        mock_info.attachment = {'rnaseq_kb_info': 'parameters.json'}
-        mock_info.object_type = 'single_cell_rna_seq_quality_metric'
-        mock_info.description = 'RNAseq Kallisto Bustools QC metric'
-        mock_info.metadata_map = {
-            'numRecords': 'n_records', 'numReads': 'n_reads'}
-        return mock_info
-
-    @pytest.fixture
-    def mock_terra_uuids(self):
-        """Mock Terra UUIDs."""
-        return parse_terra.PipelineOutputIds(
-            gcloud_bucket='fc-secure-bucket',
-            submission_id='12345',
-            workflow_id='67890',
-            subworkflow_id='abcde'
-        )
-
-    @pytest.fixture
-    def qc_payload(self, sample_terra_record, mock_qc_data_info, mock_terra_uuids):
-        """Create QCMetricsPayload instance."""
-        return igvf_payloads.QCMetricsPayload(
-            terra_data_record=sample_terra_record,
-            qc_data_info=mock_qc_data_info,
-            qc_of=['IGVFFF001AAA'],
-            terra_output_name='gene_count',
-            terra_uuids=mock_terra_uuids,
-            lab='test_lab',
-            award='test_award'
-        )
-
-    def test_init(self, qc_payload):
-        """Test QCMetricsPayload initialization."""
-        assert qc_payload.terra_output_name == 'gene_count'
-        assert qc_payload.lab == 'test_lab'
-        assert qc_payload.award == 'test_award'
-
-    def test_submitted_file_name_property(self, qc_payload):
-        """Test submitted_file_name property returns None for QC."""
-        assert qc_payload.submitted_file_name is None
-
-    def test_md5sum_property(self, qc_payload):
-        """Test md5sum property returns None for QC."""
-        assert qc_payload.md5sum is None
-
-    def test_read_json_file(self, qc_payload):
-        """Test reading JSON files."""
-        mock_json_data = {'numRecords': 1000, 'numReads': 50000}
-
-        with patch('builtins.open', mock_open(read_data=json.dumps(mock_json_data))):
-            with patch('json.load', return_value=mock_json_data):
-                result = qc_payload._read_json_file(['test_file.json'])
-                assert result == mock_json_data
-
-
-class TestIGVFPostService:
-    """Test cases for IGVFPostService class."""
-
-    @pytest.fixture
-    def mock_payload(self):
-        """Mock payload for testing."""
-        payload = Mock()
-        payload.aliases = ['test-lab:sample_alias']
-        payload.md5sum = 'abc123def456'
-        return payload
+        return mock_metadata
 
     @pytest.fixture
     def mock_igvf_api(self):
@@ -261,138 +345,277 @@ class TestIGVFPostService:
         return Mock()
 
     @pytest.fixture
-    def post_service(self, mock_igvf_api, mock_payload):
-        """Create IGVFPostService instance."""
-        return igvf_posting.IGVFPostService(mock_igvf_api, mock_payload)
+    @patch('sc_pipe_management.accession.igvf_payloads.const.OUTPUT_SUBMITTER_INFO',
+           {'lab': '/labs/test-lab/', 'award': '/awards/test-award/'})
+    @patch('sc_pipe_management.accession.igvf_payloads.const.TABULAR_FILETYPES')
+    @patch('sc_pipe_management.accession.igvf_payloads.const.GENOME_ASSEMBLY_INFO')
+    def fragment_payload(self, mock_genome_info, mock_tabular_types, mock_terra_metadata, mock_igvf_api):
+        """Create FragmentFilePayload instance for testing."""
+        # Mock file metadata
+        mock_file_metadata = Mock()
+        mock_file_metadata.assay_type = 'atac'
+        mock_file_metadata.analysis_step_version = '/analysis-step-versions/test/'
+        mock_file_metadata.content_type = 'fragments'
+        mock_file_metadata.file_format = 'tsv'
+        mock_file_metadata.file_format_specifications = [
+            '/file-format-specifications/test/']
 
-    def test_init(self, post_service, mock_igvf_api, mock_payload):
-        """Test IGVFPostService initialization."""
-        assert post_service.igvf_utils_api == mock_igvf_api
-        assert post_service.data_obj_payload == mock_payload
-        assert post_service.upload_file is False
-        assert post_service.resumed_posting is False
+        mock_tabular_types.__getitem__.return_value = mock_file_metadata
+        mock_genome_info.get.return_value = 'GRCh38'
 
-    def test_init_with_options(self, mock_igvf_api, mock_payload):
-        """Test IGVFPostService initialization with options."""
-        post_service = igvf_posting.IGVFPostService(
-            mock_igvf_api,
-            mock_payload,
-            upload_file=True,
-            resumed_posting=True
+        return igvf_payloads.FragmentFilePayload(mock_terra_metadata, mock_igvf_api)
+
+    def test_init(self, fragment_payload, mock_terra_metadata, mock_igvf_api):
+        """Test FragmentFilePayload initialization."""
+        assert fragment_payload.terra_output_name == 'atac_fragments'
+        assert fragment_payload.lab == '/labs/test-lab/'
+        assert fragment_payload.award == '/awards/test-award/'
+        assert fragment_payload.igvf_api == mock_igvf_api
+
+    def test_get_payload(self, fragment_payload):
+        """Test get_payload method."""
+        with patch.object(fragment_payload, 'aliases', ['test-alias']):
+            with patch.object(fragment_payload, 'md5sum', 'abc123'):
+                payload = fragment_payload.get_payload()
+
+                # Check required fields
+                assert payload['award'] == '/awards/test-award/'
+                assert payload['lab'] == '/labs/test-lab/'
+                assert payload['aliases'] == ['test-alias']
+                assert payload['md5sum'] == 'abc123'
+                assert payload['file_set'] == 'IGVFDS123ABC'
+                assert payload['_profile'] == 'tabular_file'
+                assert payload['file_format_type'] == 'bed3+'
+                assert payload['controlled_access'] is False
+                assert payload['filtered'] is False
+                assert payload['assembly'] == 'GRCh38'
+
+
+class TestIndexFilePayload:
+    """Test IndexFilePayload class."""
+
+    @pytest.fixture
+    def mock_terra_metadata(self):
+        """Mock TerraOutputMetadata instance for index files."""
+        mock_metadata = Mock()
+        mock_metadata.terra_data_record = pd.Series({
+            'analysis_set_acc': 'IGVFDS123ABC',
+            'atac_bam_index': 'gs://bucket/alignment.bam.bai'
+        })
+
+        # Mock UUIDs
+        mock_uuids = Mock()
+        mock_uuids.aliases.return_value = 'bucket_sub123_wf456_subwf789'
+        mock_metadata._parse_workflow_uuids_from_gs_path.return_value = mock_uuids
+
+        return mock_metadata
+
+    @pytest.fixture
+    def mock_igvf_api(self):
+        """Mock IGVF API."""
+        return Mock()
+
+    @pytest.fixture
+    @patch('sc_pipe_management.accession.igvf_payloads.const.OUTPUT_SUBMITTER_INFO',
+           {'lab': '/labs/test-lab/', 'award': '/awards/test-award/'})
+    @patch('sc_pipe_management.accession.igvf_payloads.const.INDEX_FILETYPES')
+    def index_payload(self, mock_index_types, mock_terra_metadata, mock_igvf_api):
+        """Create IndexFilePayload instance for testing."""
+        # Mock file metadata
+        mock_file_metadata = Mock()
+        mock_file_metadata.analysis_step_version = '/analysis-step-versions/test/'
+        mock_file_metadata.controlled_access = False
+        mock_file_metadata.file_format = 'bai'
+        mock_file_metadata.description = 'Test index file'
+
+        mock_index_types.__getitem__.return_value = mock_file_metadata
+
+        derived_from = ['IGVFFF001AAA']
+        return igvf_payloads.IndexFilePayload(
+            mock_terra_metadata, derived_from, 'atac_bam_index', mock_igvf_api
         )
 
-        assert post_service.upload_file is True
-        assert post_service.resumed_posting is True
+    def test_init(self, index_payload, mock_terra_metadata, mock_igvf_api):
+        """Test IndexFilePayload initialization."""
+        assert index_payload.terra_output_name == 'atac_bam_index'
+        assert index_payload.lab == '/labs/test-lab/'
+        assert index_payload.award == '/awards/test-award/'
+        assert index_payload.derived_from == ['IGVFFF001AAA']
 
-    def test_get_conflict_object_id_by_alias(self, post_service, mock_igvf_api):
-        """Test getting conflict object ID by alias."""
-        mock_igvf_api.get.return_value = {'@id': '/files/IGVFFI001AAA/'}
+    def test_get_payload(self, index_payload):
+        """Test get_payload method."""
+        with patch.object(index_payload, 'aliases', ['test-alias']):
+            with patch.object(index_payload, 'md5sum', 'abc123'):
+                payload = index_payload.get_payload()
 
-        result = post_service._get_conflict_object_id()
-
-        assert result == '/files/IGVFFI001AAA/'
-        mock_igvf_api.get.assert_called_once_with(
-            'aliases:test-lab:sample_alias')
-
-    def test_get_conflict_object_id_by_md5(self, post_service, mock_igvf_api, mock_payload):
-        """Test getting conflict object ID by MD5 when alias fails."""
-        mock_payload.aliases = None
-        mock_igvf_api.get.return_value = {'@id': '/files/IGVFFI001AAA/'}
-
-        result = post_service._get_conflict_object_id()
-
-        assert result == '/files/IGVFFI001AAA/'
-        mock_igvf_api.get.assert_called_once_with('md5:abc123def456')
-
-    def test_get_conflict_object_id_no_conflict(self, post_service, mock_igvf_api):
-        """Test no conflict found."""
-        mock_igvf_api.get.return_value = None
-
-        result = post_service._get_conflict_object_id()
-
-        assert result is None
-
-    def test_get_conflict_object_id_no_identifiers(self, post_service, mock_igvf_api, mock_payload):
-        """Test when no aliases or MD5 available."""
-        mock_payload.aliases = None
-        mock_payload.md5sum = None
-
-        result = post_service._get_conflict_object_id()
-
-        assert result is None
-        mock_igvf_api.get.assert_not_called()
+                # Check required fields
+                assert payload['award'] == '/awards/test-award/'
+                assert payload['lab'] == '/labs/test-lab/'
+                assert payload['aliases'] == ['test-alias']
+                assert payload['md5sum'] == 'abc123'
+                assert payload['file_set'] == 'IGVFDS123ABC'
+                assert payload['_profile'] == 'index_file'
+                assert payload['content_type'] == 'index'
+                assert payload['controlled_access'] is False
+                assert payload['derived_from'] == ['IGVFFF001AAA']
 
 
-class TestPostResult:
-    """Test cases for PostResult dataclass."""
+class TestQCMetricsPayload:
+    """Test QCMetricsPayload class."""
 
-    def test_post_result_success(self):
-        """Test PostResult.Success creation."""
-        result = igvf_posting.PostResult.Success(
-            col_header='test_col', accession='IGVFFI001AAA')
+    @pytest.fixture
+    def mock_terra_metadata(self):
+        """Mock TerraOutputMetadata instance for QC metrics."""
+        mock_metadata = Mock()
+        mock_metadata.terra_data_record = pd.Series({
+            'analysis_set_acc': 'IGVFDS123ABC',
+            'rna_kb_library_qc_metrics_json': 'gs://bucket/qc_metrics.json',
+            'rna_kb_parameters_json': 'gs://bucket/parameters.json'
+        })
 
-        assert result.col_header == 'test_col'
-        assert result.accession == 'IGVFFI001AAA'
-        assert result.error is None
+        # Mock UUIDs
+        mock_uuids = Mock()
+        mock_uuids.aliases.return_value = 'bucket_sub123_wf456_subwf789'
+        mock_metadata._parse_workflow_uuids_from_gs_path.return_value = mock_uuids
 
-    def test_post_result_failure(self):
-        """Test PostResult.Failure creation."""
-        error = Exception('Test error')
-        result = igvf_posting.PostResult.Failure(
-            col_header='test_col', error=error)
+        return mock_metadata
 
-        assert result.col_header == 'test_col'
-        assert result.accession is None
-        assert result.error == error
+    @pytest.fixture
+    def mock_qc_info_map(self):
+        """Mock QC info map."""
+        mock_info = Mock()
+        mock_info.analysis_step_version = '/analysis-step-versions/test/'
+        mock_info.description = 'Test QC metric'
+        mock_info.object_type = 'single_cell_rna_seq_quality_metric'
+        mock_info.__getitem__ = Mock(side_effect=lambda key: {
+            'metadata': ['rna_kb_library_qc_metrics_json'],
+            'attachment': {'rnaseq_kb_info': 'rna_kb_parameters_json'},
+            'metadata_map': {'numRecords': 'n_records', 'numReads': 'n_reads'}
+        }[key])
+        return mock_info
+
+    @pytest.fixture
+    def mock_igvf_api(self):
+        """Mock IGVF API."""
+        return Mock()
+
+    @pytest.fixture
+    @patch('sc_pipe_management.accession.igvf_payloads.const.OUTPUT_SUBMITTER_INFO',
+           {'lab': '/labs/test-lab/', 'award': '/awards/test-award/'})
+    def qc_payload(self, mock_terra_metadata, mock_qc_info_map, mock_igvf_api):
+        """Create QCMetricsPayload instance for testing."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            return igvf_payloads.QCMetricsPayload(
+                terra_metadata=mock_terra_metadata,
+                qc_info_map=mock_qc_info_map,
+                qc_prefix='gene_count',
+                qc_of=['IGVFFF001AAA'],
+                igvf_api=mock_igvf_api,
+                root_output_dir=temp_dir
+            )
+
+    def test_init(self, qc_payload, mock_terra_metadata, mock_igvf_api):
+        """Test QCMetricsPayload initialization."""
+        assert qc_payload.terra_output_name == 'gene_count_metrics'
+        assert qc_payload.lab == '/labs/test-lab/'
+        assert qc_payload.award == '/awards/test-award/'
+        assert qc_payload.qc_of == ['IGVFFF001AAA']
+        assert qc_payload.igvf_api == mock_igvf_api
+
+    def test_submitted_file_name_property(self, qc_payload):
+        """Test submitted_file_name property returns None."""
+        assert qc_payload.submitted_file_name is None
+
+    def test_md5sum_property(self, qc_payload):
+        """Test md5sum property returns None."""
+        assert qc_payload.md5sum is None
+
+    def test_aliases_property(self, qc_payload):
+        """Test aliases property."""
+        result = qc_payload.aliases
+        assert len(result) == 1
+        assert 'test-lab:' in result[0]
+        assert 'IGVFDS123ABC' in result[0]
+        assert 'gene_count_metrics' in result[0]
+
+    @patch('sc_pipe_management.accession.igvf_payloads._download_qc_file_from_gcp')
+    def test_get_qc_files(self, mock_download, qc_payload):
+        """Test _get_qc_files method."""
+        # Mock successful downloads
+        mock_download.side_effect = [
+            '/tmp/qc_metrics.json', '/tmp/parameters.json']
+
+        result = qc_payload._get_qc_files()
+
+        assert isinstance(result, igvf_payloads.QCFileDownloadInfo)
+        assert len(result.paths_of_metadata_files) == 1
+        assert len(result.paths_of_attachment_files) == 1
+        assert result.paths_of_metadata_files[0] == '/tmp/qc_metrics.json'
+
+    def test_read_json_file(self):
+        """Test _read_json_file static method."""
+        test_data = {"numRecords": 1000, "numReads": 50000}
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(test_data, f)
+            temp_file = f.name
+
+        try:
+            result = igvf_payloads.QCMetricsPayload._read_json_file([
+                                                                    temp_file])
+            assert result == test_data
+        finally:
+            os.unlink(temp_file)
 
 
 class TestPipelineParamsInfo:
-    """Test cases for PipelineParamsInfo class."""
+    """Test PipelineParamsInfo class."""
 
     @pytest.fixture
-    def terra_data_table(self):
-        """Load or create test data."""
-        test_file_path = Path(__file__).parent / \
-            'test_files' / 'DACC_post_testcases.tsv'
-        if test_file_path.exists():
-            return pd.read_csv(test_file_path, sep='\t')
-        else:
-            return pd.DataFrame({
-                'analysis_set_acc': ['IGVFDS123ABC', 'IGVFDS456DEF'],
-                'rna_kb_h5ad': [
-                    'gs://fc-secure-bucket/submissions/12345/workflow_67890/call-aggregate_metrics/subwf_abcde/output.h5ad',
-                    'gs://fc-secure-bucket/submissions/23456/workflow_78901/call-aggregate_metrics/subwf_fghij/output.h5ad'
-                ]
-            })
+    def sample_terra_datable(self):
+        """Sample Terra data table."""
+        return pd.DataFrame({
+            'analysis_set_acc': ['IGVFDS123ABC', 'IGVFDS456DEF'],
+            'rna_kb_h5ad': [
+                'gs://bucket/sub123/wf456/subwf789/file1.h5ad',
+                'gs://bucket/sub456/wf789/subwf012/file2.h5ad'
+            ]
+        })
 
     @pytest.fixture
-    def pipeline_params(self, terra_data_table):
+    def pipeline_params(self, sample_terra_datable):
         """Create PipelineParamsInfo instance."""
-        return igvf_payloads.PipelineParamsInfo(terra_data_table)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            return igvf_payloads.PipelineParamsInfo(
+                terra_datable=sample_terra_datable,
+                output_root_dir=temp_dir
+            )
 
-    def test_init(self, pipeline_params, terra_data_table):
+    def test_init(self, pipeline_params, sample_terra_datable):
         """Test PipelineParamsInfo initialization."""
         assert pipeline_params.terra_namespace == 'DACC_ANVIL'
         assert pipeline_params.terra_workspace == 'IGVF Single-Cell Data Processing'
-        assert pipeline_params.terra_datable.equals(terra_data_table)
+        assert pipeline_params.terra_datable.equals(sample_terra_datable)
 
-    def test_init_with_custom_params(self, terra_data_table):
-        """Test PipelineParamsInfo initialization with custom parameters."""
-        custom_params = igvf_payloads.PipelineParamsInfo(
-            terra_data_table,
-            terra_namespace='CUSTOM_NAMESPACE',
-            terra_workspace='Custom Workspace',
-            output_root_dir='/custom/path/'
-        )
+    def test_init_with_custom_params(self, sample_terra_datable):
+        """Test initialization with custom parameters."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            params = igvf_payloads.PipelineParamsInfo(
+                terra_datable=sample_terra_datable,
+                terra_namespace='CUSTOM_NAMESPACE',
+                terra_workspace='Custom Workspace',
+                output_root_dir=temp_dir
+            )
 
-        assert custom_params.terra_namespace == 'CUSTOM_NAMESPACE'
-        assert custom_params.terra_workspace == 'Custom Workspace'
-        assert custom_params.output_root_dir == '/custom/path/'
+            assert params.terra_namespace == 'CUSTOM_NAMESPACE'
+            assert params.terra_workspace == 'Custom Workspace'
+            assert params.output_root_dir == temp_dir
 
     @patch('sc_pipe_management.accession.igvf_payloads.fapi.get_workflow_metadata')
-    def test_get_single_input_params_success(self, mock_get_metadata, pipeline_params):
-        """Test successful retrieval of input parameters."""
-        # Mock successful API response
+    @patch('sc_pipe_management.accession.igvf_payloads._dump_json')
+    def test_get_single_input_params_success(self, mock_dump_json, mock_get_metadata, pipeline_params):
+        """Test successful input params retrieval."""
+        # Mock API response
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -400,21 +623,26 @@ class TestPipelineParamsInfo:
         }
         mock_get_metadata.return_value = mock_response
 
+        # Mock file dump
+        mock_dump_json.return_value = '/path/to/config.json'
+
         # Mock terra metadata
         mock_terra_metadata = Mock()
-        mock_terra_metadata._parse_workflow_uuids_from_gs_path.return_value = parse_terra.PipelineOutputIds(
-            gcloud_bucket='fc-secure-bucket',
-            submission_id='12345',
-            workflow_id='67890',
-            subworkflow_id='abcde'
-        )
         mock_terra_metadata.analysis_set_acc = 'IGVFDS123ABC'
+        mock_uuids = Mock()
+        mock_uuids.submission_id = 'sub123'
+        mock_uuids.workflow_id = 'wf456'
+        mock_terra_metadata._parse_workflow_uuids_from_gs_path.return_value = mock_uuids
 
-        with patch('json.dumps', return_value='{"inputs": {"param1": "value1"}}'):
-            result = pipeline_params._get_single_input_params(
-                mock_terra_metadata)
-            assert isinstance(result, str)
-            assert 'param1' in result
+        result = pipeline_params._get_single_input_params(mock_terra_metadata)
+
+        assert result == '/path/to/config.json'
+        mock_get_metadata.assert_called_once_with(
+            namespace='DACC_ANVIL',
+            workspace='IGVF Single-Cell Data Processing',
+            submission_id='sub123',
+            workflow_id='wf456'
+        )
 
     @patch('sc_pipe_management.accession.igvf_payloads.fapi.get_workflow_metadata')
     def test_get_single_input_params_api_error(self, mock_get_metadata, pipeline_params):
@@ -426,170 +654,153 @@ class TestPipelineParamsInfo:
 
         mock_terra_metadata = Mock()
         mock_terra_metadata.analysis_set_acc = 'IGVFDS123ABC'
-        mock_terra_metadata._parse_workflow_uuids_from_gs_path.return_value = Mock()
 
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # FireCloudServerError
             pipeline_params._get_single_input_params(mock_terra_metadata)
 
 
-class TestAccessioning:
-    """Integration tests for the accessioning module using real test data."""
-
-    @pytest.fixture(scope="class")
-    def terra_data_table(self):
-        """Load the Terra test data table once for all tests."""
-        test_file_path = Path(__file__).parent / \
-            'test_files' / 'DACC_post_testcases.tsv'
-        if test_file_path.exists():
-            return pd.read_csv(test_file_path, sep='\t')
-        else:
-            pytest.skip("Test data file not found")
+class TestDocumentPayload:
+    """Test DocumentPayload class."""
 
     @pytest.fixture
-    def sample_record(self, terra_data_table):
-        """Get first record from test data."""
-        return terra_data_table.iloc[0]
+    def mock_terra_metadata(self):
+        """Mock TerraOutputMetadata instance."""
+        mock_metadata = Mock()
+        mock_metadata.anaset_accession = 'IGVFDS123ABC'
 
-    def test_terra_data_table_structure(self, terra_data_table):
-        """Test that the Terra data table has expected columns."""
-        expected_columns = ['analysis_set_acc', 'taxa']
-        for col in expected_columns:
-            assert col in terra_data_table.columns, f"Missing expected column: {col}"
+        # Mock UUIDs
+        mock_uuids = Mock()
+        mock_uuids.input_param_aliases.return_value = 'bucket_sub123_wf456_subwf789'
+        mock_metadata._parse_workflow_uuids_from_gs_path.return_value = mock_uuids
 
-    def test_multiple_records_processing(self, terra_data_table):
-        """Test processing multiple records from the Terra data table."""
-        processed_records = []
+        return mock_metadata
 
-        # Test first 3 records
-        for idx, row in terra_data_table.head(3).iterrows():
-            try:
-                mock_igvf_api = Mock()
-                terra_metadata = parse_terra.TerraOutputMetadata(
-                    row, mock_igvf_api)
+    @pytest.fixture
+    def mock_pipeline_params_info(self):
+        """Mock pipeline params info."""
+        return {'IGVFDS123ABC': '/path/to/config.json'}
 
-                # Test basic functionality
-                assert terra_metadata.anaset_accession is not None
-                assert terra_metadata.taxa is not None
+    @pytest.fixture
+    def mock_igvf_api(self):
+        """Mock IGVF API."""
+        return Mock()
 
-                processed_records.append(terra_metadata.anaset_accession)
+    @pytest.fixture
+    @patch('sc_pipe_management.accession.igvf_payloads.const.OUTPUT_SUBMITTER_INFO',
+           {'lab': '/labs/test-lab/', 'award': '/awards/test-award/'})
+    def document_payload(self, mock_terra_metadata, mock_pipeline_params_info, mock_igvf_api):
+        """Create DocumentPayload instance."""
+        return igvf_payloads.DocumentPayload(
+            terra_metadata=mock_terra_metadata,
+            pipeline_params_info=mock_pipeline_params_info,
+            igvf_api=mock_igvf_api
+        )
 
-            except Exception as e:
-                # Log but don't fail - some test data might be incomplete
-                print(f"Warning: Could not process record {idx}: {e}")
+    def test_init(self, document_payload, mock_terra_metadata, mock_igvf_api):
+        """Test DocumentPayload initialization."""
+        assert document_payload.terra_output_name == 'pipeline_parameters'
+        assert document_payload.lab == '/labs/test-lab/'
+        assert document_payload.award == '/awards/test-award/'
+        assert document_payload.input_params_file_path == '/path/to/config.json'
+        assert document_payload.igvf_api == mock_igvf_api
 
-        assert len(processed_records) > 0, "Should process at least one record"
+    def test_mk_doc_aliases(self, document_payload):
+        """Test _mk_doc_aliases method."""
+        result = document_payload._mk_doc_aliases()
+        assert len(result) == 1
+        assert 'igvf-dacc-processing-pipeline:' in result[0]
+        assert 'bucket_sub123_wf456_subwf789' in result[0]
+        assert '_pipeline_config' in result[0]
 
-    def test_all_records_processing(self, terra_data_table):
-        """Test processing all records from the Terra data table."""
-        processed_records = []
-        failed_records = []
+    def test_get_payload(self, document_payload):
+        """Test get_payload method."""
+        payload = document_payload.get_payload()
 
-        # Test ALL records
-        for idx, row in terra_data_table.iterrows():
-            try:
-                mock_igvf_api = Mock()
-                terra_metadata = parse_terra.TerraOutputMetadata(
-                    row, mock_igvf_api)
-
-                # Test basic functionality
-                assert terra_metadata.anaset_accession is not None
-                assert terra_metadata.taxa is not None
-
-                processed_records.append(terra_metadata.anaset_accession)
-
-            except Exception as e:
-                # Log but don't fail - some test data might be incomplete
-                failed_records.append({'idx': idx, 'error': str(
-                    e), 'accession': row.get('analysis_set_acc', 'Unknown')})
-                print(
-                    f"Warning: Could not process record {idx} ({row.get('analysis_set_acc', 'Unknown')}): {e}")
-
-        # Print summary
-        print(f"Successfully processed {len(processed_records)} records")
-        print(f"Failed to process {len(failed_records)} records")
-
-        if failed_records:
-            print("Failed records:")
-            for failed in failed_records:
-                print(
-                    f"  - Index {failed['idx']}: {failed['accession']} - {failed['error']}")
-
-        assert len(processed_records) > 0, "Should process at least one record"
-
-        # Optional: Assert that most records should process successfully
-        success_rate = len(processed_records) / len(terra_data_table)
-        assert success_rate > 0.8, f"Success rate too low: {success_rate:.2%}. Check data quality."
-
-    def test_end_to_end_workflow(self, sample_record):
-        """Test end-to-end workflow with real data."""
-        # This test demonstrates how the components work together
-        mock_igvf_api = Mock()
-        mock_igvf_api.get.return_value = {'controlled_access': False}
-
-        try:
-            # Initialize with real data
-            terra_metadata = parse_terra.TerraOutputMetadata(
-                sample_record, mock_igvf_api)
-
-            # Test that we can create payloads if RNA data exists
-            if 'rna_kb_h5ad' in sample_record and pd.notna(sample_record['rna_kb_h5ad']):
-                # Mock the required methods
-                terra_metadata._get_input_file_accs_from_table = Mock(return_value=parse_terra.InputFileAccs(
-                    derived_from_accessions=['IGVFFF001AAA'],
-                    reference_files=['IGVFFF002BBB']
-                ))
-
-                payload = igvf_payloads.MatrixFilePayload(
-                    terra_metadata, 'rna_kb_h5ad')
-
-                assert payload.terra_output_name == 'rna_kb_h5ad'
-                assert payload.submitted_file_name is not None
-
-                # Test post service
-                post_service = igvf_posting.IGVFPostService(
-                    mock_igvf_api, payload)
-                assert post_service is not None
-
-        except Exception as e:
-            # Skip if test data doesn't support full workflow
-            pytest.skip(f"Test data doesn't support full workflow: {e}")
+        # Check required fields
+        assert payload['award'] == '/awards/test-award/'
+        assert payload['lab'] == '/labs/test-lab/'
+        assert payload['content_type'] == 'application/json'
+        assert payload['document_type'] == 'pipeline parameters'
+        assert payload['file_format'] == 'json'
+        assert payload['_profile'] == 'document'
+        assert payload['attachment']['path'] == '/path/to/config.json'
+        assert 'description' in payload
+        assert len(payload['aliases']) == 1
 
 
-# Parametrized tests for testing multiple records
-class TestParametrizedRecords:
-    """Parametrized tests to run the same test on multiple records."""
+class TestAnalysisSetPatchingPayload:
+    """Test AnalysisSetPatchingPayload class."""
 
-    @pytest.fixture(scope="class")
-    def terra_data_table(self):
-        """Load the Terra test data table."""
-        test_file_path = Path(__file__).parent / \
-            'test_files' / 'DACC_post_testcases.tsv'
-        if test_file_path.exists():
-            return pd.read_csv(test_file_path, sep='\t')
-        else:
-            pytest.skip("Test data file not found")
+    @pytest.fixture
+    def mock_terra_metadata(self):
+        """Mock TerraOutputMetadata instance."""
+        mock_metadata = Mock()
+        mock_metadata.analysis_set_acc = 'IGVFDS123ABC'
+        return mock_metadata
 
-    @pytest.mark.parametrize("record_index", [0, 1, 2])
-    def test_individual_records(self, terra_data_table, record_index):
-        """Test individual records from the Terra data table."""
-        if record_index >= len(terra_data_table):
-            pytest.skip(
-                f"Record index {record_index} not available in test data")
+    @pytest.fixture
+    def mock_igvf_utils_api(self):
+        """Mock IGVF utils API."""
+        mock_api = Mock()
+        mock_api.IGVFID_KEY = '@id'
+        return mock_api
 
-        record = terra_data_table.iloc[record_index]
-        mock_igvf_api = Mock()
+    @pytest.fixture
+    def patching_payload(self, mock_terra_metadata, mock_igvf_utils_api):
+        """Create AnalysisSetPatchingPayload instance."""
+        return igvf_payloads.AnalysisSetPatchingPayload(
+            terra_metadata=mock_terra_metadata,
+            input_params_doc_uuid='doc-uuid-123',
+            igvf_utils_api=mock_igvf_utils_api
+        )
 
-        try:
-            terra_metadata = parse_terra.TerraOutputMetadata(
-                record, mock_igvf_api)
-            assert terra_metadata.anaset_accession is not None
-            assert terra_metadata.taxa is not None
-            print(
-                f"Successfully tested record {record_index}: {terra_metadata.anaset_accession}")
-        except Exception as e:
-            pytest.fail(f"Failed to process record {record_index}: {e}")
+    def test_init(self, patching_payload, mock_terra_metadata, mock_igvf_utils_api):
+        """Test AnalysisSetPatchingPayload initialization."""
+        assert patching_payload.analysis_set_acc == 'IGVFDS123ABC'
+        assert patching_payload.input_params_doc_uuid == 'doc-uuid-123'
+        assert patching_payload.igvf_utils_api == mock_igvf_utils_api
+
+    def test_get_existing_analysis_set_docs_no_docs(self, patching_payload):
+        """Test _get_existing_analysis_set_docs when no documents exist."""
+        # Mock analysis set with no documents
+        patching_payload.igvf_utils_api.get.return_value = {'documents': None}
+
+        result = patching_payload._get_existing_analysis_set_docs()
+        assert result == []
+
+    def test_get_existing_analysis_set_docs_with_docs(self, patching_payload):
+        """Test _get_existing_analysis_set_docs with existing documents."""
+        # Mock analysis set with documents
+        patching_payload.igvf_utils_api.get.side_effect = [
+            {'documents': ['/documents/doc1/', '/documents/doc2/']},
+            {'uuid': 'uuid1'},
+            {'uuid': 'uuid2'}
+        ]
+
+        result = patching_payload._get_existing_analysis_set_docs()
+        assert len(result) == 2
+        assert 'uuid1' in result
+        assert 'uuid2' in result
+
+    def test_get_patch_payload_doc_already_exists(self, patching_payload):
+        """Test _get_patch_payload when document already exists."""
+        with patch.object(patching_payload, '_get_existing_analysis_set_docs',
+                          return_value=['doc-uuid-123', 'other-uuid']):
+            result = patching_payload._get_patch_payload()
+            assert result is None
+
+    def test_get_patch_payload_new_doc(self, patching_payload):
+        """Test _get_patch_payload when document is new."""
+        with patch.object(patching_payload, '_get_existing_analysis_set_docs',
+                          return_value=['other-uuid']):
+            result = patching_payload._get_patch_payload()
+
+            assert result is not None
+            assert result['@id'] == '/analysis-sets/IGVFDS123ABC/'
+            assert result['uniform_pipeline_status'] == 'completed'
+            assert result['_profile'] == 'analysis_set'
+            assert 'documents' in result
 
 
 if __name__ == '__main__':
-    # Run tests with pytest
     pytest.main([__file__, "-v"])
