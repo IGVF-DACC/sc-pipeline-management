@@ -29,14 +29,18 @@ class TestTerraToPortalPosting:
         # Prepare a mock terra_data_record (single row)
         terra_data_record = pd.Series({
             'analysis_set_acc': 'IGVFDS123ABC',
-            'atac_MeaSetIDs': ['IGVFDS5678DF'],
-            'rna_MeaSetIDs': ['IGVFDS9012GH'],
+            'atac_MeaSetIDs': "['IGVFDS5678DF']",
+            'rna_MeaSetIDs': "['IGVFDS9012GH']",
             'taxa': 'Homo sapiens',
             'some_other_field': 'value'
         })
 
         # Prepare mock pipeline_params_info
         pipeline_params_info = mock_PipelineParamsInfo.return_value
+        pipeline_params_info.get_all_input_params = {
+            'IGVFDS123ABC': '/path/to/config1.json',
+            'IGVFDS456DEF': '/path/to/config2.json'
+        }
 
         # Prepare mock IGVF client and utils APIs
         mock_igvf_client_api = Mock()
@@ -64,7 +68,7 @@ class TestTerraToPortalPosting:
         # Call the function
         results = t2p_posting.post_single_pipeline_run(
             terra_data_record=terra_data_record,
-            pipeline_params_info=pipeline_params_info,
+            anaset_input_params_file_paths=pipeline_params_info,
             igvf_client_api=mock_igvf_client_api,
             igvf_utils_api=mock_igvf_utils_api,
             output_root_dir='/tmp/test_output',
