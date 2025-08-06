@@ -120,15 +120,15 @@ class IGVFPostService:
             return PostResult.Failure(
                 col_header=self.data_obj_payload.terra_output_name, error=e)
 
-    def _single_patch_to_portal(self, analysis_set_acc: str) -> PostResult:
+    def _single_patch_to_portal(self, patched_object_accession: str) -> PostResult:
         """PATCH a single data object to the portal, after checking for conflicts by MD5 or aliases."""
         try:
             self.igvf_utils_api.patch(self.data_obj_payload)
             PostResult.Success(
-                col_header=self.data_obj_payload['_profile'], accession=analysis_set_acc)
+                col_header=self.data_obj_payload['_profile'], accession=patched_object_accession)
         except (requests.exceptions.HTTPError, PortalConflictError) as e:
             return PostResult.Failure(
-                col_header=self.data_obj_payload.terra_output_name, error=e)
+                col_header=self.data_obj_payload['_profile'], error=e)
 
     def get_chained_new_uuid_generated(self, lead_chain_post_results: list[PostResult]) -> list[PostResult]:
         """Post data to the portal, handling chained objects."""
@@ -367,7 +367,7 @@ class IGVFAccessioning:
         patch_payload = igvf_payloads.AnalysisSetPatchingPayload(
             terra_metadata=self.terra_metadata,
             input_params_doc_uuid=document_uuid,
-            igvf_api=self.igvf_client_api
+            igvf_utils_api=self.igvf_utils_api
         )._get_patch_payload()
 
         # If no patch payload is generated, return a failure result
@@ -384,7 +384,7 @@ class IGVFAccessioning:
             resumed_posting=self.resumed_posting
         )
 
-        return patch_mthd._single_patch_to_portal(analysis_set_acc=self.terra_metadata.anaset_accession)
+        return patch_mthd._single_patch_to_portal(patched_object_accession=self.terra_metadata.anaset_accession)
 
 
 def post_single_pipeline_run(terra_data_record: pd.Series,

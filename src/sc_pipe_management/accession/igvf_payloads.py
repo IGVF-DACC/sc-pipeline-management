@@ -656,30 +656,31 @@ class AnalysisSetPatchingPayload:
 
     def __init__(self, terra_metadata: terra_parse.TerraOutputMetadata, input_params_doc_uuid: str, igvf_utils_api):
         self.terra_metadata = terra_metadata
-        self.analysis_set_acc = terra_metadata.analysis_set_acc
+        self.anaset_accession = terra_metadata.anaset_accession
         self.input_params_doc_uuid = input_params_doc_uuid
         self.igvf_utils_api = igvf_utils_api
 
     def _get_existing_analysis_set_docs(self) -> list:
         """Get existing document UUID linked to the analysis set."""
         analysis_set_obj = self.igvf_utils_api.get(
-            f'/analysis-sets/{self.analysis_set_acc}')
+            f'/analysis-sets/{self.anaset_accession}')
+        print(analysis_set_obj.keys())
         if not analysis_set_obj.get('documents'):
             return []
         return sorted([doc_uuid.split('/')[-2] for doc_uuid in analysis_set_obj['documents']])
 
     def _get_patch_payload(self) -> dict | None:
         """Get the patch payload for the analysis set."""
-        if self.input_params_doc_uuid is None:
-            return None
         existing_anaset_doc_uuids = self._get_existing_analysis_set_docs()
+        if not existing_anaset_doc_uuids:
+            return None
         if self.input_params_doc_uuid in existing_anaset_doc_uuids:
             return None
         new_anaset_doc_uuids = existing_anaset_doc_uuids.append(
             self.input_params_doc_uuid)
         return {
             'documents': new_anaset_doc_uuids,
-            self.igvf_utils_api.IGVFID_KEY: f"/analysis-sets/{self.analysis_set_acc}/",
+            self.igvf_utils_api.IGVFID_KEY: f"/analysis-sets/{self.anaset_accession}/",
             'uniform_pipeline_status': 'completed',
             '_profile': 'analysis_set'
         }

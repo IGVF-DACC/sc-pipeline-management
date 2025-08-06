@@ -501,11 +501,10 @@ class TestQCMetricsPayload:
         mock_info.analysis_step_version = '/analysis-step-versions/test/'
         mock_info.description = 'Test QC metric'
         mock_info.object_type = 'single_cell_rna_seq_quality_metric'
-        mock_info.__getitem__ = Mock(side_effect=lambda key: {
-            'metadata': ['rna_kb_library_qc_metrics_json'],
-            'attachment': {'rnaseq_kb_info': 'rna_kb_parameters_json'},
-            'metadata_map': {'numRecords': 'n_records', 'numReads': 'n_reads'}
-        }[key])
+        mock_info.metadata = ['rna_kb_library_qc_metrics_json']
+        mock_info.attachment = {'rnaseq_kb_info': 'rna_kb_parameters_json'}
+        mock_info.metadata_map = {
+            'numRecords': 'n_records', 'numReads': 'n_reads'}
         return mock_info
 
     @pytest.fixture
