@@ -78,8 +78,8 @@ class TestTerraMetadataParse:
         config_aliases = uuids.input_param_aliases()
         assert config_aliases[0] == 'sub123_wf456'
 
-    def test_parse_workflow_uuids_from_gs_path(self, gs_path):
-        uuids = parse_terra.parse_workflow_uuids_from_gs_path(gs_path)
+    def test_parse_workflow_uuids_from_gs_path(self, mock_terra_metadata):
+        uuids = mock_terra_metadata._parse_workflow_uuids_from_gs_path()
         assert uuids.gcloud_bucket == 'bucket'
         assert uuids.submission_id == 'sub123'
         assert uuids.workflow_id == 'wf456'
