@@ -380,7 +380,7 @@ class IndexFilePayload:
         return _get_file_aliases(col_header=self.terra_output_name,
                                  lab=self.lab,
                                  terra_data_record=self.terra_metadata.terra_data_record,
-                                 terra_uuids=self.terra_uuids.aliases())
+                                 terra_uuids=self.terra_uuids)
 
     @property
     def submitted_file_name(self) -> str:
@@ -399,6 +399,14 @@ class IndexFilePayload:
         """Property to get the Terra output name of the payload."""
         return self._terra_output_name
 
+    def _get_controlled_access_from_derived_from(self) -> bool:
+        """Check if any of the derived_from files are controlled access."""
+        for file_uuid in self.derived_from:
+            file_obj = self.igvf_api.get_by_id(file_uuid).actual_instance
+            if file_obj.controlled_access:
+                return True
+        return False
+
     def get_payload(self):
         """Get the tabular file payload for the given Terra output name."""
         # Make Index file payload
@@ -407,7 +415,7 @@ class IndexFilePayload:
                                   analysis_step_version=self.file_obj_metadata.analysis_step_version,
                                   aliases=self.aliases,
                                   content_type='index',
-                                  controlled_access=self.file_obj_metadata.controlled_access,
+                                  controlled_access=self._get_controlled_access_from_derived_from(),
                                   file_format=self.file_obj_metadata.file_format,
                                   md5sum=self.md5sum,
                                   derived_from=self.derived_from,
@@ -464,8 +472,8 @@ class QCMetricsPayload:
         if not os.path.exists(curr_qc_file_dir):
             os.makedirs(curr_qc_file_dir)
         # Download attachment files
+        download_attachment_files = []
         if self.qc_info_map.attachment is not None:
-            download_attachment_files = []
             for key, value in self.qc_info_map.attachment.items():
                 # Download the file first
                 curr_attachment_file = _download_qc_file_from_gcp(
@@ -473,8 +481,8 @@ class QCMetricsPayload:
                 download_attachment_files.append(
                     {key: {'path': curr_attachment_file}})
         # Download QC files that will be converted to payloads
+        downloaded_metadata_files = []
         if self.qc_info_map.metadata is not None:
-            downloaded_metadata_files = []
             # Downloaded JSON file paths
             for metadata_qc_file_name in self.qc_info_map.metadata:
                 downloaded_metadata_files.append(_download_qc_file_from_gcp(

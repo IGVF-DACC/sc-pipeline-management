@@ -230,7 +230,7 @@ class IGVFAccessioning:
             terra_metadata=self.terra_metadata,
             derived_from=derived_from_uuids,
             terra_output_name=terra_output_name,
-            igvf_api=self.igvf_utils_api
+            igvf_api=self.igvf_client_api
         )
 
         # Post index file
@@ -304,7 +304,7 @@ class IGVFAccessioning:
 
         # Post Index files
         index_file_post_result = self._post_index_file(
-            derived_from=[alignment_file_post_result], terra_output_name='atac_alignment_index')
+            derived_from=[alignment_file_post_result], terra_output_name='atac_bam_index')
         post_results.append(index_file_post_result)
 
         # Post QC metrics
