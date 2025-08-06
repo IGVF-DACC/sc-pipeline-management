@@ -323,7 +323,6 @@ class IGVFAccessioning:
         post_results = []
 
         # Post fragment files
-
         fragment_file_post_result = self._post_fragment_file()
         post_results.append(fragment_file_post_result)
 
@@ -333,8 +332,12 @@ class IGVFAccessioning:
         post_results.append(index_file_post_result)
 
         # Post QC metrics
+        fragment_qc_prefix = 'fragment'
         qc_post_result = self._post_qc_metrics(
-            file_post_res=[fragment_file_post_result], qc_post_res_name='ATACseq Fragment QC Metrics')
+            file_post_res=[fragment_file_post_result],
+            qc_info_map=const.TERRA_QC_OUTPUTS['atacseq'][fragment_qc_prefix],
+            qc_post_res_name='ATACseq Fragment QC Metrics',
+            qc_prefix=fragment_qc_prefix)
         post_results.append(qc_post_result)
 
         return post_results

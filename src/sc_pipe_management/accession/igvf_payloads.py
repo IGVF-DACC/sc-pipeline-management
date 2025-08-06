@@ -342,7 +342,7 @@ class FragmentFilePayload:
                                      derived_from=self.input_file_accessions.get_derived_from(),
                                      submitted_file_name=self.terra_data_record[self.terra_output_name],
                                      file_set=self.terra_data_record['analysis_set_acc'],
-                                     description=self.input_file_accessions.description,
+                                     description=self.file_obj_metadata.description,
                                      filtered=False,
                                      assembly=const.GENOME_ASSEMBLY_INFO.get(
                                          self.terra_metadata.taxa),
