@@ -595,7 +595,7 @@ class TestPipelineParamsInfo:
     """Test PipelineParamsInfo class."""
 
     @pytest.fixture
-    def sample_terra_datable(self):
+    def sample_terra_datatable(self):
         """Sample Terra data table."""
         return pd.DataFrame({
             'analysis_set_acc': ['IGVFDS123ABC', 'IGVFDS456DEF'],
@@ -606,26 +606,26 @@ class TestPipelineParamsInfo:
         })
 
     @pytest.fixture
-    def pipeline_params(self, sample_terra_datable):
+    def pipeline_params(self, sample_terra_datatable):
         """Create PipelineParamsInfo instance."""
         with tempfile.TemporaryDirectory() as temp_dir:
             return igvf_payloads.PipelineParamsInfo(
-                terra_datable=sample_terra_datable,
+                terra_datatable=sample_terra_datatable,
                 igvf_client_api=Mock(),
                 output_root_dir=temp_dir
             )
 
-    def test_init(self, pipeline_params, sample_terra_datable):
+    def test_init(self, pipeline_params, sample_terra_datatable):
         """Test PipelineParamsInfo initialization."""
         assert pipeline_params.terra_namespace == 'DACC_ANVIL'
         assert pipeline_params.terra_workspace == 'IGVF Single-Cell Data Processing'
-        assert pipeline_params.terra_datable.equals(sample_terra_datable)
+        assert pipeline_params.terra_datatable.equals(sample_terra_datatable)
 
-    def test_init_with_custom_params(self, sample_terra_datable):
+    def test_init_with_custom_params(self, sample_terra_datatable):
         """Test initialization with custom parameters."""
         with tempfile.TemporaryDirectory() as temp_dir:
             params = igvf_payloads.PipelineParamsInfo(
-                terra_datable=sample_terra_datable,
+                terra_datatable=sample_terra_datatable,
                 igvf_client_api=Mock(),
                 terra_namespace='CUSTOM_NAMESPACE',
                 terra_workspace='Custom Workspace',
@@ -683,7 +683,7 @@ class TestPipelineParamsInfo:
         with pytest.raises(Exception):  # FireCloudServerError
             pipeline_params._get_single_input_params(mock_terra_metadata)
 
-    def test_get_all_input_params_success(self, pipeline_params, sample_terra_datable):
+    def test_get_all_input_params_success(self, pipeline_params, sample_terra_datatable):
         """Test PipelineParamsInfo.get_all_input_params loops over terra data table and collects input params."""
         # Prepare two mock TerraOutputMetadata objects
         mock_terra_metadata_1 = Mock()

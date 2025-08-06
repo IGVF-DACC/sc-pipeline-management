@@ -545,12 +545,12 @@ class QCMetricsPayload:
 
 
 class PipelineParamsInfo:
-    def __init__(self, terra_datable: pd.DataFrame, igvf_client_api, terra_namespace: str = 'DACC_ANVIL', terra_workspace: str = 'IGVF Single-Cell Data Processing', output_root_dir: str = '/igvf/data/'):
+    def __init__(self, terra_datatable: pd.DataFrame, igvf_client_api, terra_namespace: str = 'DACC_ANVIL', terra_workspace: str = 'IGVF Single-Cell Data Processing', output_root_dir: str = '/igvf/data/'):
         self.terra_namespace = terra_namespace
         self.terra_workspace = terra_workspace
         self.output_root_dir = output_root_dir
         # Initialize with Terra metadata class object
-        self.terra_datable = terra_datable
+        self.terra_datatable = terra_datatable
         # IGVF client API for data access
         self.igvf_client_api = igvf_client_api
 
@@ -588,7 +588,7 @@ class PipelineParamsInfo:
         """Get the workflow input configuration JSON for all submissions and workflow IDs."""
         all_input_params = {}
         try:
-            for _, terra_data_record in self.terra_datable.iterrows():
+            for _, terra_data_record in self.terra_datatable.iterrows():
                 terra_metadata = terra_parse.TerraOutputMetadata(
                     terra_data_record, self.igvf_client_api)
                 input_params = self._get_single_input_params(terra_metadata)

@@ -1,3 +1,14 @@
+import sys
+import os
+
+# Get the absolute path to the 'src' directory (one level up from the 'tests' directory)
+src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+# Add the 'src' directory to sys.path if it's not already there
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
+
 import igvf_and_terra_api_tools as api_tools
 import sc_pipe_management.accession.igvf_payloads as igvf_payloads
 import sc_pipe_management.accession.parse_terra_metadata as terra_parse
@@ -146,6 +157,16 @@ def main():
     # Call FireCloud API
     do_firecloud_api()
 
+    # Get the IGVF API keys
+    igvf_api_keys = api_tools.set_up_api_keys(
+        igvf_endpoint=args.post_endpoint)
+
+    # Call IGVF APIs
+    igvf_client_api = do_igvf_client_api(
+        igvf_api_keys=igvf_api_keys, post_endpoint=args.post_endpoint)
+    igvf_utils_api = do_igvf_utils_api(
+        igvf_api_keys=igvf_api_keys, post_endpoint=args.post_endpoint)
+
     # Download data table from Terra
     terra_table = api_tools.get_terra_tsv_data_table(terra_namespace=args.terra_namespace,
                                                      terra_workspace=args.terra_workspace,
@@ -162,24 +183,17 @@ def main():
     pipeline_params_info = igvf_payloads.PipelineParamsInfo(
         terra_namespace=args.terra_namespace,
         terra_workspace=args.terra_workspace,
-        terra_data_table=terra_table,
-        output_root_dir=os.path.join(args.output_dir, 'workflow_configs')).get_all_input_params()
+        terra_datatable=terra_table,
+        igvf_client_api=igvf_client_api,
+        output_root_dir=os.path.join(args.output_dir, 'workflow_configs'))
+    anaset_input_params_file_paths = pipeline_params_info.get_all_input_params()
     logging.info(
-        f'>>>>>>>>>>>>>> {len(pipeline_params_info)} configs downloaded')
-
-    # Get the IGVF API keys
-    igvf_api_keys = api_tools.set_up_api_keys(
-        igvf_endpoint=args.post_endpoint)
-
-    # Call IGVF APIs
-    igvf_client_api = do_igvf_client_api(
-        igvf_api_keys=igvf_api_keys, post_endpoint=args.post_endpoint)
-    igvf_utils_api = do_igvf_utils_api(
-        igvf_api_keys=igvf_api_keys, post_endpoint=args.post_endpoint)
+        f'>>>>>>>>>>>>>> {len(anaset_input_params_file_paths)} configs downloaded')
 
     # Will return a list of accessioning results
     portal_post_results = tr2igvf.post_all_pipeline_runs_from_one_submission(terra_data_table=terra_table,
-                                                                             igvf_api=igvf_client_api, pipeline_params_info=pipeline_params_info,
+                                                                             igvf_client_api=igvf_client_api,
+                                                                             anaset_input_params_file_paths=anaset_input_params_file_paths,
                                                                              igvf_utils_api=igvf_utils_api,
                                                                              output_root_dir=args.output_dir,
                                                                              upload_file=args.upload_file,
@@ -190,13 +204,16 @@ def main():
 
     # Summarize into a table
     portal_post_summary = tr2igvf.summarize_post_status(
-        post_results=portal_post_results)
+        run_results=portal_post_results)
     updated_terra_table = tr2igvf.add_post_status_summary_to_output_data_table(
-        full_terra_data_table=terra_table, post_status_df=portal_post_summary)
+        full_terra_data_table=terra_table,
+        post_status_df=portal_post_summary)
 
     # Save the updated terra table
     tr2igvf.save_pipeline_postres_tables(
-        pipeline_postres_table=portal_post_summary, updated_full_data_table=updated_terra_table, output_root_dir=args.output_dir)
+        pipeline_postres_table=portal_post_summary,
+        updated_full_data_table=updated_terra_table,
+        output_root_dir=args.output_dir)
 
     logging.info(
         f'>>>>>>>>>>>>>> Pipeline post results saved to {args.output_dir}')
