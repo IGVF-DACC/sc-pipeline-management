@@ -443,7 +443,8 @@ class QCMetricsPayload:
         # Output root directory
         self.output_root_dir = root_output_dir
 
-    def _read_json_file(json_file_paths: str) -> dict:
+    @staticmethod
+    def _read_json_file(json_file_paths: list[str]) -> dict:
         """Read a JSON file and return its content as a dictionary.
         Args:
             json_file_path (str): The path to the JSON file.
@@ -463,19 +464,19 @@ class QCMetricsPayload:
         if not os.path.exists(curr_qc_file_dir):
             os.makedirs(curr_qc_file_dir)
         # Download attachment files
-        if self.qc_info_map['attachment'] is not None:
+        if self.qc_info_map.attachment is not None:
             download_attachment_files = []
-            for key, value in self.qc_info_map['attachment'].items():
+            for key, value in self.qc_info_map.attachment.items():
                 # Download the file first
                 curr_attachment_file = _download_qc_file_from_gcp(
                     gs_file_path=self.terra_data_record[value], downloaded_dir=curr_qc_file_dir)
                 download_attachment_files.append(
                     {key: {'path': curr_attachment_file}})
         # Download QC files that will be converted to payloads
-        if self.qc_info_map['metadata'] is not None:
+        if self.qc_info_map.metadata is not None:
             downloaded_metadata_files = []
             # Downloaded JSON file paths
-            for metadata_qc_file_name in self.qc_info_map['metadata']:
+            for metadata_qc_file_name in self.qc_info_map.metadata:
                 downloaded_metadata_files.append(_download_qc_file_from_gcp(
                     gs_file_path=self.terra_data_record[metadata_qc_file_name], downloaded_dir=curr_qc_file_dir))
         return QCFileDownloadInfo(
@@ -502,7 +503,7 @@ class QCMetricsPayload:
         """Property to get the Terra output name of the payload."""
         return self._terra_output_name
 
-    def make_payload(self):
+    def get_payload(self):
         curr_qc_file_dir = os.path.join(
             self.output_root_dir, 'qc_metrics', self.terra_data_record['analysis_set_acc'])
         if not os.path.exists(curr_qc_file_dir):
@@ -511,10 +512,10 @@ class QCMetricsPayload:
         qc_payload = dict(lab=self.lab,
                           award=self.award,
                           aliases=self.aliases,
-                          analysis_step_version=self.qc_data_info.analysis_step_version,
-                          description=self.qc_data_info.description,
+                          analysis_step_version=self.qc_info_map.analysis_step_version,
+                          description=self.qc_info_map.description,
                           quality_metric_of=self.qc_of,
-                          _profile=self.qc_data_info.object_type
+                          _profile=self.qc_info_map.object_type
                           )
         # Downloaded QC files
         qc_file_download_info = self._get_qc_files()
@@ -529,7 +530,7 @@ class QCMetricsPayload:
             qc_json_parsed = self._read_json_file(
                 json_file_paths=qc_file_download_info.paths_of_metadata_files)
             # Update base qc payload
-            for key, value in self.qc_data_info['metadata_map'].items():
+            for key, value in self.qc_info_map.metadata_map.items():
                 qc_payload.update({value: qc_json_parsed[key]})
         return qc_payload
 

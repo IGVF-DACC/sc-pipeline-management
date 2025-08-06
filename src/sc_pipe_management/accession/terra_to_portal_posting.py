@@ -93,21 +93,21 @@ class IGVFPostService:
     def _single_post_to_portal(self) -> PostResult:
         """POST a single data object to the portal, after checking for conflicts by MD5 or aliases."""
         try:
+            payload_dict = self.data_obj_payload.get_payload()
             _schema_property = self.igvf_utils_api.get_profile_from_payload(
-                self.data_obj_payload).properties
+                payload_dict).properties
             # First check payload MD5 and aliases to see if the object already exists
-            existing_object_id = self._get_conflict_object_id(
-                self.igvf_utils_api, self.data_obj_payload)
+            existing_object_id = self._get_conflict_object_id()
             # If conflict exists and not expecting it to, raise an error
             if (existing_object_id is not None) and (not self.resumed_posting):
                 raise PortalConflictError(
-                    f'{self.data_obj_payload.get("_profile").capitalize().replace("_", " ")} failed to accession due to conflict with an existing object: {existing_object_id}.')
+                    f'{payload_dict.get("_profile").capitalize().replace("_", " ")} failed to accession due to conflict with an existing object: {existing_object_id}.')
             # If conflict exists and patching is expected, return the existing object ID
             if (existing_object_id is not None) and (self.resumed_posting):
                 return existing_object_id
             # Post new object to portal if no conflict is expected, metadata only
             stdout = self.igvf_utils_api.post(
-                self.data_obj_payload, upload_file=False, return_original_status_code=True, truncate_long_strings_in_payload_log=True)
+                payload_dict, upload_file=False, return_original_status_code=True, truncate_long_strings_in_payload_log=True)
             # Get the newly generated UUID
             new_uuid_generated = stdout[0]['uuid']
             if self.upload_file:
@@ -157,25 +157,25 @@ class IGVFAccessioning:
         self.pipeline_params_info = pipeline_params_info
         self.root_output_dir = root_output_dir
 
-    def _post_qc_metrics(self, file_post_res: list[PostResult], qc_post_res_name: str) -> PostResult:
+    def _post_qc_metrics(self, file_post_res: list[PostResult], qc_info_map: const.QCInfoMap, qc_post_res_name: str, qc_prefix: str) -> PostResult:
         """Post QC metrics to the portal."""
         # Get a list of files that the QC metrics are for
-        posted_rna_uuids = [
+        posted_files_uuids = [
             res.uuid for res in file_post_res if res.error is None]
 
         # If no files were posted successfully, return a failure result instead of posting QC metrics
-        if not posted_rna_uuids:
+        if not posted_files_uuids:
             return PostResult.Failure(
                 col_header=qc_post_res_name,
                 error='Cannot post QC metrics because the qc_of object(s) failed to post.'
             )
 
         # Get QC metrics payloads
-        rna_qc_payload = igvf_payloads.QCMetricsPayload(
-            terra_metadata=self.terra_data_record,
-            qc_info_map=const.TERRA_QC_OUTPUTS['rnaseq']['gene_count'],
-            qc_prefix='gene_count',
-            qc_of=posted_rna_uuids,
+        qc_payload = igvf_payloads.QCMetricsPayload(
+            terra_metadata=self.terra_metadata,
+            qc_info_map=qc_info_map,
+            qc_prefix=qc_prefix,
+            qc_of=posted_files_uuids,
             igvf_api=self.igvf_utils_api,
             root_output_dir=self.root_output_dir
         )
@@ -183,7 +183,7 @@ class IGVFAccessioning:
         # Post QC metrics (no file to upload)
         curr_qc_post_mthd = IGVFPostService(
             igvf_utils_api=self.igvf_utils_api,
-            data_obj_payload=rna_qc_payload,
+            data_obj_payload=qc_payload,
             upload_file=False,
             resumed_posting=self.resumed_posting
         )
@@ -195,10 +195,13 @@ class IGVFAccessioning:
         post_results = []
 
         # Get matrix file payloads
-        matrix_payloads = [igvf_payloads.MatrixFilePayload(
-            terra_data_record=self.terra_data_record,
-            terra_output_name=terra_output_name
-        ) for terra_output_name in list(const.MATRIX_FILETYPES.keys())]
+        matrix_payloads = []
+        for terra_output_name in list(const.MATRIX_FILETYPES.keys()):
+            curr_matrix_payload = igvf_payloads.MatrixFilePayload(
+                terra_metadata=self.terra_metadata,
+                terra_output_name=terra_output_name
+            )
+            matrix_payloads.append(curr_matrix_payload)
 
         # Post matrix files
         for matrix_payload in matrix_payloads:
@@ -208,21 +211,7 @@ class IGVFAccessioning:
                 upload_file=self.upload_file,
                 resumed_posting=self.resumed_posting
             )
-            post_results.append(curr_mtx_post_mthd.post_to_portal())
-        return post_results
-
-    def post_rnaseq_output(self) -> list[PostResult]:
-        """Post RNAseq output data to the portal."""
-        post_results = []
-
-        # Post matrix files
-        post_results.extend(self._post_matrix_files())
-
-        # Post QC metrics
-        qc_post_result = self._post_qc_metrics(
-            file_post_res=post_results, qc_post_res_name='RNAseq QC Metrics')
-        post_results.append(qc_post_result)
-
+            post_results.append(curr_mtx_post_mthd._single_post_to_portal())
         return post_results
 
     def _post_index_file(self, derived_from: list[PostResult], terra_output_name: str) -> PostResult:
@@ -251,12 +240,12 @@ class IGVFAccessioning:
             upload_file=self.upload_file,
             resumed_posting=self.resumed_posting
         )
-        return curr_index_post_mthd.post_to_portal()
+        return curr_index_post_mthd._single_post_to_portal()
 
     def _post_alignment_file(self) -> PostResult:
         # Get alignment file payload
         alignment_payload = igvf_payloads.AlignmentFilePayload(
-            terra_data_record=self.terra_data_record,
+            terra_metadata=self.terra_metadata,
             igvf_api=self.igvf_client_api
         )
 
@@ -268,7 +257,43 @@ class IGVFAccessioning:
             resumed_posting=self.resumed_posting
         )
 
-        return curr_alignment_post_mthd.post_to_portal()
+        return curr_alignment_post_mthd._single_post_to_portal()
+
+    def _post_fragment_file(self) -> PostResult:
+        """Post ATACseq fragment file to the portal."""
+        # Get fragment file payload
+        fragment_payload = igvf_payloads.FragmentFilePayload(
+            terra_metadata=self.terra_metadata,
+            igvf_api=self.igvf_client_api
+        )
+
+        # Post fragment file
+        curr_fragment_post_mthd = IGVFPostService(
+            igvf_utils_api=self.igvf_utils_api,
+            data_obj_payload=fragment_payload,
+            upload_file=self.upload_file,
+            resumed_posting=self.resumed_posting
+        )
+
+        return curr_fragment_post_mthd._single_post_to_portal()
+
+    def post_all_rnaseq_output(self) -> list[PostResult]:
+        """Post RNAseq output data to the portal."""
+        post_results = []
+
+        # Post matrix files
+        post_results.extend(self._post_matrix_files())
+
+        # Post QC metrics
+        rna_qc_prefix = 'gene_count'
+        qc_post_result = self._post_qc_metrics(
+            file_post_res=post_results,
+            qc_info_map=const.TERRA_QC_OUTPUTS['rnaseq'][rna_qc_prefix],
+            qc_post_res_name='RNAseq QC Metrics',
+            qc_prefix=rna_qc_prefix)
+        post_results.append(qc_post_result)
+
+        return post_results
 
     def post_all_atac_alignment_output(self) -> list[PostResult]:
         """Post ATACseq alignment output data to the portal."""
@@ -278,17 +303,17 @@ class IGVFAccessioning:
         post_results.append(alignment_file_post_result)
 
         # Post Index files
-        index_file_payloads = igvf_payloads.IndexFilePayload(
-            terra_metadata=self.terra_metadata,
-            derived_from=[alignment_file_post_result],
-            terra_output_name='atac_fragments_index',
-            igvf_api=self.igvf_client_api
-        )
-        post_results.append(index_file_payloads.post_to_portal())
+        index_file_post_result = self._post_index_file(
+            derived_from=[alignment_file_post_result], terra_output_name='atac_alignment_index')
+        post_results.append(index_file_post_result)
 
         # Post QC metrics
+        alignment_qc_prefix = 'alignment'
         qc_post_result = self._post_qc_metrics(
-            file_post_res=[alignment_file_post_result], qc_post_res_name='ATACseq Alignment QC Metrics')
+            file_post_res=[alignment_file_post_result],
+            qc_info_map=const.TERRA_QC_OUTPUTS['atacseq'][alignment_qc_prefix],
+            qc_post_res_name='ATACseq Alignment QC Metrics',
+            qc_prefix=alignment_qc_prefix)
         post_results.append(qc_post_result)
 
         return post_results
@@ -298,11 +323,8 @@ class IGVFAccessioning:
         post_results = []
 
         # Post fragment files
-        fragment_file_payloads = igvf_payloads.FragmentFilePayload(
-            terra_data_record=self.terra_data_record,
-            igvf_api=self.igvf_client_api
-        )
-        fragment_file_post_result = fragment_file_payloads.post_to_portal()
+
+        fragment_file_post_result = self._post_fragment_file()
         post_results.append(fragment_file_post_result)
 
         # Post Index files
@@ -405,7 +427,7 @@ def post_single_pipeline_run(terra_data_record: pd.Series,
     post_results = []
     # Post RNAseq output if applicable
     if 'RNAseq' in assays_to_post:
-        post_results += igvf_accessioning.post_rnaseq_output()
+        post_results += igvf_accessioning.post_all_rnaseq_output()
 
     # Post ATACseq alignment output if applicable
     if 'ATACseq' in assays_to_post:
