@@ -672,8 +672,7 @@ class AnalysisSetPatchingPayload:
     def get_patch_payload(self) -> dict:
         """Get the patch payload for the analysis set."""
         anaset_document_uuids = self._get_existing_analysis_set_docs()
-        if not anaset_document_uuids:
-            return None
+        # If Analysis set has no documents, create a documents array
         if self.input_params_doc_uuid in anaset_document_uuids:
             return None
         anaset_document_uuids.append(self.input_params_doc_uuid)

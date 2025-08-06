@@ -345,7 +345,7 @@ class IGVFAccessioning:
 
         return post_results
 
-    def post_document(self) -> list[PostResult]:
+    def post_document(self) -> PostResult:
         """Post workflow configuration document to the portal."""
         # Post workflow configuration document
         doc_payload = igvf_payloads.DocumentPayload(
@@ -366,18 +366,17 @@ class IGVFAccessioning:
 
     def patch_analysis_set(self, document_uuid: str) -> PostResult:
         """Patch the analysis set with the new data."""
-        # Patch the analysis set with the new data
         patch_payload = igvf_payloads.AnalysisSetPatchingPayload(
             terra_metadata=self.terra_metadata,
             input_params_doc_uuid=document_uuid,
             igvf_utils_api=self.igvf_utils_api
         ).get_patch_payload()
 
-        # If no patch payload is generated, return a failure result
         if patch_payload is None:
+            # Gracefully skip patching and return a "skipped" result
             return PostResult.Failure(
-                col_header='Analysis Set Patch',
-                error='No patch payload generated, possibly due to no changes in the analysis set.'
+                col_header='AnalysisSetPatch',
+                error='No patch needed: document already present or no documents to patch.'
             )
 
         patch_mthd = IGVFPostService(
@@ -386,7 +385,6 @@ class IGVFAccessioning:
             upload_file=False,
             resumed_posting=self.resumed_posting
         )
-
         return patch_mthd._single_patch_to_portal(patched_object_accession=self.terra_metadata.anaset_accession)
 
 
