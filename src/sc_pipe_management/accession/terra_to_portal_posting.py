@@ -124,8 +124,8 @@ class IGVFPostService:
         """PATCH a single data object to the portal, after checking for conflicts by MD5 or aliases."""
         try:
             self.igvf_utils_api.patch(self.data_obj_payload)
-            PostResult.Success(
-                col_header=self.data_obj_payload['_profile'], accession=patched_object_accession)
+            return PostResult.Success(
+                col_header=self.data_obj_payload['_profile'], uuid=patched_object_accession)
         except (requests.exceptions.HTTPError, PortalConflictError) as e:
             return PostResult.Failure(
                 col_header=self.data_obj_payload['_profile'], error=e)
@@ -368,7 +368,7 @@ class IGVFAccessioning:
             terra_metadata=self.terra_metadata,
             input_params_doc_uuid=document_uuid,
             igvf_utils_api=self.igvf_utils_api
-        )._get_patch_payload()
+        ).get_patch_payload()
 
         # If no patch payload is generated, return a failure result
         if patch_payload is None:
@@ -443,7 +443,7 @@ def post_single_pipeline_run(terra_data_record: pd.Series,
 
     # Patch the analysis set with the new data
     anaset_patch_result = igvf_accessioning.patch_analysis_set(
-        document_uuid=document_post_result.accession)
+        document_uuid=document_post_result.uuid)
     post_results.append(anaset_patch_result)
 
     return post_results

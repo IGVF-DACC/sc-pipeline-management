@@ -669,17 +669,16 @@ class AnalysisSetPatchingPayload:
             return []
         return sorted([doc_uuid.split('/')[-2] for doc_uuid in analysis_set_obj['documents']])
 
-    def _get_patch_payload(self) -> dict | None:
+    def get_patch_payload(self) -> dict:
         """Get the patch payload for the analysis set."""
-        existing_anaset_doc_uuids = self._get_existing_analysis_set_docs()
-        if not existing_anaset_doc_uuids:
+        anaset_document_uuids = self._get_existing_analysis_set_docs()
+        if not anaset_document_uuids:
             return None
-        if self.input_params_doc_uuid in existing_anaset_doc_uuids:
+        if self.input_params_doc_uuid in anaset_document_uuids:
             return None
-        new_anaset_doc_uuids = existing_anaset_doc_uuids.append(
-            self.input_params_doc_uuid)
+        anaset_document_uuids.append(self.input_params_doc_uuid)
         return {
-            'documents': new_anaset_doc_uuids,
+            'documents': anaset_document_uuids,
             self.igvf_utils_api.IGVFID_KEY: f"/analysis-sets/{self.anaset_accession}/",
             'uniform_pipeline_status': 'completed',
             '_profile': 'analysis_set'

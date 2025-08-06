@@ -830,15 +830,15 @@ class TestAnalysisSetPatchingPayload:
         assert result == ['uuid1', 'uuid2']
 
     def test_get_patch_payload_doc_already_exists(self, patching_payload):
-        """Should return None if doc already exists."""
+        """Should return {} if doc already exists."""
         with patch.object(patching_payload, '_get_existing_analysis_set_docs', return_value=['doc-uuid-123', 'other-uuid']):
-            result = patching_payload._get_patch_payload()
+            result = patching_payload.get_patch_payload()
             assert result is None
 
     def test_get_patch_payload_new_doc(self, patching_payload):
         """Should return patch payload if doc is new."""
         with patch.object(patching_payload, '_get_existing_analysis_set_docs', return_value=['other-uuid']):
-            result = patching_payload._get_patch_payload()
+            result = patching_payload.get_patch_payload()
             assert result is not None
             assert result['@id'] == '/analysis-sets/IGVFDS123ABC/'
             assert result['uniform_pipeline_status'] == 'completed'

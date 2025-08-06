@@ -57,7 +57,7 @@ class TestTerraToPortalPosting:
         mock_accessioning.post_all_atac_fragment_output.return_value = [
             Mock(col_header='ATACseq_fragment', uuid='uuid3', error=None)]
         mock_accessioning.post_document.return_value = Mock(
-            col_header='Document', accession='doc-uuid', error=None)
+            col_header='Document', uuid='doc-uuid', error=None)
         mock_accessioning.patch_analysis_set.return_value = Mock(
             col_header='AnalysisSetPatch', uuid='patch-uuid', error=None)
 
