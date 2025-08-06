@@ -454,7 +454,8 @@ class TestIndexFilePayload:
     def test_get_payload(self, index_payload):
         """Test get_payload method."""
         with patch('sc_pipe_management.accession.igvf_payloads._get_file_aliases') as mock_aliases, \
-                patch('sc_pipe_management.accession.igvf_payloads.api_tools.calculate_gsfile_hex_hash') as mock_hash:
+                patch('sc_pipe_management.accession.igvf_payloads.api_tools.calculate_gsfile_hex_hash') as mock_hash, \
+                patch.object(index_payload, '_get_controlled_access_from_derived_from', return_value=False):
 
             mock_aliases.return_value = ['test-alias']
             mock_hash.return_value = 'abc123'
