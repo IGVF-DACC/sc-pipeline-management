@@ -3,13 +3,13 @@ import datetime
 import subprocess
 import pandas as pd
 import firecloud.api as fapi
-import firecloud.errors as FireCloudServerError
+from firecloud.errors import FireCloudServerError
 import json
 import dataclasses
 from typing import Protocol
 
 import sc_pipe_management.accession.parse_terra_metadata as terra_parse
-import src.sc_pipe_management.accession.constants as const
+import sc_pipe_management.accession.constants as const
 import sc_pipe_management.igvf_and_terra_api_tools as api_tools
 
 
@@ -535,17 +535,18 @@ class QCMetricsPayload:
 
 
 class PipelineParamsInfo:
-    def __init__(self, terra_datable: pd.DataFrame, terra_namespace: str = 'DACC_ANVIL', terra_workspace: str = 'IGVF Single-Cell Data Processing', output_root_dir: str = '/igvf/data/'):
+    def __init__(self, terra_datable: pd.DataFrame, igvf_client_api, terra_namespace: str = 'DACC_ANVIL', terra_workspace: str = 'IGVF Single-Cell Data Processing', output_root_dir: str = '/igvf/data/'):
         self.terra_namespace = terra_namespace
         self.terra_workspace = terra_workspace
         self.output_root_dir = output_root_dir
         # Initialize with Terra metadata class object
         self.terra_datable = terra_datable
+        # IGVF client API for data access
+        self.igvf_client_api = igvf_client_api
 
     def _get_single_input_params(self, terra_metadata: terra_parse.TerraOutputMetadata) -> str:
         """Get the workflow input configuration JSON file path for a given submission and workflow ID."""
         terra_uuids = terra_metadata._parse_workflow_uuids_from_gs_path()
-        anaset_accession = terra_metadata.analysis_set_acc
         # Firecloud API call to get the workflow metadata
         input_params_request = fapi.get_workflow_metadata(namespace=self.terra_namespace,
                                                           workspace=self.terra_workspace,
@@ -554,7 +555,7 @@ class PipelineParamsInfo:
                                                           )
         if input_params_request.status_code != 200:
             raise FireCloudServerError(code=input_params_request.status_code,
-                                       message=f'Error fetching input params data for {anaset_accession}.')
+                                       message=f'Error fetching input params data for {terra_metadata.anaset_accession}.')
         # Parse the response JSON to get the workflow input configuration
         workflow_data_res = input_params_request.json()
         try:
@@ -563,27 +564,28 @@ class PipelineParamsInfo:
             input_params['igvf_credentials'] = 'Google cloud path to a txt file with credentials to access the IGVF data portal.'
             # Set up output directory for the JSON file
             json_output_dir = os.path.join(
-                self.output_root_dir, anaset_accession)
+                self.output_root_dir, terra_metadata.anaset_accession)
             # Dumpt the config to a local JSON file
             local_file_path = _dump_json(input_json=input_params,
-                                         analysis_set_acc=anaset_accession,
+                                         analysis_set_acc=terra_metadata.anaset_accession,
                                          output_root_dir=json_output_dir)
             return local_file_path
         except KeyError:
             raise FireCloudServerError(code=input_params_request.status_code,
-                                       message=f'Error parsing workflow input params for{anaset_accession}. No inputs found.')
+                                       message=f'Error parsing workflow input params for{terra_metadata.anaset_accession}. No inputs found.')
 
     def get_all_input_params(self) -> dict:
         """Get the workflow input configuration JSON for all submissions and workflow IDs."""
         all_input_params = {}
-        for terra_data_record in self.terra_datable.iterrows():
-            terra_metadata = terra_parse.TerraOutputMetadata(terra_data_record)
-            try:
+        try:
+            for _, terra_data_record in self.terra_datable.iterrows():
+                terra_metadata = terra_parse.TerraOutputMetadata(
+                    terra_data_record, self.igvf_client_api)
                 input_params = self._get_single_input_params(terra_metadata)
-                all_input_params[terra_metadata.analysis_set_acc] = input_params
-            except FireCloudServerError as e:
-                print(
-                    f'Error fetching input params for {terra_metadata.analysis_set_acc}: {e.message}')
+                all_input_params[terra_metadata.anaset_accession] = input_params
+        except FireCloudServerError as e:
+            print(
+                f'Error fetching input params for {terra_metadata.anaset_accession}: {e.message}')
         return all_input_params
 
 

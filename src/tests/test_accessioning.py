@@ -604,6 +604,7 @@ class TestPipelineParamsInfo:
         with tempfile.TemporaryDirectory() as temp_dir:
             return igvf_payloads.PipelineParamsInfo(
                 terra_datable=sample_terra_datable,
+                igvf_client_api=Mock(),
                 output_root_dir=temp_dir
             )
 
@@ -618,6 +619,7 @@ class TestPipelineParamsInfo:
         with tempfile.TemporaryDirectory() as temp_dir:
             params = igvf_payloads.PipelineParamsInfo(
                 terra_datable=sample_terra_datable,
+                igvf_client_api=Mock(),
                 terra_namespace='CUSTOM_NAMESPACE',
                 terra_workspace='Custom Workspace',
                 output_root_dir=temp_dir
@@ -644,7 +646,7 @@ class TestPipelineParamsInfo:
 
         # Mock terra metadata
         mock_terra_metadata = Mock()
-        mock_terra_metadata.analysis_set_acc = 'IGVFDS123ABC'
+        mock_terra_metadata.anaset_accession = 'IGVFDS123ABC'
         mock_uuids = Mock()
         mock_uuids.submission_id = 'sub123'
         mock_uuids.workflow_id = 'wf456'
@@ -669,7 +671,7 @@ class TestPipelineParamsInfo:
         mock_get_metadata.return_value = mock_response
 
         mock_terra_metadata = Mock()
-        mock_terra_metadata.analysis_set_acc = 'IGVFDS123ABC'
+        mock_terra_metadata.anaset_accession = 'IGVFDS123ABC'
 
         with pytest.raises(Exception):  # FireCloudServerError
             pipeline_params._get_single_input_params(mock_terra_metadata)
@@ -678,9 +680,9 @@ class TestPipelineParamsInfo:
         """Test PipelineParamsInfo.get_all_input_params loops over terra data table and collects input params."""
         # Prepare two mock TerraOutputMetadata objects
         mock_terra_metadata_1 = Mock()
-        mock_terra_metadata_1.analysis_set_acc = 'IGVFDS123ABC'
+        mock_terra_metadata_1.anaset_accession = 'IGVFDS123ABC'
         mock_terra_metadata_2 = Mock()
-        mock_terra_metadata_2.analysis_set_acc = 'IGVFDS456DEF'
+        mock_terra_metadata_2.anaset_accession = 'IGVFDS456DEF'
 
         # Patch TerraOutputMetadata to return the correct mock for each row
         with patch('sc_pipe_management.accession.parse_terra_metadata.TerraOutputMetadata') as mock_constructor, \
@@ -692,6 +694,7 @@ class TestPipelineParamsInfo:
 
             # Call the actual method under test
             result = pipeline_params.get_all_input_params()
+            print(result)
 
             # Assertions
             assert result == {
