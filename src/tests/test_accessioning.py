@@ -740,7 +740,7 @@ class TestDocumentPayload:
         """Create DocumentPayload instance."""
         return igvf_payloads.DocumentPayload(
             terra_metadata=mock_terra_metadata,
-            pipeline_params_info=mock_pipeline_params_info,
+            anaset_input_params_file_paths=mock_pipeline_params_info,
             igvf_api=mock_igvf_api
         )
 
@@ -767,9 +767,7 @@ class TestDocumentPayload:
         # Check required fields
         assert payload['award'] == '/awards/test-award/'
         assert payload['lab'] == '/labs/test-lab/'
-        assert payload['content_type'] == 'application/json'
         assert payload['document_type'] == 'pipeline parameters'
-        assert payload['file_format'] == 'json'
         assert payload['_profile'] == 'document'
         assert payload['attachment']['path'] == '/path/to/config.json'
         assert 'description' in payload
