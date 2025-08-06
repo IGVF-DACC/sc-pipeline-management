@@ -601,7 +601,7 @@ class PipelineParamsInfo:
 class DocumentPayload:
     """Class to create a document payload for a given Terra output name."""
 
-    def __init__(self, terra_metadata: terra_parse.TerraOutputMetadata, pipeline_params_info: PipelineParamsInfo, igvf_api):
+    def __init__(self, terra_metadata: terra_parse.TerraOutputMetadata, anaset_input_params_file_paths: dict, igvf_api):
         # Data object lab and award
         self.lab = const.OUTPUT_SUBMITTER_INFO['lab']
         self.award = const.OUTPUT_SUBMITTER_INFO['award']
@@ -611,7 +611,8 @@ class DocumentPayload:
         self.terra_uuids = terra_metadata._parse_workflow_uuids_from_gs_path()
         self._terra_output_name = 'pipeline_parameters'
         # Pipeline run input parameters for this pipeline run
-        self.input_params_file_path = pipeline_params_info[terra_metadata.anaset_accession]
+        self.input_params_file_path = anaset_input_params_file_paths[
+            terra_metadata.anaset_accession]
 
     def _mk_doc_aliases(self) -> list:
         """Create a list of document aliases for the workflow configuration."""
@@ -643,9 +644,7 @@ class DocumentPayload:
         doc_payload = dict(award=self.award,
                            lab=self.lab,
                            aliases=self.aliases,
-                           content_type='application/json',
                            document_type='pipeline parameters',
-                           file_format='json',
                            attachment={'path': self.input_params_file_path},
                            description='Terra workflow configuration for the single-cell pipeline run',
                            _profile='document')

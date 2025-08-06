@@ -147,14 +147,14 @@ class IGVFPostService:
 class IGVFAccessioning:
     """Class to handle IGVF accessioning operations."""
 
-    def __init__(self, igvf_utils_api, igvf_client_api, terra_metadata: terra_parse.TerraOutputMetadata, pipeline_params_info: igvf_payloads.PipelineParamsInfo, upload_file: bool = False, resumed_posting: bool = False, root_output_dir: str = '/igvf/data/'):
+    def __init__(self, igvf_utils_api, igvf_client_api, terra_metadata: terra_parse.TerraOutputMetadata, anaset_input_params_file_paths: dict, upload_file: bool = False, resumed_posting: bool = False, root_output_dir: str = '/igvf/data/'):
         self.igvf_utils_api = igvf_utils_api
         self.igvf_client_api = igvf_client_api
         self.upload_file = upload_file
         self.resumed_posting = resumed_posting
         self.terra_metadata = terra_metadata
         self.terra_data_record = terra_metadata.terra_data_record
-        self.pipeline_params_info = pipeline_params_info
+        self.anaset_input_params_file_paths = anaset_input_params_file_paths
         self.root_output_dir = root_output_dir
 
     def _post_qc_metrics(self, file_post_res: list[PostResult], qc_info_map: const.QCInfoMap, qc_post_res_name: str, qc_prefix: str) -> PostResult:
@@ -347,7 +347,7 @@ class IGVFAccessioning:
         # Post workflow configuration document
         doc_payload = igvf_payloads.DocumentPayload(
             terra_metadata=self.terra_metadata,
-            pipeline_params_info=self.pipeline_params_info,
+            anaset_input_params_file_paths=self.anaset_input_params_file_paths,
             igvf_api=self.igvf_client_api,
         )
 
@@ -359,7 +359,7 @@ class IGVFAccessioning:
             resumed_posting=self.resumed_posting
         )
 
-        return doc_post_mthd.post_to_portal()
+        return doc_post_mthd._single_post_to_portal()
 
     def patch_analysis_set(self, document_uuid: str) -> PostResult:
         """Patch the analysis set with the new data."""
