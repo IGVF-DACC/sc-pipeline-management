@@ -7,6 +7,7 @@ from firecloud.errors import FireCloudServerError
 import json
 import dataclasses
 from typing import Protocol
+import logging
 
 import sc_pipe_management.accession.parse_terra_metadata as terra_parse
 import sc_pipe_management.accession.constants as const
@@ -593,7 +594,7 @@ class PipelineParamsInfo:
                 input_params = self._get_single_input_params(terra_metadata)
                 all_input_params[terra_metadata.anaset_accession] = input_params
         except FireCloudServerError as e:
-            print(
+            logging.debug(
                 f'Error fetching input params for {terra_metadata.anaset_accession}: {e.message}')
         return all_input_params
 
@@ -664,7 +665,6 @@ class AnalysisSetPatchingPayload:
         """Get existing document UUID linked to the analysis set."""
         analysis_set_obj = self.igvf_utils_api.get(
             f'/analysis-sets/{self.anaset_accession}')
-        print(analysis_set_obj.keys())
         if not analysis_set_obj.get('documents'):
             return []
         return sorted([doc_uuid.split('/')[-2] for doc_uuid in analysis_set_obj['documents']])

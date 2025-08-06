@@ -163,7 +163,7 @@ def main():
         terra_namespace=args.terra_namespace,
         terra_workspace=args.terra_workspace,
         terra_data_table=terra_table,
-        output_root_dir=os.path.join(args.output_dir, 'workflow_configs'))
+        output_root_dir=os.path.join(args.output_dir, 'workflow_configs')).get_all_input_params()
     logging.info(
         f'>>>>>>>>>>>>>> {len(pipeline_params_info)} configs downloaded')
 

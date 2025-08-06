@@ -79,14 +79,16 @@ class IGVFPostService:
         # Check by alias first (preferred method)
         if self.data_obj_payload.aliases:
             existing_file = self.igvf_utils_api.get(
-                f"aliases:{self.data_obj_payload.aliases[0]}")
-            return existing_file.get('@id') if existing_file else None
+                self.data_obj_payload.aliases[0])
+            if existing_file:
+                return existing_file.get('@id') if existing_file else None
 
         # Fall back to MD5 check
         if self.data_obj_payload.md5sum:
             existing_file = self.igvf_utils_api.get(
                 f"md5:{self.data_obj_payload.md5sum}")
-            return existing_file.get('@id') if existing_file else None
+            if existing_file:
+                return existing_file.get('@id') if existing_file else None
 
         return None
 
@@ -104,7 +106,8 @@ class IGVFPostService:
                     f'{payload_dict.get("_profile").capitalize().replace("_", " ")} failed to accession due to conflict with an existing object: {existing_object_id}.')
             # If conflict exists and patching is expected, return the existing object ID
             if (existing_object_id is not None) and (self.resumed_posting):
-                return existing_object_id
+                return PostResult.Failure(
+                    col_header=self.data_obj_payload.terra_output_name, error=f'Conflict with existing object: {existing_object_id}.')
             # Post new object to portal if no conflict is expected, metadata only
             stdout = self.igvf_utils_api.post(
                 payload_dict, upload_file=False, return_original_status_code=True, truncate_long_strings_in_payload_log=True)
@@ -388,7 +391,7 @@ class IGVFAccessioning:
 
 
 def post_single_pipeline_run(terra_data_record: pd.Series,
-                             pipeline_params_info: igvf_payloads.PipelineParamsInfo,
+                             anaset_input_params_file_paths: dict,
                              igvf_client_api,
                              igvf_utils_api,
                              output_root_dir: str = '/igvf/data/',
@@ -399,7 +402,7 @@ def post_single_pipeline_run(terra_data_record: pd.Series,
 
     Args:
         terra_data_record (pd.Series): Single row of the Terra data table containing metadata for a pipeline run.
-        pipeline_params_info (igvf_payloads.PipelineParamsInfo): Information about the pipeline parameters.
+        anaset_input_params_file_paths (dict): {anaset_accession: path/to/file}.
         igvf_client_api (_type_): IGVF client API instance.
         igvf_utils_api (_type_): IGVF utils API instance.
         output_root_dir (str, optional): Root directory for output files. Defaults to '/igvf/data/'.
@@ -419,7 +422,7 @@ def post_single_pipeline_run(terra_data_record: pd.Series,
         igvf_utils_api=igvf_utils_api,
         igvf_client_api=igvf_client_api,
         terra_metadata=terra_metadata,
-        pipeline_params_info=pipeline_params_info,
+        anaset_input_params_file_paths=anaset_input_params_file_paths,
         upload_file=upload_file,
         resumed_posting=resumed_posting,
         root_output_dir=output_root_dir
@@ -442,15 +445,21 @@ def post_single_pipeline_run(terra_data_record: pd.Series,
     post_results.append(document_post_result)
 
     # Patch the analysis set with the new data
-    anaset_patch_result = igvf_accessioning.patch_analysis_set(
-        document_uuid=document_post_result.uuid)
+    if document_post_result.error is None:
+        anaset_patch_result = igvf_accessioning.patch_analysis_set(
+            document_uuid=document_post_result.uuid)
+    else:
+        # If the document post failed, we cannot patch the analysis set
+        anaset_patch_result = PostResult.Failure(
+            col_header='Analysis Set Patch',
+            error='Cannot patch analysis set because the document post failed or has a conflict.')
     post_results.append(anaset_patch_result)
 
     return post_results
 
 
 def post_all_pipeline_runs_from_one_submission(terra_data_table: pd.DataFrame,
-                                               pipeline_params_info: igvf_payloads.PipelineParamsInfo,
+                                               anaset_input_params_file_paths: dict,
                                                igvf_client_api,
                                                igvf_utils_api,
                                                output_root_dir: str = '/igvf/data/',
@@ -460,7 +469,8 @@ def post_all_pipeline_runs_from_one_submission(terra_data_table: pd.DataFrame,
     """Post all successful runs from a Terra data table to the portal.
 
     Args:
-        full_terra_data_table (pd.DataFrame): The Complete Terra data table
+        terra_data_table (pd.DataFrame): The Complete Terra data table
+        anaset_input_params_file_paths (dict): A dictionary of input params file paths for each pipeline run
         igvf_api (_type_): IGVF utils api
         igvf_utils_api (_type_): IGVF python client api
         upload_file (bool): Whether to upload the file to the portal
@@ -478,7 +488,7 @@ def post_all_pipeline_runs_from_one_submission(terra_data_table: pd.DataFrame,
         for _, curr_pipeline in terra_data_table.iterrows():
             pipeline_post_res = post_single_pipeline_run(
                 terra_data_record=curr_pipeline,
-                pipeline_params_info=pipeline_params_info,
+                anaset_input_params_file_paths=anaset_input_params_file_paths,
                 igvf_client_api=igvf_client_api,
                 igvf_utils_api=igvf_utils_api,
                 output_root_dir=output_root_dir,
@@ -487,7 +497,7 @@ def post_all_pipeline_runs_from_one_submission(terra_data_table: pd.DataFrame,
             )
             # Once a full run is posted, write the AnaSet accession to a file
             # In case of interruption, we can skip those already posted
-            f.write(f"{pipeline_post_res.analysis_set_acc}\n")
+            f.write(f"{curr_pipeline['analysis_set_acc']}\n")
             f.flush()
             run_results.append(RunResult(
                 analysis_set_acc=curr_pipeline['analysis_set_acc'],
