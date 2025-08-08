@@ -16,10 +16,30 @@ import sc_pipe_management.accession.parse_terra_metadata as parse_terra
 
 class TestUtilityFunctions:
     def test_parse_terra_str_list(self):
-        # Typical Terra string list
-        s = ["['IGVFFI4773YQEF', 'IGVFFI7241VYRQ']"]
-        result = parse_terra._parse_terra_str_list(s)
-        assert result == ["IGVFFI4773YQEF", "IGVFFI7241VYRQ"]
+        # Typical Terra string list (copied from the original data table)
+        str_of_lst = ["['IGVFFI4773YQEF', 'IGVFFI7241VYRQ']"]
+        str_of_lst_result = parse_terra._parse_terra_str_list(str_of_lst)
+        assert str_of_lst_result == ["IGVFFI4773YQEF", "IGVFFI7241VYRQ"]
+
+        # Possible case of a single string
+        single_str = "IGVFFI4773YQEF"
+        single_str_result = parse_terra._parse_terra_str_list([single_str])
+        assert single_str_result == ["IGVFFI4773YQEF"]
+
+        # Possible case of a list of normal strings
+        lst_of_strs = ["IGVFFI4773YQEF", "IGVFFI7241VYRQ"]
+        lst_of_strs_result = parse_terra._parse_terra_str_list(lst_of_strs)
+        assert lst_of_strs_result == ["IGVFFI4773YQEF", "IGVFFI7241VYRQ"]
+
+        # Empty list case
+        empty_list = []
+        empty_list_result = parse_terra._parse_terra_str_list(empty_list)
+        assert empty_list_result == []
+
+        # Case with NaN
+        nan_case = [float('nan')]
+        nan_case_result = parse_terra._parse_terra_str_list(nan_case)
+        assert nan_case_result == []
 
 
 class TestTerraMetadataParse:

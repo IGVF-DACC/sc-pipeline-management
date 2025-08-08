@@ -7,6 +7,7 @@ that don't directly call .post or .patch operations.
 import pandas as pd
 import dataclasses
 import re
+import ast
 
 
 # IGVF file url parsing regex for accession
@@ -86,20 +87,24 @@ INPUT_FILE_HEADERS_BY_ASSAY_TYPE = {
 
 
 def _parse_terra_str_list(terra_str_lists: list[str]) -> list[str]:
-    """Parse a string list from Terra data table to a Python list."""
+    """Parse a string list from Terra data table to a Python list using ast.literal_eval."""
     parse_list_of_strs = []
+    skipped_cases = ['nan', '[]', '[""]', []]
     for value in terra_str_lists:
-        if str(value) == 'nan':
+        if value in skipped_cases or not str(value).strip():
             continue
-        if str(value) == '[]':
-            continue
-        if str(value) == '[""]':
-            continue
-        if str(value).startswith("[") and str(value).endswith("]"):
-            parse_list_of_strs.extend([ele.strip("'")
-                                      for ele in value[1:-1].split(', ')])
-        else:
-            parse_list_of_strs.append(value)
+        if isinstance(value, str) and value.strip().startswith("[") and value.strip().endswith("]"):
+            try:
+                # Safely evaluate the string as a Python list
+                parse_list_of_strs.extend(ast.literal_eval(value.strip()))
+            except Exception:
+                continue
+        # Almost unlikely case
+        elif isinstance(value, list) and len(value):
+            parse_list_of_strs.extend(value)
+        # If it's a single string, just strip it and add it
+        elif isinstance(value, str) and value.strip():
+            parse_list_of_strs.append(value.strip())
     return parse_list_of_strs
 
 
