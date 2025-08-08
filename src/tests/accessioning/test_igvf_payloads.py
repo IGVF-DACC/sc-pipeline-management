@@ -701,7 +701,6 @@ class TestPipelineParamsInfo:
 
             # Call the actual method under test
             result = pipeline_params.get_all_input_params()
-            print(result)
 
             # Assertions
             assert result == {
