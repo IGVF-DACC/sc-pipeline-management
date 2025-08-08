@@ -13,7 +13,7 @@ import base64
 import binascii
 
 
-fapi._set_session()
+# fapi._set_session()
 
 
 # API keys for IGVF portal (staging uses a snapshot of production)

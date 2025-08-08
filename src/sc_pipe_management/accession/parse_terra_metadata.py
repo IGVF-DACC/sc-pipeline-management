@@ -7,10 +7,7 @@ that don't directly call .post or .patch operations.
 import pandas as pd
 import dataclasses
 import re
-import firecloud.api as fapi
-import io
 
-fapi._set_session()
 
 # IGVF file url parsing regex for accession
 IGVF_URL_PATH_REGEX = re.compile(

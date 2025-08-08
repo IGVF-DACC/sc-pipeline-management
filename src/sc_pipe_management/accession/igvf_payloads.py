@@ -14,9 +14,6 @@ import sc_pipe_management.accession.constants as const
 import sc_pipe_management.igvf_and_terra_api_tools as api_tools
 
 
-fapi._set_session()
-
-
 @dataclasses.dataclass(frozen=True)
 class QCFileDownloadInfo:
     paths_of_metadata_files: list[str]
