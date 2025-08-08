@@ -67,17 +67,11 @@ def get_parser():
                         help="""Path to the output directory. Defaults to $(pwd)/terra_datatables/output/$(date +%m%d%Y)""")
     parser.add_argument('--resumed_posting', action='store_true',
                         help="""Whether to patch an existing post. Defaults to False. See `single_post_to_portal` for more details.""")
-    parser.add_argument('--tries', type=int, default=3,
-                        help="""Number of tries to attempt the API calls. Default is 3.""")
-    parser.add_argument('--delay', type=int, default=5,
-                        help="""Initial delay between retries in seconds. Default is 5.""")
-    parser.add_argument('--backoff', type=int, default=2,
-                        help="""Backoff multiplier e.g. value of 2 will double the delay each retry. Default is 2.""")
     return parser
 
 
 ## decorator for preventing time out ##
-def retry(tries=1, delay=5, backoff=2):
+def retry(tries=5, delay=5, backoff=2):
     import time
     """Retry calling the decorated function using an exponential backoff.
 
@@ -115,11 +109,7 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
-    tries = args.tries
-    delay = args.delay
-    backoff = args.backoff
-
-    @retry(tries, delay, backoff)
+    @retry()
     def do_igvf_utils_api(igvf_api_keys, post_endpoint):
         """Set up IGVF utils API connection
         """
@@ -134,7 +124,7 @@ def main():
                                                        submission_mode=True)
 
     # Set up igvf client connection
-    @retry(tries, delay, backoff)
+    @retry()
     def do_igvf_client_api(igvf_api_keys, post_endpoint):
         """Set up IGVF client API connection
         """
@@ -142,7 +132,7 @@ def main():
                                               igvf_endpoint=post_endpoint)
 
     # Refresh firecloud API
-    @retry(tries, delay, backoff)
+    @retry()
     def do_firecloud_api():
         """Set up Fire Cloud API connection
         """
