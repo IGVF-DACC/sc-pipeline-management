@@ -11,9 +11,7 @@ from igvf_utils.connection import Connection
 import os
 import base64
 import binascii
-
-
-# fapi._set_session()
+import logging
 
 
 # API keys for IGVF portal (staging uses a snapshot of production)
@@ -162,7 +160,7 @@ def upload_portal_input_tsv_to_terra(terra_namespace: str, terra_workspace: str,
                                               delete_empty=False
                                               )
     if verbose:
-        print(dumper.dump(input_table_upload))
+        logging.info(dumper.dump(input_table_upload))
 
 
 def upload_output_post_res_to_terra(terra_namespace: str, terra_workspace: str, terra_etype: str, output_post_results: pd.DataFrame, verbose: bool = False):
@@ -184,7 +182,7 @@ def upload_output_post_res_to_terra(terra_namespace: str, terra_workspace: str, 
                                               model='flexible'  # Firecloud mode just seems failing
                                               )
     if verbose:
-        print(dumper.dump(input_table_upload))
+        logging.info(dumper.dump(input_table_upload))
 
 
 def get_workflow_input_config(terra_namespace: str, terra_workspace: str, submission_id: str, workflow_id: str) -> dict:

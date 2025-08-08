@@ -98,9 +98,9 @@ def retry(tries=1, delay=5, backoff=2):
                 try:
                     return f(*args, **kwargs)
                 except Exception as e:
-                    print(str(e))
+                    logging.debug(str(e))
                     msg = "Retrying in %d seconds..." % (mdelay)
-                    print(msg)
+                    logging.info(msg)
                     time.sleep(mdelay)
                     mtries -= 1
                     mdelay *= backoff
