@@ -9,17 +9,18 @@ if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
 
-import igvf_and_terra_api_tools as api_tools
-import sc_pipe_management.accession.igvf_payloads as igvf_payloads
-import sc_pipe_management.accession.parse_terra_metadata as terra_parse
-import sc_pipe_management.accession.constants as const
-import sc_pipe_management.accession.terra_to_portal_posting as tr2igvf
 import argparse
 import firecloud.api as fapi
 import os
 from datetime import datetime
 from functools import wraps
 import logging
+
+import igvf_and_terra_api_tools as api_tools
+import sc_pipe_management.accession.igvf_payloads as igvf_payloads
+import sc_pipe_management.accession.parse_terra_metadata as terra_parse
+import sc_pipe_management.accession.constants as const
+import sc_pipe_management.accession.terra_to_portal_posting as tr2igvf
 
 
 def read_exclusion_file(file_path: str) -> list:
@@ -47,6 +48,24 @@ def read_exclusion_file(file_path: str) -> list:
         raise argparse.ArgumentTypeError(f"Error reading exclusion file: {e}")
 
 
+def get_default_output_root_dir():
+    """Check if the script is running on the expected hostname."""
+    # Set up local output directory
+    today = datetime.now().strftime("%m%d%Y")
+    if api_tools.is_gce_instance():
+        # If running on GCE, use the Google VM output directory
+        top_root_dir = os.path.join(
+            const.OUTPUT_ROOT_DIRS['googlevm'], "output", today)
+    else:
+        # If running locally, use the localhost output directory
+        top_root_dir = os.path.join(
+            const.OUTPUT_ROOT_DIRS['localhost'], "output", today)
+    # Create the directory if it does not exist
+    if not os.path.exists(top_root_dir):
+        os.makedirs(top_root_dir)
+    return top_root_dir
+
+
 def get_parser():
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -63,8 +82,6 @@ def get_parser():
                         help="""A file with a list of accessions to exclude from the data table. If not provided, no accessions will be excluded.""")
     parser.add_argument('--upload_file', action='store_true',
                         help="""If True, upload the file to the portal.""")
-    parser.add_argument('--output_dir', type=str, default=None,
-                        help="""Path to the output directory. Defaults to $(pwd)/terra_datatables/output/$(date +%m%d%Y)""")
     parser.add_argument('--resumed_posting', action='store_true',
                         help="""Whether to patch an existing post. Defaults to False. See `single_post_to_portal` for more details.""")
     return parser
@@ -138,11 +155,10 @@ def main():
         """
         fapi._set_session()
 
-    # Set up local output directory
+    # Set up local output directory for the Terra data table
     today = datetime.now().strftime("%m%d%Y")
-    if args.output_dir is None:
-        args.output_dir = os.path.join(
-            os.getcwd(), "terra_datatables", "output", today, args.terra_etype)
+    pipeline_output_dir = os.path.join(
+        get_default_output_root_dir(), args.terra_etype)
 
     # Call FireCloud API
     do_firecloud_api()
@@ -175,7 +191,7 @@ def main():
         terra_workspace=args.terra_workspace,
         terra_datatable=terra_table,
         igvf_client_api=igvf_client_api,
-        output_root_dir=os.path.join(args.output_dir, 'workflow_configs'))
+        output_root_dir=os.path.join(pipeline_output_dir, 'workflow_configs'))
     anaset_input_params_file_paths = pipeline_params_info.get_all_input_params()
     logging.info(
         f'>>>>>>>>>>>>>> {len(anaset_input_params_file_paths)} configs downloaded')
@@ -185,7 +201,7 @@ def main():
                                                                              igvf_client_api=igvf_client_api,
                                                                              anaset_input_params_file_paths=anaset_input_params_file_paths,
                                                                              igvf_utils_api=igvf_utils_api,
-                                                                             output_root_dir=args.output_dir,
+                                                                             output_root_dir=pipeline_output_dir,
                                                                              upload_file=args.upload_file,
                                                                              resumed_posting=args.resumed_posting)
 
@@ -203,10 +219,10 @@ def main():
     tr2igvf.save_pipeline_postres_tables(
         pipeline_postres_table=portal_post_summary,
         updated_full_data_table=updated_terra_table,
-        output_root_dir=args.output_dir)
+        output_root_dir=pipeline_output_dir)
 
     logging.info(
-        f'>>>>>>>>>>>>>> Pipeline post results saved to {args.output_dir}')
+        f'>>>>>>>>>>>>>> Pipeline post results saved to {pipeline_output_dir}')
 
 
 if __name__ == '__main__':

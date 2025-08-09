@@ -20,7 +20,7 @@ class QCFileDownloadInfo:
     paths_of_attachment_files: list[str]
 
 
-def _dump_json(input_json: dict, analysis_set_acc: str, output_root_dir: str = './run_config') -> str:
+def _dump_json(input_json: dict, analysis_set_acc: str, output_root_dir: str) -> str:
     """Save a JSON object to a file in the specified output directory.
 
     Args:
@@ -428,7 +428,7 @@ class IndexFilePayload:
 class QCMetricsPayload:
     """Class to create a QC metrics payload for a given Terra output name."""
 
-    def __init__(self, terra_metadata: terra_parse.TerraOutputMetadata, qc_info_map: const.QCInfoMap, qc_prefix: str, qc_of: list[str], igvf_api, root_output_dir: str = '/igvf/data/'):
+    def __init__(self, terra_metadata: terra_parse.TerraOutputMetadata, qc_info_map: const.QCInfoMap, qc_prefix: str, qc_of: list[str], igvf_api, root_output_dir: str):
         # Data object lab and award
         self.lab = const.OUTPUT_SUBMITTER_INFO['lab']
         self.award = const.OUTPUT_SUBMITTER_INFO['award']
@@ -542,7 +542,7 @@ class QCMetricsPayload:
 
 
 class PipelineParamsInfo:
-    def __init__(self, terra_datatable: pd.DataFrame, igvf_client_api, terra_namespace: str = 'DACC_ANVIL', terra_workspace: str = 'IGVF Single-Cell Data Processing', output_root_dir: str = '/igvf/data/'):
+    def __init__(self, terra_datatable: pd.DataFrame, igvf_client_api, output_root_dir: str, terra_namespace: str = 'DACC_ANVIL', terra_workspace: str = 'IGVF Single-Cell Data Processing'):
         self.terra_namespace = terra_namespace
         self.terra_workspace = terra_workspace
         self.output_root_dir = output_root_dir

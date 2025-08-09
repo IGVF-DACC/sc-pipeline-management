@@ -12,6 +12,7 @@ import os
 import base64
 import binascii
 import logging
+import requests
 
 
 # API keys for IGVF portal (staging uses a snapshot of production)
@@ -79,7 +80,7 @@ def get_igvf_client_auth(igvf_api_keys: dict, igvf_endpoint: str = 'sandbox'):
 
 
 def get_igvf_utils_connection(igvf_api_keys: dict, igvf_utils_mode: str = 'sandbox', submission_mode: bool = False):
-    """Set up IGVF utils connection.
+    """Set up IGVF utils connection. Dry run option is not supported because many objects are linked to each other via some metadata properties upon a successful accession. So dry run will crash upon trying to access those properties.
 
     Args:
         igvf_api_keys (dict): A dictionary containing the public and secret API keys.
@@ -216,3 +217,15 @@ def get_workflow_input_config(terra_namespace: str, terra_workspace: str, submis
     except KeyError:
         raise FireCloudServerError(code=workflow_data_request.status_code,
                                    message=f'Error parsing workflow input config for workflow: {workflow_id} in submission: {submission_id}. No inputs found.')
+
+
+def is_gce_instance():
+    """Check if the script is running on a Google Compute Engine (GCE) instance."""
+    metadata_url = "http://metadata.google.internal"
+    try:
+        response = requests.get(metadata_url, timeout=2)
+        if response.status_code == 200:
+            return True
+    except requests.exceptions.RequestException:
+        pass
+    return False

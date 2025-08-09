@@ -150,7 +150,7 @@ class IGVFPostService:
 class IGVFAccessioning:
     """Class to handle IGVF accessioning operations."""
 
-    def __init__(self, igvf_utils_api, igvf_client_api, terra_metadata: terra_parse.TerraOutputMetadata, anaset_input_params_file_paths: dict, upload_file: bool = False, resumed_posting: bool = False, root_output_dir: str = '/igvf/data/'):
+    def __init__(self, igvf_utils_api, igvf_client_api, terra_metadata: terra_parse.TerraOutputMetadata, anaset_input_params_file_paths: dict, root_output_dir: str, upload_file: bool = False, resumed_posting: bool = False):
         self.igvf_utils_api = igvf_utils_api
         self.igvf_client_api = igvf_client_api
         self.upload_file = upload_file
@@ -392,7 +392,7 @@ def post_single_pipeline_run(terra_data_record: pd.Series,
                              anaset_input_params_file_paths: dict,
                              igvf_client_api,
                              igvf_utils_api,
-                             output_root_dir: str = '/igvf/data/',
+                             output_root_dir: str,
                              upload_file: bool = False,
                              resumed_posting: bool = False
                              ) -> list[PostResult]:
@@ -403,7 +403,7 @@ def post_single_pipeline_run(terra_data_record: pd.Series,
         anaset_input_params_file_paths (dict): {anaset_accession: path/to/file}.
         igvf_client_api (_type_): IGVF client API instance.
         igvf_utils_api (_type_): IGVF utils API instance.
-        output_root_dir (str, optional): Root directory for output files. Defaults to '/igvf/data/'.
+        output_root_dir (str, optional): Root directory for output files.
         upload_file (bool, optional): Whether to upload files. Defaults to False.
         resumed_posting (bool, optional): Whether to resume posting. Defaults to False.
 
@@ -460,7 +460,7 @@ def post_all_pipeline_runs_from_one_submission(terra_data_table: pd.DataFrame,
                                                anaset_input_params_file_paths: dict,
                                                igvf_client_api,
                                                igvf_utils_api,
-                                               output_root_dir: str = '/igvf/data/',
+                                               output_root_dir: str,
                                                upload_file: bool = False,
                                                resumed_posting: bool = False
                                                ) -> list[RunResult]:
@@ -473,7 +473,7 @@ def post_all_pipeline_runs_from_one_submission(terra_data_table: pd.DataFrame,
         igvf_utils_api (_type_): IGVF python client api
         upload_file (bool): Whether to upload the file to the portal
         config_file_collection (dict): A dictionary of config file paths and doc aliases for each pipeline run
-        output_root_dir (str, optional): The output directory to download the QC files to. Defaults to '/igvf/data/'.
+        output_root_dir (str, optional): The output directory to download the QC files to.
         resumed_posting (bool, optional): Whether to patch an existing post. Defaults to False. See `single_post_to_portal` for more details.
 
     Returns:
@@ -551,7 +551,7 @@ def save_pipeline_postres_tables(pipeline_postres_table: pd.DataFrame, updated_f
     """
     curr_datetime = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
     # make output dir if it does not exist
-    if os.path.exists(output_root_dir) is False:
+    if not os.path.exists(output_root_dir):
         os.makedirs(output_root_dir)
 
     # The original table has an extra index column from merging

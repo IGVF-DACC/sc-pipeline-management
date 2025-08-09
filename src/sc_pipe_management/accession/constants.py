@@ -3,6 +3,7 @@ Constants for Terra to Portal posting operations.
 """
 
 import dataclasses
+import os
 
 # The lab and award to post data under
 OUTPUT_SUBMITTER_INFO = {
@@ -21,6 +22,14 @@ GENOME_ASSEMBLY_INFO = {'Homo sapiens': 'GRCh38',
 ANALYSIS_STEP_VERSION = {
     'atacseq': 'igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0',
     'rnaseq': 'igvf:single-cell-uniform-pipeline-kallisto-bustools-rnaseq-step-v1.1.0'
+}
+
+
+# Output file dir
+OUTPUT_ROOT_DIRS = {
+    # This script is usually run from the top of the repo
+    'localhost': os.path.join(os.getcwd(), 'terra_datatables'),
+    'googlevm': '/igvf/data/terra_post_report_tables/'
 }
 
 
