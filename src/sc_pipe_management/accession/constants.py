@@ -40,7 +40,7 @@ class FileObjMetadata:
     description: str    # description for the output file
     content_type: str   # content type enum used for the output file
     # file format specification documents' aliases for the output file
-    file_format_specifications: list
+    file_format_specifications: list | None
     analysis_step_version: str  # ASV used for for the output file
     assay_type: str
 
@@ -53,8 +53,7 @@ ALIGNMENT_FILETYPES = {
     'atac_bam': FileObjMetadata(file_format='bam',
                                 description='Raw Aligned bam file from Chromap',
                                 content_type='alignments',
-                                file_format_specifications=[
-                                    'buenrostro-bernstein:igvf-sc-pipeline-alignment-bam-specification'],
+                                file_format_specifications=None,
                                 analysis_step_version=ANALYSIS_STEP_VERSION['atacseq'],
                                 assay_type='atac'
                                 )
@@ -65,16 +64,14 @@ INDEX_FILETYPES = {
     'atac_fragments_index': FileObjMetadata(file_format='tbi',
                                             description='Raw Fragment file index from Chromap',
                                             content_type='index',
-                                            file_format_specifications=[
-                                                'buenrostro-bernstein:igvf-sc-pipeline-fragment-file-specification'],
+                                            file_format_specifications=None,
                                             analysis_step_version=ANALYSIS_STEP_VERSION['atacseq'],
                                             assay_type='atac'
                                             ),
     'atac_bam_index': FileObjMetadata(file_format='bai',
                                       description='Raw Aligned bam file index from Chromap',
                                       content_type='index',
-                                      file_format_specifications=[
-                                          'buenrostro-bernstein:igvf-sc-pipeline-alignment-bam-index-specification'],
+                                      file_format_specifications=None,
                                       analysis_step_version=ANALYSIS_STEP_VERSION['atacseq'],
                                       assay_type='atac'
                                       )
