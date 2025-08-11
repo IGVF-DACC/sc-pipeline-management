@@ -20,3 +20,7 @@ temp/
 terra_datatables/
 terra_post_report_tables/
 .vscode/
+coverage.xml
+.coverage
+src/sc_pipe_management/accession/*.ipynb
+rc/sc_pipe_management/accession/IU_Logs/

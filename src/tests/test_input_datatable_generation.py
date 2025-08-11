@@ -13,6 +13,7 @@ import hashlib
 import pandas as pd
 from pandas.testing import assert_series_equal, assert_frame_equal
 import unittest
+import logging
 from sc_pipe_management.igvf_and_terra_api_tools import set_up_api_keys, get_igvf_client_auth
 from sc_pipe_management.portal_to_terra_input_from_anaset import (
     generate_pipeline_input_table,
@@ -181,13 +182,13 @@ class TestInputDatatableGeneration(unittest.TestCase):
             for assay_type, seqspec_path in seqspec_paths.items():
                 if seqspec_path is None:
                     # Skip if the seqspec path is None (e.g., SPLiT-seq for atac)
-                    print(
+                    logging.info(
                         f'Skipping {assay_title} for {assay_type} as it has no seqspec.')
                     continue
                 for read_id_methd in ['onlist', 'index']:
-                    print(
+                    logging.info(
                         f'Testing {assay_title} {assay_type} with read_id_methd: {read_id_methd}.')
-                    print(seqspec_path)
+                    logging.info(seqspec_path)
                     curr_read_input = generate_ordered_read_ids(seqspec_file_path=seqspec_path,
                                                                 assay_type=assay_type,
                                                                 usage_purpose=read_id_methd,
@@ -201,7 +202,7 @@ class TestInputDatatableGeneration(unittest.TestCase):
                         first=curr_read_input, second=SEQSPEC_OUTPUT_BY_ASSAY_TITLES[
                             assay_title][assay_type][f'{read_id_methd}_input'],
                         msg=curr_error_detail)
-        print('All read id input tests done.\n')
+        logging.info('All read id input tests done.\n')
 
     def test_read_index_generation(self):
         """Check if rna and atac read index are correct.
@@ -210,13 +211,13 @@ class TestInputDatatableGeneration(unittest.TestCase):
             for assay_type, seqspec_path in seqspec_paths.items():
                 if seqspec_path is None:
                     # Skip if the seqspec path is None (e.g., SPLiT-seq for atac)
-                    print(
+                    logging.info(
                         f'Skipping {assay_title} for {assay_type} as it has no seqspec.')
                     continue
-                print(
+                logging.info(
                     f'Testing {assay_title} {assay_type} for read index generation.')
                 # Get the current read index from seqspec
-                print(seqspec_path)
+                logging.info(seqspec_path)
                 curr_index_input = seqspec_index_get(
                     seqspec_file_path=seqspec_path, assay_type=assay_type, igvf_api=IGVF_PROD_CLIENT_API)
                 curr_error_detail = (f'Generated {assay_type} index read index does not match expected for {assay_title} {assay_type}. '
@@ -228,7 +229,7 @@ class TestInputDatatableGeneration(unittest.TestCase):
                     second=SEQSPEC_OUTPUT_BY_ASSAY_TITLES[assay_title][assay_type]['read_index'],
                     msg=curr_error_detail
                 )
-        print('All read index tests done.\n')
+        logging.info('All read index tests done.\n')
 
     def test_finalinclusion_list_generation(self):
         """Check if the final inclusion list file has correct md5sum for each assay type.
@@ -237,12 +238,12 @@ class TestInputDatatableGeneration(unittest.TestCase):
             for assay_type, seqspec_path in seqspec_paths.items():
                 if seqspec_path is None:
                     # Skip if the seqspec path is None (e.g., SPLiT-seq for atac)
-                    print(
+                    logging.info(
                         f'Skipping {assay_title} for {assay_type} as it has no seqspec.')
                     continue
-                print(
+                logging.info(
                     f'Testing final inclusion list generation for {assay_title} {assay_type}.')
-                print(seqspec_path)
+                logging.info(seqspec_path)
                 output_file_path = generate_finalinclusion_list(
                     seqspec_file_path=seqspec_path,
                     assay_type=assay_type,
@@ -266,67 +267,67 @@ class TestInputDatatableGeneration(unittest.TestCase):
                     second=expected_md5sum,
                     msg=curr_error_detail
                 )
-        print('All final inclusion list tests done.\n')
+        logging.info('All final inclusion list tests done.\n')
 
     def test_file_md5sums_comparison(self):
         """Compare the generated input file md5sums to ensure they match the reference file.
         """
-        print('Checking table file md5sums...')
+        logging.info('Checking table file md5sums...')
         self.assertEqual(first=compute_md5sum(TEST_TABLES_PATHS['ref']),
                          second=compute_md5sum(TEST_TABLES_PATHS['ref']),
                          msg='MD5 checksum of the generated file does not match the reference file.'
                          )
-        print('MD5sums check done.\n')
+        logging.info('MD5sums check done.\n')
 
     def test_df_shapes_comparison(self):
         """Check if the shapes of the generated input datatable match the reference input datatable
         """
-        print('Checking datatable shapes...')
+        logging.info('Checking datatable shapes...')
         try:
             self.assertEqual(first=self.ref_table.shape,
                              second=self.generated_table.shape, msg='Shapes do not match.')
         except AssertionError as e:
-            print(e)
-        print('Shapes comparison done.\n')
+            logging.debug(e)
+        logging.info('Shapes comparison done.\n')
 
     def test_column_comparison(self):
         """Check if the columns of the generated input datatable match the reference input datatable
         """
-        print('Checking datatable columns...')
+        logging.info('Checking datatable columns...')
         try:
             self.assertEqual(first=sorted(self.ref_table.columns), second=sorted(
                 self.generated_table.columns), msg='Columns do not match.')
         except AssertionError as e:
-            print(e)
-        print('Columns comparison done.\n')
+            logging.debug(e)
+        logging.info('Columns comparison done.\n')
 
     def test_row_comparison(self):
         """Check if the rows of the generated input datatable match the reference input datatable
         """
-        print('Checking datatable rows...')
+        logging.info('Checking datatable rows...')
         try:
             self.assertEqual(first=sorted(self.ref_table.index), second=sorted(
                 self.generated_table.index), msg='Rows do not match.')
         except AssertionError as e:
-            print(e)
-        print('Rows comparison done.\n')
+            logging.debug(e)
+        logging.info('Rows comparison done.\n')
 
     def test_column_value_comparison(self):
         # Check if the values of the generated input datatable match the reference input datatable
-        print('Checking datatable values...')
+        logging.info('Checking datatable values...')
         try:
             for col in self.generated_table.columns:
                 assert_series_equal(
                     left=self.ref_table[col], right=self.generated_table[col])
         except AssertionError as e:
-            print(e)
-        print('Column-wise value comparison done.\n')
+            logging.debug(e)
+        logging.info('Column-wise value comparison done.\n')
 
     def test_full_table_comparison(self):
         """Check if the generated input datatable is equal to the reference input datatable
         """
         try:
-            print('Checking full datatables...')
+            logging.info('Checking full datatables...')
             assert_frame_equal(left=self.ref_table,
                                right=self.generated_table,
                                check_dtype=True,
@@ -334,8 +335,8 @@ class TestInputDatatableGeneration(unittest.TestCase):
                                check_column_type=True
                                )
         except AssertionError as e:
-            print(e)
-        print('Total full datatable comparison done.\n')
+            logging.debug(e)
+        logging.info('Total full datatable comparison done.\n')
 
 
 def suite():

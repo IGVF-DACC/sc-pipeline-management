@@ -1,9 +1,10 @@
 import igvf_and_terra_api_tools as api_tools
-import terra_to_portal_posting as t2portal
+import accession.terra_to_portal_posting as t2portal
 import argparse
 from functools import wraps
 from datetime import datetime
 import requests
+import logging
 
 
 def limit_type(value):
@@ -128,9 +129,9 @@ def query_for_measets(filtered_fields: dict, igvf_client_api, limit: str | int =
         return None
     else:
         if limit == 'all':
-            print(f'>>>>>>>> {query_res.total} results found.')
+            logging.info(f'>>>>>>>> {query_res.total} results found.')
         else:
-            print(f'>>>>>>>> {len(query_res.graph)} results found.')
+            logging.info(f'>>>>>>>> {len(query_res.graph)} results found.')
         return query_res.graph
 
 
@@ -303,8 +304,12 @@ def create_all_analysis_set_payload(all_input_file_sets: list[list], lab: str, a
     for input_file_sets in all_input_file_sets:
         curr_payload = create_analysis_set_payload(
             input_file_sets, lab, award, igvf_client_api)
-        post_res.append(t2portal.single_post_to_portal(
-            igvf_data_payload=curr_payload, igvf_utils_api=igvf_utils_api, upload_file=False))
+        igvf_post_mthd = t2portal.IGVFPostService(igvf_utils_api=igvf_utils_api,
+                                                  data_obj_payload=curr_payload,
+                                                  upload_file=False,
+                                                  resumed_posting=False
+                                                  )
+        post_res.append(igvf_post_mthd.single_post_to_portal())
     return post_res
 
 
@@ -330,9 +335,9 @@ def retry(tries=1, delay=5, backoff=2):
                 try:
                     return f(*args, **kwargs)
                 except Exception as e:
-                    print(str(e))
+                    logging.debug(str(e))
                     msg = "Retrying in %d seconds..." % (mdelay)
-                    print(msg)
+                    logging.info(msg)
                     time.sleep(mdelay)
                     mtries -= 1
                     mdelay *= backoff
@@ -394,14 +399,14 @@ def main():
     query_res = query_for_measets(
         filtered_fields=filtered_fields, igvf_client_api=igvf_client_api, limit=args.limit)
     if query_res is None:
-        print('>>>>>>>>>> No measurement sets found. Exiting.')
+        logging.info('>>>>>>>>>> No measurement sets found. Exiting.')
         return
 
     # Get all input file sets for new analysis sets
     all_input_file_sets = get_all_input_file_sets(
         query_res=query_res, igvf_client_api=igvf_client_api)
     if not all_input_file_sets:
-        print('>>>>>>>>>> No new analysis sets to create. Exiting.')
+        logging.info('>>>>>>>>>> No new analysis sets to create. Exiting.')
         return
 
     # Post new analysis sets to the portal
@@ -414,14 +419,14 @@ def main():
             igvf_client_api=igvf_client_api
         )
     except requests.exceptions.HTTPError as e:
-        print(f'>>>>>>>>>>> Error posting new analysis sets: {e}')
+        logging.debug(f'>>>>>>>>>>> Error posting new analysis sets: {e}')
         return
 
     # Save the new analysis set accessions to a file
     unique_name = f'{args.lab.split("/")[-2]}_{args.preferred_assay_title.replace(" ", "-")}_{datetime.now().strftime("%m%d%Y")}'
     output_file_path = f"{args.output_dir.rstrip('/')}/new_anasets_to_run_{unique_name}.txt"
     write_list_to_file(list_to_write=post_res, file_path=output_file_path)
-    print(
+    logging.info(
         f'>>>>>>>>>> New analysis set accessions saved to {output_file_path}')
 
 

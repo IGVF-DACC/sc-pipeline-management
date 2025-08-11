@@ -11,6 +11,7 @@ from itertools import chain
 from seqspec.utils import load_spec
 import seqspec
 import re
+import logging
 
 
 class BadDataException(Exception):
@@ -896,15 +897,15 @@ def generate_pipeline_input_table(query_analysis_set_accs: list, igvf_api, terra
     """
     pipeline_input_list = []
     for anaset_acc in query_analysis_set_accs:
-        print('Processing:', anaset_acc)
+        logging.info('Processing:', anaset_acc)
         curr_input_builder = SingleCellInputBuilder(
             analysis_set_acc=anaset_acc, igvf_api=igvf_api)
         pipeline_input_list.append(curr_input_builder.build_input_dict(
             local_barcode_file_dir=local_barcode_file_dir))
-        print('Done:', anaset_acc)
+        logging.info('Done:', anaset_acc)
     pipeline_input_table = pd.DataFrame(pipeline_input_list)
-    print('Reformatting input table for Terra format...')
-    print('Done.')
+    logging.info('Reformatting input table for Terra format...')
+    logging.info('Done.')
     return mod_input_table_for_terra(pipeline_input_table=pipeline_input_table,
                                      terra_etype=terra_etype,
                                      local_barcode_file_dir=local_barcode_file_dir,

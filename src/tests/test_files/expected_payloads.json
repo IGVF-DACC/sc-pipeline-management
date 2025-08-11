@@ -1,0 +1,35 @@
+{
+    "rna_kb_h5ad": {
+        "aliases": [
+            "igvf-dacc-processing-pipeline:IGVFDS0657NHTA_fc-secure-de19fd29-2253-41cd-9751-1788cf7ad1a5_f6921ff1-998d-4faf-a638-9b7d9e55820c_e2d9739d-6423-4051-b065-0575c840fba2_e856c806-001d-4c7d-9c67-dc8054e6c241_rna_kb_h5ad_uniform-pipeline"
+        ],
+        "analysis_step_version": "igvf:single-cell-uniform-pipeline-kallisto-bustools-rnaseq-step-v1.1.0",
+        "award": "/awards/HG012012/",
+        "content_type": "sparse gene count matrix",
+        "derived_from": [
+            "IGVFFI0768XBIK",
+            "IGVFFI0777CMJH",
+            "IGVFFI3078ONYU",
+            "IGVFFI5825ATCM",
+            "IGVFFI7330UNCB",
+            "IGVFFI8781BOZU"
+        ],
+        "description": "Raw h5ad containing four separated count matrices: Spliced, Unspliced, Ambiguous, and Total",
+        "file_format": "h5ad",
+        "file_format_specifications": [
+            "buenrostro-bernstein:igvf-sc-pipeline-matrix-h5-specification"
+        ],
+        "file_set": "IGVFDS0657NHTA",
+        "filtered": false,
+        "lab": "/labs/igvf-dacc-processing-pipeline/",
+        "md5sum": "1ad7e2efae8eaa75bea2357333e928ee",
+        "principal_dimension": "cell",
+        "reference_files": [
+            "IGVFFI5078MNED"
+        ],
+        "secondary_dimensions": [
+            "gene"
+        ],
+        "submitted_file_name": "gs://fc-secure-de19fd29-2253-41cd-9751-1788cf7ad1a5/submissions/final-outputs/f6921ff1-998d-4faf-a638-9b7d9e55820c/single_cell_pipeline/e2d9739d-6423-4051-b065-0575c840fba2/call-rna/wf_rna/e856c806-001d-4c7d-9c67-dc8054e6c241/call-kb/cacheCopy/IGVFDS0657NHTA.h5ad"
+    }
+}

@@ -1,10 +1,26 @@
-import igvf_and_terra_api_tools as api_tools
-import terra_to_portal_posting as terra2portal_transfer
+import sys
+import os
+
+# Get the absolute path to the 'src' directory (one level up from the 'tests' directory)
+src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+# Add the 'src' directory to sys.path if it's not already there
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
+
 import argparse
 import firecloud.api as fapi
 import os
 from datetime import datetime
 from functools import wraps
+import logging
+
+import igvf_and_terra_api_tools as api_tools
+import sc_pipe_management.accession.igvf_payloads as igvf_payloads
+import sc_pipe_management.accession.parse_terra_metadata as terra_parse
+import sc_pipe_management.accession.constants as const
+import sc_pipe_management.accession.terra_to_portal_posting as tr2igvf
 
 
 def read_exclusion_file(file_path: str) -> list:
@@ -32,6 +48,24 @@ def read_exclusion_file(file_path: str) -> list:
         raise argparse.ArgumentTypeError(f"Error reading exclusion file: {e}")
 
 
+def get_default_output_root_dir():
+    """Check if the script is running on the expected hostname."""
+    # Set up local output directory
+    today = datetime.now().strftime("%m%d%Y")
+    if api_tools.is_gce_instance():
+        # If running on GCE, use the Google VM output directory
+        top_root_dir = os.path.join(
+            const.OUTPUT_ROOT_DIRS['googlevm'], "output", today)
+    else:
+        # If running locally, use the localhost output directory
+        top_root_dir = os.path.join(
+            const.OUTPUT_ROOT_DIRS['localhost'], "output", today)
+    # Create the directory if it does not exist
+    if not os.path.exists(top_root_dir):
+        os.makedirs(top_root_dir)
+    return top_root_dir
+
+
 def get_parser():
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -48,19 +82,13 @@ def get_parser():
                         help="""A file with a list of accessions to exclude from the data table. If not provided, no accessions will be excluded.""")
     parser.add_argument('--upload_file', action='store_true',
                         help="""If True, upload the file to the portal.""")
-    parser.add_argument('--output_dir', type=str, default=None,
-                        help="""Path to the output directory. Defaults to $(pwd)/terra_datatables/output/$(date +%m%d%Y)""")
-    parser.add_argument('--tries', type=int, default=3,
-                        help="""Number of tries to attempt the API calls. Default is 3.""")
-    parser.add_argument('--delay', type=int, default=5,
-                        help="""Initial delay between retries in seconds. Default is 5.""")
-    parser.add_argument('--backoff', type=int, default=2,
-                        help="""Backoff multiplier e.g. value of 2 will double the delay each retry. Default is 2.""")
+    parser.add_argument('--resumed_posting', action='store_true',
+                        help="""Whether to patch an existing post. Defaults to False. See `single_post_to_portal` for more details.""")
     return parser
 
 
 ## decorator for preventing time out ##
-def retry(tries=1, delay=5, backoff=2):
+def retry(tries=5, delay=5, backoff=2):
     import time
     """Retry calling the decorated function using an exponential backoff.
 
@@ -81,9 +109,9 @@ def retry(tries=1, delay=5, backoff=2):
                 try:
                     return f(*args, **kwargs)
                 except Exception as e:
-                    print(str(e))
+                    logging.debug(str(e))
                     msg = "Retrying in %d seconds..." % (mdelay)
-                    print(msg)
+                    logging.info(msg)
                     time.sleep(mdelay)
                     mtries -= 1
                     mdelay *= backoff
@@ -98,11 +126,7 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
-    tries = args.tries
-    delay = args.delay
-    backoff = args.backoff
-
-    @retry(tries, delay, backoff)
+    @retry()
     def do_igvf_utils_api(igvf_api_keys, post_endpoint):
         """Set up IGVF utils API connection
         """
@@ -117,7 +141,7 @@ def main():
                                                        submission_mode=True)
 
     # Set up igvf client connection
-    @retry(tries, delay, backoff)
+    @retry()
     def do_igvf_client_api(igvf_api_keys, post_endpoint):
         """Set up IGVF client API connection
         """
@@ -125,40 +149,19 @@ def main():
                                               igvf_endpoint=post_endpoint)
 
     # Refresh firecloud API
-    @retry(tries, delay, backoff)
+    @retry()
     def do_firecloud_api():
         """Set up Fire Cloud API connection
         """
         fapi._set_session()
 
-    # Set up local output directory
+    # Set up local output directory for the Terra data table
     today = datetime.now().strftime("%m%d%Y")
-    if args.output_dir is None:
-        args.output_dir = os.path.join(
-            os.getcwd(), "terra_datatables", "output", today, args.terra_etype)
+    pipeline_output_dir = os.path.join(
+        get_default_output_root_dir(), args.terra_etype)
 
     # Call FireCloud API
     do_firecloud_api()
-
-    # Download data table from Terra
-    terra_table = api_tools.get_terra_tsv_data_table(terra_namespace=args.terra_namespace,
-                                                     terra_workspace=args.terra_workspace,
-                                                     terra_etype=args.terra_etype,
-                                                     excluded_accessions=args.excluded_accs)
-    if args.excluded_accs is None:
-        num_excluded = 0
-    else:
-        num_excluded = len(args.excluded_accs)
-    print(
-        f'>>>>>>>>>>>>>> A total of {terra_table.shape[0]} pipeline runs found with {num_excluded} of which excluded.')
-
-    # Download all workflow configs first (firecloud times out)
-    config_file_collection = terra2portal_transfer.download_all_workflow_config_jsons(
-        terra_namespace=args.terra_namespace,
-        terra_workspace=args.terra_workspace,
-        terra_data_table=terra_table,
-        output_root_dir=os.path.join(args.output_dir, 'workflow_configs'))
-    print(f'>>>>>>>>>>>>>> {len(config_file_collection)} configs downloaded')
 
     # Get the IGVF API keys
     igvf_api_keys = api_tools.set_up_api_keys(
@@ -170,23 +173,56 @@ def main():
     igvf_utils_api = do_igvf_utils_api(
         igvf_api_keys=igvf_api_keys, post_endpoint=args.post_endpoint)
 
-    # Will return a list of Postres
-    portal_post_results = terra2portal_transfer.post_all_successful_runs(full_terra_data_table=terra_table,
-                                                                         igvf_api=igvf_client_api,
-                                                                         igvf_utils_api=igvf_utils_api,
-                                                                         upload_file=args.upload_file,
-                                                                         config_file_collection=config_file_collection,
-                                                                         output_root_dir=args.output_dir)
+    # Download data table from Terra
+    terra_table = api_tools.get_terra_tsv_data_table(terra_namespace=args.terra_namespace,
+                                                     terra_workspace=args.terra_workspace,
+                                                     terra_etype=args.terra_etype,
+                                                     excluded_accessions=args.excluded_accs)
+    if args.excluded_accs is None:
+        num_excluded = 0
+    else:
+        num_excluded = len(args.excluded_accs)
+    logging.info(
+        f'>>>>>>>>>>>>>> A total of {terra_table.shape[0]} pipeline runs found with {num_excluded} of which excluded.')
+
+    # Download all workflow configs first (firecloud times out)
+    pipeline_params_info = igvf_payloads.PipelineParamsInfo(
+        terra_namespace=args.terra_namespace,
+        terra_workspace=args.terra_workspace,
+        terra_datatable=terra_table,
+        igvf_client_api=igvf_client_api,
+        output_root_dir=os.path.join(pipeline_output_dir, 'workflow_configs'))
+    anaset_input_params_file_paths = pipeline_params_info.get_all_input_params()
+    logging.info(
+        f'>>>>>>>>>>>>>> {len(anaset_input_params_file_paths)} configs downloaded')
+
+    # Will return a list of accessioning results
+    portal_post_results = tr2igvf.post_all_pipeline_runs_from_one_submission(terra_data_table=terra_table,
+                                                                             igvf_client_api=igvf_client_api,
+                                                                             anaset_input_params_file_paths=anaset_input_params_file_paths,
+                                                                             igvf_utils_api=igvf_utils_api,
+                                                                             output_root_dir=pipeline_output_dir,
+                                                                             upload_file=args.upload_file,
+                                                                             resumed_posting=args.resumed_posting)
+
+    logging.info(
+        f'>>>>>>>>>>>>>> A total of {len(portal_post_results)} pipeline runs posted to the portal.')
 
     # Summarize into a table
-    portal_post_summary = terra2portal_transfer.summarize_post_status(
-        post_results=portal_post_results)
-    updated_terra_table = terra2portal_transfer.add_post_status_summary_to_output_data_table(
-        full_terra_data_table=terra_table, post_status_df=portal_post_summary)
+    portal_post_summary = tr2igvf.summarize_post_status(
+        run_results=portal_post_results)
+    updated_terra_table = tr2igvf.add_post_status_summary_to_output_data_table(
+        full_terra_data_table=terra_table,
+        post_status_df=portal_post_summary)
 
     # Save the updated terra table
-    terra2portal_transfer.save_pipeline_postres_tables(
-        pipeline_postres_table=portal_post_summary, updated_full_data_table=updated_terra_table, output_root_dir=args.output_dir)
+    tr2igvf.save_pipeline_postres_tables(
+        pipeline_postres_table=portal_post_summary,
+        updated_full_data_table=updated_terra_table,
+        output_root_dir=pipeline_output_dir)
+
+    logging.info(
+        f'>>>>>>>>>>>>>> Pipeline post results saved to {pipeline_output_dir}')
 
 
 if __name__ == '__main__':
