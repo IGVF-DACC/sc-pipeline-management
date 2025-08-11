@@ -29,6 +29,9 @@ READ_ID_REGEX = re.compile(r'(IGVF[A-Z0-9]*)')
 # seqspec index tool
 ASSAY_TYPE_TO_TOOL_FORMAT = {'rna': 'kb-single', 'atac': 'chromap'}
 
+# File deprecated status
+FILE_DEPRECATED_STATUSES = ['revoked', 'deleted', 'replaced', 'archived']
+
 
 @dataclasses.dataclass(frozen=True)
 class RunReferenceFiles:
@@ -54,3 +57,8 @@ TAXA_TO_GENOME_REF_FILES = {
         genome_ref='gs://broad-buenrostro-pipeline-genome-annotations/IGVF_mouse_v32/IGVF_mouse_v32_Mus_musculus_genome_files_mm39_v32.tsv'
     )
 }
+
+
+class BadDataException(Exception):
+    """Custom exception for bad data."""
+    pass
