@@ -79,8 +79,6 @@ def main():
     # Set up IGVF client API
     igvf_portal_api = api_tools.get_igvf_client_auth(igvf_api_keys=igvf_api_keys,
                                                      igvf_endpoint=args.igvf_endpoint)
-    # Refresh Firecloud API
-    fapi._set_session()
 
     # Get a list of analysis set accessions from the arg or file, but not both
     if args.input_analysis_set_file:

@@ -23,4 +23,7 @@ terra_post_report_tables/
 coverage.xml
 .coverage
 src/sc_pipe_management/accession/*.ipynb
-rc/sc_pipe_management/accession/IU_Logs/
+src/sc_pipe_management/accession/IU_Logs/
+.coverage
+coverage.xml
+src/sc_pipe_management/accession/sandbox_accessioning.ipynb

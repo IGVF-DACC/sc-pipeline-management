@@ -1,0 +1,48 @@
+version: 2.1
+
+workflows:
+  lint_build_and_test:
+    jobs:
+      - lint
+      - build-and-test:
+          requires:
+            - lint
+
+jobs:
+  lint:
+    docker:
+      - image: cimg/python:3.11
+    working_directory: ~/sc_pipe_management
+    steps:
+      - checkout
+      - run:
+          name: Install pre-commit
+          command: pip install pre-commit==4.2.0
+      - run:
+          name: Run pre-commit checks
+          command: pre-commit run --all-files
+
+  build-and-test:
+    docker:
+      - image: cimg/python:3.11
+    working_directory: ~/sc_pipe_management
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            pip install --upgrade pip
+            pip install wheel
+            pip install setuptools==57.5.0
+            pip install --no-use-pep517 firecloud
+            pip install -r requirements.txt
+            pip install pytest pytest-cov coveralls
+      - run:
+          name: Run tests with coverage
+          command: |
+            pytest src/tests/ --cov=src/sc_pipe_management --cov-report=xml --cov-report=html --cov-report=term-missing
+      - run:
+          name: Upload coverage report to Coveralls
+          command: |
+            coveralls
+          when: always
