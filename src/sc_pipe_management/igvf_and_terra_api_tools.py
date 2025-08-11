@@ -15,8 +15,6 @@ import logging
 import requests
 
 
-
-
 # API keys for IGVF portal (staging uses a snapshot of production)
 API_KEYS_BY_SITES = {
     'prod': {'public': 'IGVF_API_KEY_PROD', 'secret': 'IGVF_SECRET_KEY_PROD'},
