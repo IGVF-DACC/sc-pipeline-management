@@ -897,12 +897,12 @@ def generate_pipeline_input_table(query_analysis_set_accs: list, igvf_api, terra
     """
     pipeline_input_list = []
     for anaset_acc in query_analysis_set_accs:
-        logging.info('Processing:', anaset_acc)
+        logging.info(f'Processing: {anaset_acc}')
         curr_input_builder = SingleCellInputBuilder(
             analysis_set_acc=anaset_acc, igvf_api=igvf_api)
         pipeline_input_list.append(curr_input_builder.build_input_dict(
             local_barcode_file_dir=local_barcode_file_dir))
-        logging.info('Done:', anaset_acc)
+        logging.info(f'Done: {anaset_acc}')
     pipeline_input_table = pd.DataFrame(pipeline_input_list)
     logging.info('Reformatting input table for Terra format...')
     logging.info('Done.')
