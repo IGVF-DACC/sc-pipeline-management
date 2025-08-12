@@ -339,6 +339,7 @@ class FragmentFilePayload:
                                      md5sum=self.md5sum,
                                      derived_from=self.input_file_accessions.get_derived_from(),
                                      submitted_file_name=self.terra_data_record[self.terra_output_name],
+                                     reference_files=self.input_file_accessions.reference_files,
                                      file_set=self.terra_data_record['analysis_set_acc'],
                                      description=self.file_obj_metadata.description,
                                      filtered=False,

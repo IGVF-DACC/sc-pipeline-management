@@ -323,6 +323,7 @@ class TestAlignmentFilePayload:
             assert payload['filtered'] is False
             assert payload['redacted'] is False
             assert 'controlled_access' in payload
+            assert payload['reference_files'] == ['IGVFFF002BBB']
 
 
 class TestFragmentFilePayload:
@@ -346,6 +347,7 @@ class TestFragmentFilePayload:
         # Mock input file accessions
         mock_input_files = Mock()
         mock_input_files.get_derived_from.return_value = ['IGVFFF001AAA']
+        mock_input_files.reference_files = ['IGVFFF002BBB']
         mock_input_files.description = 'Test fragment file'
         mock_metadata._get_input_file_accs_from_table.return_value = mock_input_files
 
@@ -405,6 +407,7 @@ class TestFragmentFilePayload:
             assert payload['controlled_access'] is False
             assert payload['filtered'] is False
             assert payload['assembly'] == 'GRCh38'
+            assert payload['reference_files'] == ['IGVFFF002BBB']
 
 
 class TestIndexFilePayload:
