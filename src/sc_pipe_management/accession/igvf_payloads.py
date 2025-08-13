@@ -659,23 +659,23 @@ class AnalysisSetPatchingPayload:
         self.input_params_doc_uuid = input_params_doc_uuid
         self.igvf_utils_api = igvf_utils_api
 
-    def _get_existing_analysis_set_docs(self) -> list:
+    def _get_existing_analysis_set_pipe_params(self) -> list:
         """Get existing document UUID linked to the analysis set."""
         analysis_set_obj = self.igvf_utils_api.get(
             f'/analysis-sets/{self.anaset_accession}')
-        if not analysis_set_obj.get('documents'):
+        if not analysis_set_obj.get('pipeline_parameters'):
             return []
-        return sorted([doc_uuid.split('/')[-2] for doc_uuid in analysis_set_obj['documents']])
+        return sorted([doc_uuid.split('/')[-2] for doc_uuid in analysis_set_obj['pipeline_parameters']])
 
     def get_patch_payload(self) -> dict:
         """Get the patch payload for the analysis set."""
-        anaset_document_uuids = self._get_existing_analysis_set_docs()
+        anaset_document_uuids = self._get_existing_analysis_set_pipe_params()
         # If Analysis set has no documents, create a documents array
         if self.input_params_doc_uuid in anaset_document_uuids:
             return None
         anaset_document_uuids.append(self.input_params_doc_uuid)
         return {
-            'documents': anaset_document_uuids,
+            'pipeline_parameters': anaset_document_uuids,
             self.igvf_utils_api.IGVFID_KEY: f"/analysis-sets/{self.anaset_accession}/",
             'uniform_pipeline_status': 'completed',
             '_profile': 'analysis_set'
