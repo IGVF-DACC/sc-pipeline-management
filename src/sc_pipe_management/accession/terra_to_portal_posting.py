@@ -100,14 +100,15 @@ class IGVFPostService:
                 payload_dict).properties
             # First check payload MD5 and aliases to see if the object already exists
             existing_object_id = self._get_conflict_object_id()
-            # If conflict exists and not expecting it to, raise an error
+            # If conflict exists and not expecting it to, return a failure result
             if (existing_object_id is not None) and (not self.resumed_posting):
-                raise PortalConflictError(
-                    f'{payload_dict.get("_profile").capitalize().replace("_", " ")} failed to accession due to conflict with an existing object: {existing_object_id}.')
-            # If conflict exists and patching is expected, return the existing object ID
-            if (existing_object_id is not None) and (self.resumed_posting):
                 return PostResult.Failure(
-                    col_header=self.data_obj_payload.terra_output_name, error=f'Conflict with existing object: {existing_object_id}.')
+                    col_header=self.data_obj_payload.terra_output_name,
+                    error=f'Conflict with existing object: {existing_object_id}.')
+            # If conflict exists and patching is expected, return the existing object ID (still as a success result)
+            if (existing_object_id is not None) and (self.resumed_posting):
+                return PostResult.Success(
+                    col_header=self.data_obj_payload.terra_output_name, uuid=existing_object_id)
             # Post new object to portal if no conflict is expected, metadata only
             stdout = self.igvf_utils_api.post(
                 payload_dict, upload_file=False, return_original_status_code=True, truncate_long_strings_in_payload_log=True)
