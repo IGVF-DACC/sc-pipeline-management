@@ -815,37 +815,39 @@ class TestAnalysisSetPatchingPayload:
         assert patching_payload.input_params_doc_uuid == 'doc-uuid-123'
         assert patching_payload.igvf_utils_api == mock_igvf_utils_api
 
-    def test_get_existing_analysis_set_docs_no_docs(self, patching_payload):
+    def test_get_existing_analysis_set_pipe_params_no_docs(self, patching_payload):
         """Should return empty list if no documents exist."""
-        patching_payload.igvf_utils_api.get.return_value = {'documents': None}
-        result = patching_payload._get_existing_analysis_set_docs()
+        patching_payload.igvf_utils_api.get.return_value = {
+            'pipeline_parameters': None}
+        result = patching_payload._get_existing_analysis_set_pipe_params()
         assert result == []
 
-    def test_get_existing_analysis_set_docs_with_docs(self, patching_payload):
+    def test_get_existing_analysis_set_pipe_params_with_docs(self, patching_payload):
         """Should return UUIDs for existing documents."""
         patching_payload.igvf_utils_api.get.side_effect = [
-            {'documents': ['/documents/uuid1/', '/documents/uuid2/']},
+            {'pipeline_parameters': [
+                '/documents/uuid1/', '/documents/uuid2/']},
             {'uuid': 'uuid1'},
             {'uuid': 'uuid2'}
         ]
-        result = patching_payload._get_existing_analysis_set_docs()
+        result = patching_payload._get_existing_analysis_set_pipe_params()
         assert result == ['uuid1', 'uuid2']
 
     def test_get_patch_payload_doc_already_exists(self, patching_payload):
         """Should return {} if doc already exists."""
-        with patch.object(patching_payload, '_get_existing_analysis_set_docs', return_value=['doc-uuid-123', 'other-uuid']):
+        with patch.object(patching_payload, '_get_existing_analysis_set_pipe_params', return_value=['doc-uuid-123', 'other-uuid']):
             result = patching_payload.get_patch_payload()
             assert result is None
 
     def test_get_patch_payload_new_doc(self, patching_payload):
         """Should return patch payload if doc is new."""
-        with patch.object(patching_payload, '_get_existing_analysis_set_docs', return_value=['other-uuid']):
+        with patch.object(patching_payload, '_get_existing_analysis_set_pipe_params', return_value=['other-uuid']):
             result = patching_payload.get_patch_payload()
             assert result is not None
             assert result['@id'] == '/analysis-sets/IGVFDS123ABC/'
             assert result['uniform_pipeline_status'] == 'completed'
             assert result['_profile'] == 'analysis_set'
-            assert 'documents' in result
+            assert 'pipeline_parameters' in result
 
 
 if __name__ == '__main__':
