@@ -211,20 +211,20 @@ class TestGetAnalysisSetMedata:
     """Test class for GetAnalysisSetMedata methods."""
 
     @pytest.fixture
-    def mock_analysis_set_obj(self):
-        """Mock analysis set object."""
-        mock_obj = MagicMock()
-        mock_obj.samples = ["/samples/SAMPLE123"]
-        mock_obj.input_file_sets = [
-            "/measurement-sets/MEASET123", "/measurement-sets/MEASET456"]
-        return mock_obj
-
-    @pytest.fixture
     def mock_sample_obj(self):
         """Mock sample object."""
         mock_obj = MagicMock()
-        mock_obj.taxa = "Homo sapiens"
-        mock_obj.accession = "SAMPLE123"
+        mock_obj.taxa = 'Homo sapiens'
+        mock_obj.accession = 'SAMPLE123'
+        return mock_obj
+
+    @pytest.fixture
+    def mock_analysis_set_obj(self):
+        """Mock analysis set object."""
+        mock_obj = MagicMock()
+        mock_obj.samples = ['/samples/SAMPLE123/']
+        mock_obj.input_file_sets = [
+            "/measurement-sets/MEASET123/", "/measurement-sets/MEASET456/"]
         return mock_obj
 
     @pytest.fixture
@@ -235,8 +235,8 @@ class TestGetAnalysisSetMedata:
             assay_type="rna",
             onlist_mapping=False,
             seqfiles=[],
-            onlist_method="method1",
-            onlist_files=["file1", "file2"],
+            onlist_method="no combination",
+            onlist_files=["/tabular-files/file1/"],
             barcode_replacement_file=None
         )
 
@@ -248,8 +248,8 @@ class TestGetAnalysisSetMedata:
             assay_type="atac",
             onlist_mapping=False,
             seqfiles=[],
-            onlist_method="method2",
-            onlist_files=["file3", "file4"],
+            onlist_method="product",
+            onlist_files=["/tabular-files/file3/", "/tabular-files/file4/"],
             barcode_replacement_file=None
         )
 
@@ -265,7 +265,7 @@ class TestGetAnalysisSetMedata:
                                              mock_rna_measet_metadata, mock_atac_measet_metadata):
         """Test get_input_analysis_set_metadata method."""
         def mock_get_by_id_side_effect(obj_id):
-            if obj_id == "/samples/SAMPLE123":
+            if obj_id == "/samples/SAMPLE123/":
                 return MagicMock(actual_instance=mock_sample_obj)
             else:
                 return MagicMock(actual_instance=mock_analysis_set_obj)
@@ -273,11 +273,11 @@ class TestGetAnalysisSetMedata:
         mock_igvf_api.get_by_id.side_effect = mock_get_by_id_side_effect
 
         def mock_get_measurement_set_metadata_side_effect(measet_id, igvf_api):
-            if measet_id == "/measurement-sets/MEASET123":
+            if measet_id == "/measurement-sets/MEASET123/":
                 mock_instance = MagicMock()
                 mock_instance.get_measurement_set_metadata.return_value = mock_rna_measet_metadata
                 return mock_instance
-            elif measet_id == "/measurement-sets/MEASET456":
+            elif measet_id == "/measurement-sets/MEASET456/":
                 mock_instance = MagicMock()
                 mock_instance.get_measurement_set_metadata.return_value = mock_atac_measet_metadata
                 return mock_instance
@@ -290,42 +290,31 @@ class TestGetAnalysisSetMedata:
             analysis_set_metadata = instance.get_input_analysis_set_metadata()
 
             assert analysis_set_metadata.analysis_set_acc == "ANASET123"
+
             assert len(analysis_set_metadata.sample_info) == 1
             assert analysis_set_metadata.sample_info[0].taxa == "Homo sapiens"
             assert analysis_set_metadata.sample_info[0].subpool_id == "SAMPLE123"
+
             assert len(analysis_set_metadata.rna_input_info) == 1
             assert analysis_set_metadata.rna_input_info[0].measet_acc == "MEASET123"
+
             assert len(analysis_set_metadata.atac_input_info) == 1
             assert analysis_set_metadata.atac_input_info[0].measet_acc == "MEASET456"
 
-    def test_get_input_analysis_set_metadata_no_samples(self, mock_igvf_api, mock_analysis_set_obj):
-        """Test get_input_analysis_set_metadata method when no samples are present."""
-        mock_analysis_set_obj.samples = []
-        mock_analysis_set_obj.input_file_sets = []
-        mock_igvf_api.get_by_id.return_value.actual_instance = mock_analysis_set_obj
-
-        instance = portal_parsing.GetAnalysisSetMedata(
-            analysis_set_accession="ANASET123", igvf_api=mock_igvf_api)
-        analysis_set_metadata = instance.get_input_analysis_set_metadata()
-
-        assert analysis_set_metadata.analysis_set_acc == "ANASET123"
-        assert len(analysis_set_metadata.sample_info) == 0
-        assert len(analysis_set_metadata.rna_input_info) == 0
-        assert len(analysis_set_metadata.atac_input_info) == 0
-
-    def test_get_input_analysis_set_metadata_only_rna(self, mock_igvf_api, mock_analysis_set_obj,
-                                                      mock_sample_obj, mock_rna_measet_metadata):
+    def test_get_input_analysis_set_metadata_only_one_assay_type(self, mock_igvf_api, mock_analysis_set_obj,
+                                                                 mock_sample_obj, mock_rna_measet_metadata, mock_atac_measet_metadata):
         """Test get_input_analysis_set_metadata method with only RNA measurement sets."""
         mock_analysis_set_obj.input_file_sets = ["/measurement-sets/MEASET123"]
 
         def mock_get_by_id_side_effect(obj_id):
-            if obj_id == "/samples/SAMPLE123":
+            if obj_id == "/samples/SAMPLE123/":
                 return MagicMock(actual_instance=mock_sample_obj)
             else:
                 return MagicMock(actual_instance=mock_analysis_set_obj)
 
         mock_igvf_api.get_by_id.side_effect = mock_get_by_id_side_effect
 
+        # Test if only RNA measurement set metadata is returned
         with patch('sc_pipe_management.input_params_generation.portal_metadata_parsing.GetMeasurementSetMetadata') as mock_get_measet:
             mock_instance = MagicMock()
             mock_instance.get_measurement_set_metadata.return_value = mock_rna_measet_metadata
@@ -337,3 +326,16 @@ class TestGetAnalysisSetMedata:
 
             assert len(analysis_set_metadata.rna_input_info) == 1
             assert len(analysis_set_metadata.atac_input_info) == 0
+
+        # Test if only ATAC measurement set metadata is returned
+        with patch('sc_pipe_management.input_params_generation.portal_metadata_parsing.GetMeasurementSetMetadata') as mock_get_measet:
+            mock_instance = MagicMock()
+            mock_instance.get_measurement_set_metadata.return_value = mock_atac_measet_metadata
+            mock_get_measet.return_value = mock_instance
+
+            instance = portal_parsing.GetAnalysisSetMedata(
+                analysis_set_accession="ANASET123", igvf_api=mock_igvf_api)
+            analysis_set_metadata = instance.get_input_analysis_set_metadata()
+
+            assert len(analysis_set_metadata.rna_input_info) == 0
+            assert len(analysis_set_metadata.atac_input_info) == 1
