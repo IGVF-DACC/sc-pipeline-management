@@ -121,12 +121,13 @@ class TestGetMeasurementSetMetadata:
         """Mock measurement set object."""
         mock_obj = MagicMock()
         mock_obj.accession = "MEASET123"
-        mock_obj.assay_term = "RNA-seq"
-        mock_obj.preferred_assay_titles = ["RNA-seq"]
+        mock_obj.assay_term = "/assay-terms/OBI_0003109/"
+        mock_obj.preferred_assay_titles = ["SHARE-seq"]
         mock_obj.files = ["/sequence-files/IGVFFI123456"]
-        mock_obj.onlist_method = "method1"
-        mock_obj.onlist_files = ["file1", "file2"]
-        mock_obj.barcode_replacement_file = "barcode_file"
+        mock_obj.onlist_method = "no combination"
+        mock_obj.onlist_files = [
+            "/tabular-files/file1/"]
+        mock_obj.barcode_replacement_file = "/tabular-files/barcodefile1/"
         return mock_obj
 
     @pytest.fixture
@@ -139,9 +140,9 @@ class TestGetMeasurementSetMetadata:
             sequencing_run=1,
             lane=2,
             flowcell_id="Flowcell123",
-            file_url="https://example.com/files/IGVFFI123456/@@download",
+            file_url="https://example.com/sequence-files/IGVFFI123456/@@download/IGVFFI123456.fastq.gz",
             seqspec_urls=[
-                "https://example.com/seqspecs/SEQSPEC123/@@download"],
+                "https://example.com/configuration-files/SEQSPEC123/@@download/SEQSPEC123.yaml.gz"],
             read_names=["Read1", "Read2"]
         )
 
@@ -153,11 +154,11 @@ class TestGetMeasurementSetMetadata:
         assert instance.measet_id == measet_id
         assert instance.igvf_api == mock_igvf_api
 
-    def test_get_measurement_set_metadata(self, mock_igvf_api, mock_measet_obj, mock_seqfile_metadata):
+    def test_get_measurement_set_metadata_onlist_mapping_false(self, mock_igvf_api, mock_measet_obj, mock_seqfile_metadata):
         """Test get_measurement_set_metadata method."""
         mock_igvf_api.get_by_id.return_value.actual_instance = mock_measet_obj
 
-        with patch.object(const, 'ASSAY_NAMES_CONVERSION_REF', {"RNA-seq": "rna"}):
+        with patch.object(const, 'ASSAY_NAMES_CONVERSION_REF', {"/assay-terms/OBI_0003109/": "rna"}):
             with patch('sc_pipe_management.input_params_generation.portal_metadata_parsing.GetSeqFileMetadata') as mock_get_seqfile:
                 mock_get_seqfile.return_value.get_seqfile_metadata.return_value = mock_seqfile_metadata
 
@@ -170,16 +171,17 @@ class TestGetMeasurementSetMetadata:
                 assert measet_metadata.onlist_mapping is False
                 assert len(measet_metadata.seqfiles) == 1
                 assert measet_metadata.seqfiles[0].file_accession == "IGVFFI123456"
-                assert measet_metadata.onlist_method == "method1"
-                assert measet_metadata.onlist_files == ["file1", "file2"]
-                assert measet_metadata.barcode_replacement_file == "barcode_file"
+                assert measet_metadata.onlist_method == "no combination"
+                assert measet_metadata.onlist_files == [
+                    "/tabular-files/file1/"]
+                assert measet_metadata.barcode_replacement_file == "/tabular-files/barcodefile1/"
 
     def test_get_measurement_set_metadata_onlist_mapping_true(self, mock_igvf_api, mock_measet_obj, mock_seqfile_metadata):
         """Test get_measurement_set_metadata method when onlist_mapping is True."""
-        mock_measet_obj.onlist_method = "onlist"
+        mock_measet_obj.preferred_assay_titles = ['10x multiome']
         mock_igvf_api.get_by_id.return_value.actual_instance = mock_measet_obj
 
-        with patch.object(const, 'ASSAY_NAMES_CONVERSION_REF', {"RNA-seq": "rna"}):
+        with patch.object(const, 'ASSAY_NAMES_CONVERSION_REF', {"/assay-terms/OBI_0003109/": "rna"}):
             with patch('sc_pipe_management.input_params_generation.portal_metadata_parsing.GetSeqFileMetadata') as mock_get_seqfile:
                 mock_get_seqfile.return_value.get_seqfile_metadata.return_value = mock_seqfile_metadata
 
@@ -191,10 +193,10 @@ class TestGetMeasurementSetMetadata:
 
     def test_get_measurement_set_metadata_no_barcode_replacement(self, mock_igvf_api, mock_measet_obj, mock_seqfile_metadata):
         """Test get_measurement_set_metadata method when barcode_replacement_file is not present."""
-        del mock_measet_obj.barcode_replacement_file
+        mock_measet_obj.barcode_replacement_file = None
         mock_igvf_api.get_by_id.return_value.actual_instance = mock_measet_obj
 
-        with patch.object(const, 'ASSAY_NAMES_CONVERSION_REF', {"RNA-seq": "rna"}):
+        with patch.object(const, 'ASSAY_NAMES_CONVERSION_REF', {"/assay-terms/OBI_0003109/": "rna"}):
             with patch('sc_pipe_management.input_params_generation.portal_metadata_parsing.GetSeqFileMetadata') as mock_get_seqfile:
                 mock_get_seqfile.return_value.get_seqfile_metadata.return_value = mock_seqfile_metadata
 
