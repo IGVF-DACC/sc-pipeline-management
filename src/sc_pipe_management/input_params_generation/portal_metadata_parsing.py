@@ -32,6 +32,16 @@ class SeqFileMetadata:
     seqspec_urls: list[str]
     read_names: list[str]
 
+    def get_read_names_from_seqfile(self) -> str:
+        """Get the read names from the seqfile object."""
+        if len(self.read_names) == 1:
+            return self.read_names[0]
+        elif self.read_names == ['Read 2', 'Barcode index']:
+            return 'Read 2'
+        else:
+            raise const.BadDataException(
+                f'Malformed seqfile read names: {self.read_names}. Expected only one read name or Read 2 and Barcode index.')
+
 
 @dataclasses.dataclass(frozen=True)
 class MeasurementSetMetadata:
