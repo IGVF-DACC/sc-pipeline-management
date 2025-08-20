@@ -16,107 +16,6 @@ import sc_pipe_management.input_params_generation.constant as const
 import sc_pipe_management.input_params_generation.portal_metadata_parsing as portal_parsing
 
 
-def get_atac_seqfile_read_titles(read_names: list) -> str:
-    """Get ATACseq read titles. Will always have read1, read2, and barcode index even if read2 and barcode may be concatenated.
-
-    Args:
-        read_names (list): seqfile.read_names values
-
-    Returns:
-        str: assay-type_read-names, e.g., rna_read1
-    """
-    assay_type = 'atac'
-    read_file_titles = []
-    for read_name in read_names:
-        read_file_titles.append(
-            '_'.join([assay_type, const.READ_NAME_TO_READ_TYPE_MAP[read_name]]))
-    return read_file_titles
-
-
-def get_rna_seqfile_read_titles(read_names: list) -> str:
-    """Get RNA seq file read titles. If reads are not concatenated, will always have read1, read2, and barcode index.
-    If reads are concatenated, will only have read1 and read2. The barcode fastaq will be ignored.
-
-    Args:
-        read_names (list): seqfile.read_names values
-
-    Returns:
-        str: assay-type_read-names, e.g., rna_read1
-    """
-    assay_type = 'rna'
-    read_file_titles = []
-    if len(read_names) == 1:
-        for read_name in read_names:
-            read_file_titles.append(
-                '_'.join([assay_type, const.READ_NAME_TO_READ_TYPE_MAP[read_name]]))
-    else:
-        # NOTE: Hard coded for cases if read2 and barcode are concatenated. Ignore barcode index.
-        if sorted(read_names) == sorted(['Read 2', 'Barcode index']):
-            read_file_titles.append(
-                '_'.join([assay_type, const.READ_NAME_TO_READ_TYPE_MAP['Read 2']]))
-        else:
-            read_file_titles.append(
-                '_'.join([assay_type, const.READ_NAME_TO_READ_TYPE_MAP[read_name]]))
-    return read_file_titles
-
-
-def get_seqfile_readnames(seqfile_item, assay_type: str) -> str:
-    """HACK: Use sequence file metadata to infer FASTQ file read types.
-
-    Args:
-        seqfile_item (_type_): Return item from the API
-        assay_type (str): translated from assay term into atac or rna
-
-    Returns:
-        str: e.g., atac_read1, rna_read2
-    """
-    read_file_titles = []
-    curr_read_names = seqfile_item.read_names
-    if not curr_read_names:
-        raise const.BadDataException(
-            'Error: No read names found in the sequence file item.')
-    if assay_type == 'atac':
-        return get_atac_seqfile_read_titles(read_names=curr_read_names)
-    elif assay_type == 'rna':
-        return get_rna_seqfile_read_titles(read_names=curr_read_names)
-
-
-def check_emptyinclusion_list(final_inclusion_list_path: str) -> bool:
-    """Check if the final inclusion list created is empty.
-
-    Args:
-        final_inclusion_list_path (str): _description_
-
-    Returns:
-        bool: _description_
-    """
-    with open(final_inclusion_list_path, 'r') as file_obj:
-        first_char = file_obj.read(1)
-        if not first_char.isalpha():
-            return False
-
-
-def download_file_via_https(seqspec_file_url: str, partial_root_dir: str) -> str:
-    """Download file via href url on the portal and save it locally."""
-    if not os.path.exists(partial_root_dir):
-        os.makedirs(partial_root_dir)
-    # TODO: Needs to update this to use API tools
-    username = os.getenv('IGVF_API_KEY')
-    password = os.getenv('IGVF_SECRET_KEY')
-    session = requests.Session()
-    session.auth = (username, password)
-    response = session.get(seqspec_file_url)
-    if response.status_code == 200:
-        curr_output_file = os.path.join(
-            partial_root_dir, 'temp', seqspec_file_url.split('/')[-1])
-        with open(curr_output_file, 'wb') as file:
-            file.write(response.content)
-        return curr_output_file
-    else:
-        raise const.BadDataException(
-            f'Error: Download failed with status code: {response.status_code}.')
-
-
 @dataclasses.dataclass(frozen=True)
 class SeqSpecMetadata:
     """Dataclass to hold seqspec metadata."""
@@ -227,14 +126,62 @@ class SeqSpecToolOutput:
     onlist_file_path: str
 
 
-class SeqSpecMetadataGenerator:
+class GetSeqSpecToolOutput:
     """Class to generate seqspec metadata for a given seqspec file."""
 
-    def __init__(self, seqspec_metadata: SeqSpecMetadata, partial_root_dir: str):
+    def __init__(self, seqspec_metadata: SeqSpecMetadata, output_barcode_list_file: str):
         self.seqspec_metadata = seqspec_metadata
-        self.partial_root_dir = partial_root_dir
+        self.output_barcode_list_file = output_barcode_list_file
+        self.modality = self.seqspec_metadata.modality
+        self.seqspec_file_path = self.seqspec_metadata.seqspec_file_path
+        self.seqspec_index_read_ids = self.seqspec_metadata.get_index_read_ids()
+        self.seqspec_onlist_read_id = self.seqspec_metadata.get_onlist_read_ids()
 
-    def get_seqspec_index(self) -> str:
+    def _get_seqspec_index(self) -> str:
         """Get the index read IDs based on the usage purpose."""
-        read_index_tool = const.ASSAY_TYPE_TO_TOOL_FORMAT.get(
-            self.seqspec_metadata.modality, None)
+        curr_run_log = subprocess.run(['seqspec', 'index', '-m', self.modality, '-t',
+                                       const.ASSAY_TYPE_TO_TOOL_FORMAT[self.modality], '-s', 'read', '-i', self.seqspec_index_read_ids, self.seqspec_file_path], capture_output=True)
+        if curr_run_log.returncode != 0:
+            raise const.BadDataException(
+                f'Error: seqspec file {self.seqspec_file_path} does not have index read IDs.')
+        if self.modality == 'rna':
+            return curr_run_log.stdout.decode('utf-8').strip()
+        elif self.modality == 'atac':
+            return curr_run_log.stdout.decode('utf-8').strip().split(' ')[-1]
+
+    def _get_seqspec_onlist(self, onlist_method: str) -> str:
+        """Get the onlist files from the seqspec file."""
+        if onlist_method == 'no combination':
+            curr_run_log = subprocess.run(['seqspec', 'onlist', '-m', self.modality, '-s',
+                                           'region-type', '-i', 'barcode', '-o', self.output_barcode_list_file, self.seqspec_file_path], capture_output=True)
+        # If combinatorial, seqspec onlist will generated a new file
+        else:
+            # NOTE: Per sc FG mtg, on Mar 10, 2025, all combinatorial onlist files will be generated as product.
+            curr_run_log = subprocess.run(['seqspec', 'onlist', '-m', self.modality, '-s', 'read', '-i',
+                                           self.seqspec_onlist_read_id, '-f', 'product', '-o', self.output_barcode_list_file, self.seqspec_file_path], capture_output=True)
+        if curr_run_log.returncode != 0:
+            raise const.BadDataException(
+                f'Error: Seqspec onlist generation command error. Seqspec tool debug msg: {curr_run_log.stderr.decode("utf-8")}.')
+        return self.output_barcode_list_file
+
+    def __check_emptyinclusion_list(self) -> bool:
+        """Check if the final inclusion list created is empty."""
+        with open(self.output_barcode_list_file, 'r') as file_obj:
+            first_char = file_obj.read(1)
+            if not first_char.isalpha():
+                return False
+
+    def generate_seqspec_tool_output(self, onlist_method: str) -> SeqSpecToolOutput:
+        """Generate seqspec tool output for a given seqspec file."""
+        # Get the index read IDs
+        read_index_string = self._get_seqspec_index()
+        # Get the onlist files
+        onlist_file_path = self._get_seqspec_onlist(onlist_method)
+        # Check if the inclusion list is empty
+        if self.__check_emptyinclusion_list():
+            raise const.BadDataException(
+                'Error: The inclusion list is empty. Please check the seqspec file and the onlist method.')
+        return SeqSpecToolOutput(
+            read_index_string=read_index_string,
+            onlist_file_path=onlist_file_path
+        )
