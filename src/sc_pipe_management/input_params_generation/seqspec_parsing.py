@@ -124,6 +124,7 @@ class SeqSpecToolOutput:
     """Dataclass to hold seqspec tool output."""
     read_index_string: str
     onlist_file_path: str
+    errors: str | None
 
 
 class GetSeqSpecToolOutput:
@@ -164,24 +165,23 @@ class GetSeqSpecToolOutput:
                 f'Error: Seqspec onlist generation command error. Seqspec tool debug msg: {curr_run_log.stderr.decode("utf-8")}.')
         return self.output_barcode_list_file
 
-    def __check_emptyinclusion_list(self) -> bool:
-        """Check if the final inclusion list created is empty."""
-        with open(self.output_barcode_list_file, 'r') as file_obj:
-            first_char = file_obj.read(1)
-            if not first_char.isalpha():
-                return False
-
     def generate_seqspec_tool_output(self, onlist_method: str) -> SeqSpecToolOutput:
         """Generate seqspec tool output for a given seqspec file."""
-        # Get the index read IDs
-        read_index_string = self._get_seqspec_index()
-        # Get the onlist files
-        onlist_file_path = self._get_seqspec_onlist(onlist_method)
-        # Check if the inclusion list is empty
-        if self.__check_emptyinclusion_list():
-            raise const.BadDataException(
-                'Error: The inclusion list is empty. Please check the seqspec file and the onlist method.')
-        return SeqSpecToolOutput(
-            read_index_string=read_index_string,
-            onlist_file_path=onlist_file_path
-        )
+        read_index_string = None
+        onlist_file_path = None
+        try:
+            # Get the index read IDs
+            read_index_string = self._get_seqspec_index()
+            # Get the onlist files
+            onlist_file_path = self._get_seqspec_onlist(onlist_method)
+            return SeqSpecToolOutput(
+                read_index_string=read_index_string,
+                onlist_file_path=onlist_file_path,
+                errors=None
+            )
+        except const.BadDataException as e:
+            return SeqSpecToolOutput(
+                read_index_string=read_index_string,
+                onlist_file_path=onlist_file_path,
+                errors=str(e)
+            )
