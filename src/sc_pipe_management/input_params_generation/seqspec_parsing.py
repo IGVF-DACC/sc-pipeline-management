@@ -1,24 +1,19 @@
-import urllib.parse
 import os
-import pandas as pd
-import itertools
-import urllib
-from datetime import datetime
-import subprocess
-import requests
-from collections import OrderedDict
-from itertools import chain
-from seqspec.utils import load_spec
-from seqspec.seqspec_info import seqspec_info_modalities
-import seqspec
-import re
-import logging
 import dataclasses
+import requests
+import subprocess
+
+# Import seqspec modules
+from seqspec.utils import load_spec
+from seqspec.seqspec_index import run_index
+import seqspec
+
+# Import IGVF API client
 import igvf_client
 
+# Import custom modules
 import sc_pipe_management.input_params_generation.constant as const
 import sc_pipe_management.input_params_generation.portal_metadata_parsing as portal_parsing
-import sc_pipe_management.igvf_and_terra_api_tools as igvf_api_tools
 
 
 def get_atac_seqfile_read_titles(read_names: list) -> str:
@@ -86,34 +81,6 @@ def get_seqfile_readnames(seqfile_item, assay_type: str) -> str:
         return get_rna_seqfile_read_titles(read_names=curr_read_names)
 
 
-def download_file_via_https(igvf_download_url: str, igvf_api_keys: dict, output_dir: str = './temp') -> str:
-    """Download file via href url on the portal
-
-    Args:
-        igvf_download_url (str): _description_
-        save_file_path (str): _description_
-
-    Returns:
-        str: _description_
-    """
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    username = igvf_api_keys['public']
-    password = igvf_api_keys['secret']
-    session = requests.Session()
-    session.auth = (username, password)
-    response = session.get(igvf_download_url)
-    if response.status_code == 200:
-        curr_output_file = os.path.join(
-            output_dir, igvf_download_url.split('/')[-1])
-        with open(curr_output_file, 'wb') as file:
-            file.write(response.content)
-        return curr_output_file
-    else:
-        raise const.BadDataException(
-            f'Error: Download failed with status code: {response.status_code}.')
-
-
 def check_emptyinclusion_list(final_inclusion_list_path: str) -> bool:
     """Check if the final inclusion list created is empty.
 
@@ -129,125 +96,7 @@ def check_emptyinclusion_list(final_inclusion_list_path: str) -> bool:
             return False
 
 
-def find_igvf_acc_in_seqspec(spec: seqspec.Read.Read) -> str | None:
-    """Find IGVF accession in a seqspec for fastq files. Trying read_id first, then file_ids, and finally the URL.
-
-    Args:
-        spec (seqspec.Read.Read): The seqspec to search after importing a seqspec.
-
-    Raises:
-        BadDataException: If no IGVF accession is found.
-
-    Returns:
-        str: The found IGVF accession, parsed if has suffixes.
-    """
-    # If read_id is an IGVF accession, return it
-    read_id = spec.read_id
-    if const.READ_ID_REGEX.match(read_id):
-        return const.READ_ID_REGEX.search(read_id).group(1)
-    # If read_id is not an IGVF accession, check the file_ids
-    file_specs = spec.files
-    for file_spec in file_specs:
-        file_id = file_spec.file_id
-        # If the read_id is not an IGVF accession, check the file_id
-        if const.READ_ID_REGEX.match(file_id):
-            return const.READ_ID_REGEX.search(file_id).group(1)
-        # If file_id is not an IGVF accession, check the URL
-        for item in file_spec.url.split('/'):
-            if const.READ_ID_REGEX.match(item):
-                return const.READ_ID_REGEX.search(item).group(1)
-    return None
-
-
-def parse_read_ids_from_seqspec_file(seqspec_file_path: str, assay_type: str) -> list[tuple[str, str | None]]:
-    """Retrieve read_id values of a specific modality from a seqspec
-
-    Args:
-        seqspec_file_path (str): Local seqspec file path
-        assay_type (str): rna or atac
-
-    Raises:
-        BadDataException: If the read_id does not contain IGVF accession
-
-    Returns:
-        list[tuple[str, str | None]]: a list of (read_id, IGVF accession)
-    """
-    sequence_specs = load_spec(seqspec_file_path).sequence_spec
-    read_ids = []
-    for spec in sequence_specs:
-        if spec.modality == assay_type:
-            igvf_accession = find_igvf_acc_in_seqspec(spec=spec)
-            read_ids.append((spec.read_id, igvf_accession))
-    return read_ids
-
-
-def get_read_names_from_seqfile(seqfile_obj) -> str:
-    """Get the read names from the seqfile object.
-
-    Args:
-        seqfile_obj (_type_): IGVF client query return object for sequence file
-
-    Returns:
-        str: The read name (e.g., 'Read 1', 'Read 2', 'Barcode index').
-    """
-    if len(seqfile_obj.read_names) == 1:
-        return seqfile_obj.read_names[0]
-    # If Read2 and Barcode are concatenated, use only Read 2
-    assert sorted(seqfile_obj.read_names) == sorted(
-        ['Read 2', 'Barcode index']), 'Malformed seqfile read names.'
-    return 'Read 2'
-
-
-def generate_ordered_read_ids(seqspec_file_path: str, assay_type: str, usage_purpose: str, igvf_api) -> str:
-    """Get the read1,read2,barcode files order from the seqspec read_id and portal metadata.
-
-    Args:
-        seqspec_file_path (str): seqspec file path
-        assay_type (str): rna or atac
-        usage_purpose (str): Usage purpose of the read files, 'onlist' or 'index'. 'onlist' will take a joined list, and 'index' will return either barcode index accession if a separate file or read2 if barcode index is combined with read2 or not indicated.
-        igvf_api (_type_): igvf client api
-
-    Raises:
-        BadDataException: If no IGVF accession is found for a read ID.
-        BadDataException: If sequence files have fatal errors in read_names property.
-
-    Returns:
-        str: read1_fastaq_accession,read2_fastaq_accession,barcode_fastaq_accession
-    """
-    # Get read IDs from the seqspec file
-    read_ids = parse_read_ids_from_seqspec_file(
-        seqspec_file_path=seqspec_file_path, assay_type=assay_type)
-    id_by_name = {}
-    for (read_id, igvf_accession) in read_ids:
-        # If no IGVF accession is found, add to unknown
-        if igvf_accession is None:
-            raise const.BadDataException(
-                f'Error: No IGVF accession found for read ID {read_id}.')
-        # Get seq file object if there is IGVF accession
-        seqfile_obj = igvf_api.get_by_id(
-            f'/sequence-files/{igvf_accession}/').actual_instance
-        # If no read names are found, skip this seqfile
-        if not seqfile_obj.read_names:
-            continue
-        read_name = get_read_names_from_seqfile(seqfile_obj=seqfile_obj)
-        if read_name in id_by_name:
-            raise const.BadDataException(
-                f'Error: Multiple sequence files found for the same {read_name}.')
-        id_by_name[read_name] = read_id
-
-    if usage_purpose == 'onlist':
-        if 'Barcode index' in id_by_name:
-            return id_by_name.get('Barcode index')
-        return id_by_name.get('Read 2')
-    assert usage_purpose == 'index'
-    # Sort the dictionary by the order of keys
-    ordered_names = [id_by_name.get('Read 1'), id_by_name.get(
-        'Read 2'), id_by_name.get('Barcode index')]
-    # for use with seqspec index, it takes all read ids joined
-    return ','.join(name for name in ordered_names if name is not None)
-
-
-def _download_file_via_https(seqspec_file_url: str, partial_root_dir: str) -> str:
+def download_file_via_https(seqspec_file_url: str, partial_root_dir: str) -> str:
     """Download file via href url on the portal and save it locally."""
     if not os.path.exists(partial_root_dir):
         os.makedirs(partial_root_dir)
@@ -268,51 +117,46 @@ def _download_file_via_https(seqspec_file_url: str, partial_root_dir: str) -> st
             f'Error: Download failed with status code: {response.status_code}.')
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class SeqSpecMetadata:
     """Dataclass to hold seqspec metadata."""
     seqspec_file_path: str
     modality: str
-    read_index_string: str
-    index_ordered_read_ids: str
-    onlist_read_id: str
+    ordered_read_ids: list
+    onlist_files: list[str]
+
+    def get_index_read_ids(self) -> str:
+        """Get the index read IDs based on the usage purpose."""
+        return ','.join(self.ordered_read_ids)
+
+    def get_onlist_read_ids(self) -> str:
+        """Get the read IDs for onlist usage purpose."""
+        return self.ordered_read_ids[-1]
 
 
-class SeqSpecMetadataGenerator:
-    """Class to generate seqspec metadata for a given seqspec file."""
+class GetSeqSpecMetadata:
+    """Class to get seqspec metadata from a seqspec file."""
 
-    def __init__(self, seqspec_file_url: str, igvf_api: igvf_client.api.igvf_api.IgvfApi, partial_root_dir: str):
-        self.seqspec_file_url = seqspec_file_url
+    def __init__(self, seqspec_file_path: str, igvf_api: igvf_client.api.igvf_api.IgvfApi):
+        self.seqspec_file_path = seqspec_file_path
         self.igvf_api = igvf_api
-        self.partial_root_dir = partial_root_dir
+        self.imported_seqspec = load_spec(self.seqspec_file_path)
 
-    def _get_modality_from_seqspec(self, seqspec_file_path: str) -> str:
-        """Get the modality from the seqspec file. Expecting exactly one modality per seqspec yaml."""
-        sequence_specs = load_spec(seqspec_file_path).sequence_spec
-        modalities = seqspec_info_modalities(sequence_specs)['modalities']
+    def _get_seqspec_modality(self) -> str:
+        modalities = self.imported_seqspec.modalities
         if len(modalities) != 1:
             raise const.BadDataException(
-                f'Error: Expected exactly one modality in seqspec, found {len(modalities)}.')
+                f'Error: Seqspec file {self.seqspec_file_path.split("/")[-2]} has multiple modalities. Only one modality is supported.')
         return modalities[0]
 
-    def _find_igvf_acc_in_seqspec(spec: seqspec.Read.Read) -> str | None:
-        """Find IGVF accession in a seqspec for fastq files. Trying read_id first, then file_ids, and finally the URL.
-
-        Args:
-            spec (seqspec.Read.Read): The seqspec to search after importing a seqspec.
-
-        Raises:
-            BadDataException: If no IGVF accession is found.
-
-        Returns:
-            str: The found IGVF accession, parsed if has suffixes.
-        """
+    def _find_igvf_acc_in_single_read_spec(self, single_read_spec: seqspec.Read.Read) -> str | None:
+        """Find IGVF accession in a single !Read spec. Trying read_id first, then file_ids, and finally the URL."""
         # If read_id is an IGVF accession, return it
-        read_id = spec.read_id
+        read_id = single_read_spec.read_id
         if const.READ_ID_REGEX.match(read_id):
             return const.READ_ID_REGEX.search(read_id).group(1)
         # If read_id is not an IGVF accession, check the file_ids
-        file_specs = spec.files
+        file_specs = single_read_spec.files
         for file_spec in file_specs:
             file_id = file_spec.file_id
             # If the read_id is not an IGVF accession, check the file_id
@@ -324,23 +168,73 @@ class SeqSpecMetadataGenerator:
                     return const.READ_ID_REGEX.search(item).group(1)
         return None
 
-    def parse_read_ids_from_seqspec_file(seqspec_file_path: str, assay_type: str) -> list[tuple[str, str | None]]:
-        """Retrieve read_id values of a specific modality from a seqspec
-
-        Args:
-            seqspec_file_path (str): Local seqspec file path
-            assay_type (str): rna or atac
-
-        Raises:
-            BadDataException: If the read_id does not contain IGVF accession
-
-        Returns:
-            list[tuple[str, str | None]]: a list of (read_id, IGVF accession)
-        """
-        sequence_specs = load_spec(seqspec_file_path).sequence_spec
+    def _parse_read_ids_from_seqspec_file(self) -> list[tuple[str, str | None]]:
+        """Retrieve read_id values of a specific modality from a seqspec."""
+        sequence_specs = self.imported_seqspec.sequence_spec
         read_ids = []
         for spec in sequence_specs:
-            if spec.modality == assay_type:
-                igvf_accession = find_igvf_acc_in_seqspec(spec=spec)
+            if spec.modality == self._get_seqspec_modality():
+                igvf_accession = self._find_igvf_acc_in_single_read_spec(
+                    single_read_spec=spec)
                 read_ids.append((spec.read_id, igvf_accession))
         return read_ids
+
+    def _generate_ordered_read_ids(self, seqfiles_metadata: list[portal_parsing.SeqFileMetadata]) -> list[str]:
+        """Get the read1,read2,barcode files order from the seqspec read_id and portal metadata."""
+        # Get read IDs from the seqspec file
+        read_ids = self._parse_read_ids_from_seqspec_file()
+        id_by_name = {}
+        for (read_id, igvf_accession) in read_ids:
+            # If no IGVF accession is found, add to unknown
+            if igvf_accession is None:
+                raise const.BadDataException(
+                    f'Error: No IGVF accession found for read ID {read_id}.')
+            for seqfile_metadata in seqfiles_metadata:
+                if seqfile_metadata.file_accession == igvf_accession:
+                    read_name = seqfile_metadata.get_read_names_from_seqfile()
+                    if read_name in id_by_name:
+                        raise const.BadDataException(
+                            f'Error: Multiple sequence files found for the same {read_name}.')
+                    id_by_name[read_name] = read_id
+        return [id_by_name[read_name] for read_name in ['Read 1', 'Read 2', 'Barcode index'] if id_by_name.get(read_name) is not None]
+
+    def _get_onlist_files(self) -> list[str]:
+        """Get the onlist files from the seqspec file."""
+        curr_run_log = subprocess.run(['seqspec', 'file', '-m', self._get_seqspec_modality(), '-s', 'region-type',
+                                      '-i', 'barcode', '-f', 'index', '-k', 'url', self.seqspec_file_path], capture_output=True)
+        if curr_run_log.returncode != 0:
+            raise const.BadDataException(
+                f'Error: seqspec file {self.seqspec_file_path} does not have onlist files.')
+        onlist_files = curr_run_log.stdout.decode('utf-8').strip().split('\n')
+        return onlist_files
+
+    def generate_seqspec_metadata(self, seqfiles_metadata: list[portal_parsing.SeqFileMetadata]) -> SeqSpecMetadata:
+        """Generate seqspec metadata from the seqspec file and seqfiles metadata."""
+        # Generate ordered read IDs
+        ordered_read_ids = self._generate_ordered_read_ids(seqfiles_metadata)
+        return SeqSpecMetadata(
+            seqspec_file_path=self.seqspec_file_path,
+            modality=self._get_seqspec_modality(),
+            ordered_read_ids=ordered_read_ids,
+            onlist_files=self._get_onlist_files()
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class SeqSpecToolOutput:
+    """Dataclass to hold seqspec tool output."""
+    read_index_string: str
+    onlist_file_path: str
+
+
+class SeqSpecMetadataGenerator:
+    """Class to generate seqspec metadata for a given seqspec file."""
+
+    def __init__(self, seqspec_metadata: SeqSpecMetadata, partial_root_dir: str):
+        self.seqspec_metadata = seqspec_metadata
+        self.partial_root_dir = partial_root_dir
+
+    def get_seqspec_index(self) -> str:
+        """Get the index read IDs based on the usage purpose."""
+        read_index_tool = const.ASSAY_TYPE_TO_TOOL_FORMAT.get(
+            self.seqspec_metadata.modality, None)

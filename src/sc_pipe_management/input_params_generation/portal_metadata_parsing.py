@@ -131,8 +131,11 @@ class GetMeasurementSetMetadata:
         seqfile_metadata_list = []
         for seqfile_id in self.measet_obj.files:
             if seqfile_id.startswith('/sequence-files/'):
-                seqfile_metadata_list.append(
-                    GetSeqFileMetadata(seqfile_id=seqfile_id, igvf_api=self.igvf_api).get_seqfile_metadata())
+                curr_seqfile_metadata = GetSeqFileMetadata(
+                    seqfile_id=seqfile_id, igvf_api=self.igvf_api).get_seqfile_metadata()
+                if curr_seqfile_metadata.read_names is None:
+                    continue
+                seqfile_metadata_list.append(curr_seqfile_metadata)
         return seqfile_metadata_list
 
     def get_measurement_set_metadata(self) -> MeasurementSetMetadata:
