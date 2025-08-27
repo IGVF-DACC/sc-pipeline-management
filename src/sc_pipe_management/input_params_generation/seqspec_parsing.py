@@ -129,15 +129,16 @@ class GetSeqSpecMetadata:
 class SeqSpecToolOutput:
     """Dataclass to hold seqspec tool output."""
     read_index_string: str
-    onlist_file_path: str
+    final_barcode_file: str
     errors: str | None
 
 
 class GetSeqSpecToolOutput:
     """Class to generate seqspec metadata for a given seqspec file."""
 
-    def __init__(self, seqspec_metadata: SeqSpecMetadata, output_barcode_list_file: str):
+    def __init__(self, seqspec_metadata: SeqSpecMetadata, onlist_method: str, output_barcode_list_file: str):
         self.seqspec_metadata = seqspec_metadata
+        self.onlist_method = onlist_method
         self.output_barcode_list_file = output_barcode_list_file
         self.modality = self.seqspec_metadata.modality
         self.seqspec_file_path = self.seqspec_metadata.seqspec_file_path
@@ -156,9 +157,9 @@ class GetSeqSpecToolOutput:
         elif self.modality == 'atac':
             return curr_run_log.stdout.decode('utf-8').strip().split(' ')[-1]
 
-    def _get_seqspec_onlist(self, onlist_method: str) -> str:
+    def _get_seqspec_onlist(self) -> str:
         """Get the onlist files from the seqspec file."""
-        if onlist_method == 'no combination':
+        if self.onlist_method == 'no combination':
             curr_run_log = subprocess.run(['seqspec', 'onlist', '-m', self.modality, '-s',
                                            'region-type', '-i', 'barcode', '-o', self.output_barcode_list_file, self.seqspec_file_path], capture_output=True)
         # If combinatorial, seqspec onlist will generated a new file
@@ -171,7 +172,7 @@ class GetSeqSpecToolOutput:
                 f'Error: Seqspec onlist generation command error. Seqspec tool debug msg: {curr_run_log.stderr.decode("utf-8")}.')
         return self.output_barcode_list_file
 
-    def generate_seqspec_tool_output(self, onlist_method: str) -> SeqSpecToolOutput:
+    def generate_seqspec_tool_output(self) -> SeqSpecToolOutput:
         """Generate seqspec tool output for a given seqspec file."""
         read_index_string = None
         onlist_file_path = None
@@ -179,15 +180,15 @@ class GetSeqSpecToolOutput:
             # Get the index read IDs
             read_index_string = self._get_seqspec_index()
             # Get the onlist files
-            onlist_file_path = self._get_seqspec_onlist(onlist_method)
+            onlist_file_path = self._get_seqspec_onlist()
             return SeqSpecToolOutput(
                 read_index_string=read_index_string,
-                onlist_file_path=onlist_file_path,
+                final_barcode_file=onlist_file_path,
                 errors=None
             )
         except const.BadDataException as e:
             return SeqSpecToolOutput(
                 read_index_string=read_index_string,
-                onlist_file_path=onlist_file_path,
+                final_barcode_file=onlist_file_path,
                 errors=str(e)
             )

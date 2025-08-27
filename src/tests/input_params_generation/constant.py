@@ -10,6 +10,7 @@ if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
 import sc_pipe_management.input_params_generation.portal_metadata_parsing as portal_parsing
+import sc_pipe_management.input_params_generation.seqspec_parsing as seqspec_parsing
 
 
 @dataclasses.dataclass(frozen=True)
@@ -21,8 +22,17 @@ class SeqSpecTestConstants:
     read_index: str
     index_input: str
     onlist_input: str
+    onlist_method: str
     final_barcode_file: str
     final_barcode_file_md5: str
+
+    def convert_to_seqspec_metadata(self) -> seqspec_parsing.SeqSpecMetadata:
+        return seqspec_parsing.SeqSpecMetadata(
+            seqspec_file_path=self.seqspec_file_path,
+            modality=self.modality,
+            ordered_read_ids=self.ordered_read_ids,
+            onlist_files=self.onlist_files
+        )
 
 
 SEQSPEC_PARSE_TEST_RESULTS = {
@@ -36,6 +46,7 @@ SEQSPEC_PARSE_TEST_RESULTS = {
             onlist_files=[
                 'https://api.data.igvf.org/tabular-files/IGVFFI7587TJLC/@@download/IGVFFI7587TJLC.tsv.gz'
             ],
+            onlist_method='no combination',
             read_index='bc:8:23:-,r1:0:49,r2:0:49',
             index_input='IGVFFI4665EVGC,IGVFFI4986VMDU,IGVFFI0391NHGA',
             onlist_input='IGVFFI0391NHGA',
@@ -49,6 +60,7 @@ SEQSPEC_PARSE_TEST_RESULTS = {
             onlist_files=[
                 'https://api.data.igvf.org/tabular-files/IGVFFI8751YQRY/@@download/IGVFFI8751YQRY.tsv.gz'
             ],
+            onlist_method='no combination',
             read_index='0,0,16:0,16,28:1,0,90',
             index_input='IGVFFI6948UZJO,IGVFFI7951DAQB',
             onlist_input='IGVFFI7951DAQB',
@@ -68,6 +80,7 @@ SEQSPEC_PARSE_TEST_RESULTS = {
                 "https://api.data.igvf.org/tabular-files/IGVFFI1138MCVX/@@download/IGVFFI1138MCVX.tsv.gz",
                 "https://api.data.igvf.org/tabular-files/IGVFFI1138MCVX/@@download/IGVFFI1138MCVX.tsv.gz"
             ],
+            onlist_method='multi',
             read_index='1,10,18,1,48,56,1,78,86:1,0,10:0,0,140',
             index_input='IGVFFI4633WXZI.fastq.gz,IGVFFI9320MADV.fastq.gz',
             onlist_input='IGVFFI9320MADV.fastq.gz',
@@ -87,6 +100,7 @@ SEQSPEC_PARSE_TEST_RESULTS = {
                 "https://api.data.igvf.org/tabular-files/IGVFFI2668ZFEB/@@download/IGVFFI2668ZFEB.tsv.gz",
                 "https://api.data.igvf.org/tabular-files/IGVFFI2668ZFEB/@@download/IGVFFI2668ZFEB.tsv.gz"
             ],
+            onlist_method='product',
             read_index='bc:115:122,bc:153:160,bc:191:198,r1:0:99,r2:0:99',
             index_input='IGVFFI1918YZDJ.fastq.gz,IGVFFI4773YQEF.fastq.gz',
             onlist_input='IGVFFI4773YQEF.fastq.gz',
@@ -103,6 +117,7 @@ SEQSPEC_PARSE_TEST_RESULTS = {
                 "https://api.data.igvf.org/tabular-files/IGVFFI2668ZFEB/@@download/IGVFFI2668ZFEB.tsv.gz",
                 "https://api.data.igvf.org/tabular-files/IGVFFI2668ZFEB/@@download/IGVFFI2668ZFEB.tsv.gz"
             ],
+            onlist_method='product',
             read_index='1,115,123,1,153,161,1,191,199:1,0,10:0,0,100',
             index_input='IGVFFI0777CMJH.fastq.gz,IGVFFI7330UNCB.fastq.gz',
             onlist_input='IGVFFI7330UNCB.fastq.gz',
@@ -119,6 +134,7 @@ SEQSPEC_PARSE_TEST_RESULTS = {
             onlist_files=[
                 "https://api.data.igvf.org/tabular-files/IGVFFI8751YQRY/@@download/IGVFFI8751YQRY.tsv.gz"
             ],
+            onlist_method='no combination',
             read_index='0,0,16:0,16,28:1,0,101',
             index_input='IGVFFI4117HDFW,IGVFFI9675ROSO',
             onlist_input='IGVFFI9675ROSO',
@@ -135,6 +151,7 @@ SEQSPEC_PARSE_TEST_RESULTS = {
             onlist_files=[
                 'https://api.data.igvf.org/tabular-files/IGVFFI8751YQRY/@@download/IGVFFI8751YQRY.tsv.gz'
             ],
+            onlist_method='no combination',
             read_index='0,0,16:0,16,28:1,0,90',
             index_input='RNA Read 1,RNA Read 2',
             onlist_input='RNA Read 2',
