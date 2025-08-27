@@ -1,6 +1,4 @@
-import os
 import dataclasses
-import requests
 import subprocess
 
 # Import seqspec modules
