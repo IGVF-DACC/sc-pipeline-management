@@ -1,17 +1,19 @@
 import sys
 import os
+import hashlib
+import logging
 
 # Get the absolute path to the 'src' directory (one level up from the 'tests' directory)
-src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-
-# Add the 'src' directory to sys.path if it's not already there
+project_root = os.path.abspath(os.path.join(
+    os.path.dirname(__file__), '..', '..', '..'))
+src_path = os.path.join(project_root, 'src')
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
 
-import hashlib
-import unittest
-import logging
+import sc_pipe_management.igvf_and_terra_api_tools as igvf_tools
+import sc_pipe_management.input_params_generation.seqspec_parsing as seqspec_parsing
+import constant as test_const
 
 
 def compute_md5sum(file_path: str) -> str:
@@ -39,96 +41,62 @@ IGVF_PROD_CLIENT_API = igvf_tools.get_igvf_client_auth(igvf_api_keys=IGVF_PROD_A
 
 
 class TestSeqspecInfoGeneration:
-    def test_generate_read_id_input(self):
-        """Test if read id input -i arg is generated correctly.
-        """
-        for assay_title, seqspec_paths in SEQSPEC_FILES_BY_ASSAY_TITLES.items():
-            for assay_type, seqspec_path in seqspec_paths.items():
-                if seqspec_path is None:
-                    # Skip if the seqspec path is None (e.g., SPLiT-seq for atac)
-                    logging.info(
-                        f'Skipping {assay_title} for {assay_type} as it has no seqspec.')
-                    continue
-                for read_id_methd in ['onlist', 'index']:
-                    logging.info(
-                        f'Testing {assay_title} {assay_type} with read_id_methd: {read_id_methd}.')
-                    logging.info(seqspec_path)
-                    curr_read_input = generate_ordered_read_ids(seqspec_file_path=seqspec_path,
-                                                                assay_type=assay_type,
-                                                                usage_purpose=read_id_methd,
-                                                                igvf_api=IGVF_PROD_CLIENT_API
-                                                                )
-                    curr_error_detail = (f'Generated index read ids do not match expected for {assay_title} {assay_type} with method {read_id_methd}. '
-                                         f'Expected: {SEQSPEC_OUTPUT_BY_ASSAY_TITLES[assay_title][assay_type][f"{read_id_methd}_input"]}, '
-                                         f' Got: {curr_read_input}.'
-                                         )
-                    self.assertEqual(
-                        first=curr_read_input, second=SEQSPEC_OUTPUT_BY_ASSAY_TITLES[
-                            assay_title][assay_type][f'{read_id_methd}_input'],
-                        msg=curr_error_detail)
-        logging.info('All read id input tests done.\n')
+    """Test class for seqspec parsing functions.
+    """
 
-    def test_read_index_generation(self):
-        """Check if rna and atac read index are correct.
+    def test_seqspec_metadata_generation_idv_steps(self):
+        """Test if the modality is correctly parsed from seqspec file.
         """
-        for assay_title, seqspec_paths in SEQSPEC_FILES_BY_ASSAY_TITLES.items():
-            for assay_type, seqspec_path in seqspec_paths.items():
-                if seqspec_path is None:
-                    # Skip if the seqspec path is None (e.g., SPLiT-seq for atac)
-                    logging.info(
-                        f'Skipping {assay_title} for {assay_type} as it has no seqspec.')
-                    continue
-                logging.info(
-                    f'Testing {assay_title} {assay_type} for read index generation.')
-                # Get the current read index from seqspec
-                logging.info(seqspec_path)
-                curr_index_input = seqspec_index_get(
-                    seqspec_file_path=seqspec_path, assay_type=assay_type, igvf_api=IGVF_PROD_CLIENT_API)
-                curr_error_detail = (f'Generated {assay_type} index read index does not match expected for {assay_title} {assay_type}. '
-                                     f'Expected: {SEQSPEC_OUTPUT_BY_ASSAY_TITLES[assay_title][assay_type]["read_index"]}, '
-                                     f' Got: {curr_index_input}.'
-                                     )
-                self.assertEqual(
-                    first=curr_index_input,
-                    second=SEQSPEC_OUTPUT_BY_ASSAY_TITLES[assay_title][assay_type]['read_index'],
-                    msg=curr_error_detail
-                )
-        logging.info('All read index tests done.\n')
+        for test_file_type, test_seqspec_info in test_const.SEQSPEC_PARSE_TEST_RESULTS.items():
+            for assay_type, per_assay_seqspec_info in test_seqspec_info.items():
 
-    def test_finalinclusion_list_generation(self):
-        """Check if the final inclusion list file has correct md5sum for each assay type.
-        """
-        for assay_title, seqspec_paths in SEQSPEC_FILES_BY_ASSAY_TITLES.items():
-            for assay_type, seqspec_path in seqspec_paths.items():
-                if seqspec_path is None:
-                    # Skip if the seqspec path is None (e.g., SPLiT-seq for atac)
-                    logging.info(
-                        f'Skipping {assay_title} for {assay_type} as it has no seqspec.')
-                    continue
-                logging.info(
-                    f'Testing final inclusion list generation for {assay_title} {assay_type}.')
-                logging.info(seqspec_path)
-                output_file_path = generate_finalinclusion_list(
-                    seqspec_file_path=seqspec_path,
-                    assay_type=assay_type,
-                    onlist_method=SEQSPEC_OUTPUT_BY_ASSAY_TITLES[assay_title][assay_type]['onlist_method'],
-                    final_inclusion_list_path=os.path.join(
-                        'src/tests/test_files/', f'{assay_title}_{assay_type}_final_barcode_list.txt'),
+                # Get the reference seqspec info
+                test_ref_seqspec_info = test_const.SEQSPEC_PARSE_TEST_RESULTS[
+                    test_file_type][assay_type]
+
+                # Generate the seqspec metadata for testing
+                curr_seqspec_metadata_mthd = seqspec_parsing.GetSeqSpecMetadata(
+                    seqspec_file_path=per_assay_seqspec_info.seqspec_file_path,
                     igvf_api=IGVF_PROD_CLIENT_API
                 )
-                curr_md5sum = compute_md5sum(
-                    file_path=output_file_path
+
+                # Check if modality match
+                curr_seqspec_modality = curr_seqspec_metadata_mthd._get_seqspec_modality()
+                assert curr_seqspec_modality == test_ref_seqspec_info.modality, \
+                    f"Modality mismatch for {test_file_type} {assay_type}: expected {test_ref_seqspec_info.modality}, got {curr_seqspec_modality}"
+
+                # Check if read IDs match
+                curr_ordered_read_ids = curr_seqspec_metadata_mthd._generate_ordered_read_ids(
+                    seqfiles_metadata=test_const.TEST_SEQFILES_METADATA)
+                assert curr_ordered_read_ids == test_ref_seqspec_info.ordered_read_ids, \
+                    f"Ordered read IDs mismatch for {test_file_type} {assay_type}: expected {test_ref_seqspec_info.ordered_read_ids}, got {curr_ordered_read_ids}"
+
+                # Check if onlist files match
+                curr_onlist_files = curr_seqspec_metadata_mthd._get_onlist_files()
+                assert curr_onlist_files == sorted(test_ref_seqspec_info.onlist_files), \
+                    f"Onlist files mismatch for {test_file_type} {assay_type}: expected {test_ref_seqspec_info.onlist_files}, got {curr_onlist_files}"
+
+    def test_generate_seqspec_metadata_integration(self):
+        """Integration test for generate_seqspec_metadata."""
+        for test_file_type, test_seqspec_info in test_const.SEQSPEC_PARSE_TEST_RESULTS.items():
+            for assay_type, per_assay_seqspec_info in test_seqspec_info.items():
+                test_ref_seqspec_info = test_const.SEQSPEC_PARSE_TEST_RESULTS[
+                    test_file_type][assay_type]
+
+                curr_seqspec_metadata_mthd = seqspec_parsing.GetSeqSpecMetadata(
+                    seqspec_file_path=per_assay_seqspec_info.seqspec_file_path,
+                    igvf_api=IGVF_PROD_CLIENT_API
                 )
-                # Compare the md5sum of the generated file with the expected md5sum
-                expected_md5sum = SEQSPEC_OUTPUT_BY_ASSAY_TITLES[
-                    assay_title][assay_type]['onlist_final_list']
-                curr_error_detail = (f'Generated final inclusion list md5sum does not match expected for {assay_title} {assay_type}. '
-                                     f'Expected: {expected_md5sum}, '
-                                     f' Got: {curr_md5sum}.'
-                                     )
-                self.assertEqual(
-                    first=curr_md5sum,
-                    second=expected_md5sum,
-                    msg=curr_error_detail
+                curr_seqspec_metadata = curr_seqspec_metadata_mthd.generate_seqspec_metadata(
+                    seqfiles_metadata=test_const.TEST_SEQFILES_METADATA
                 )
-        logging.info('All final inclusion list tests done.\n')
+
+                assert curr_seqspec_metadata.modality == test_ref_seqspec_info.modality, \
+                    f"Modality mismatch for {test_file_type} {assay_type}: expected {test_ref_seqspec_info.modality}, got {curr_seqspec_metadata.modality}"
+
+                assert curr_seqspec_metadata.ordered_read_ids == test_ref_seqspec_info.ordered_read_ids, \
+                    f"Ordered read IDs mismatch for {test_file_type} {assay_type}: expected {test_ref_seqspec_info.ordered_read_ids}, got {curr_seqspec_metadata.ordered_read_ids}"
+
+                # If onlist_files may be unsorted, sort both before comparing
+                assert sorted(curr_seqspec_metadata.onlist_files) == sorted(test_ref_seqspec_info.onlist_files), \
+                    f"Onlist files mismatch for {test_file_type} {assay_type}: expected {test_ref_seqspec_info.onlist_files}, got {curr_seqspec_metadata.onlist_files}"

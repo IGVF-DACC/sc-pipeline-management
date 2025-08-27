@@ -83,8 +83,9 @@ SEQSPEC_PARSE_TEST_RESULTS = {
             ordered_read_ids=["IGVFFI1918YZDJ.fastq.gz",
                               "IGVFFI4773YQEF.fastq.gz"],
             onlist_files=[
-                "https://api.data.igvf.org/tabular-files/IGVFFI1918YZDJ/@@download/IGVFFI1918YZDJ.tsv.gz",
-                "https://api.data.igvf.org/tabular-files/IGVFFI4773YQEF/@@download/IGVFFI4773YQEF.tsv.gz"
+                "https://api.data.igvf.org/tabular-files/IGVFFI6680XCDT/@@download/IGVFFI6680XCDT.tsv.gz",
+                "https://api.data.igvf.org/tabular-files/IGVFFI2668ZFEB/@@download/IGVFFI2668ZFEB.tsv.gz",
+                "https://api.data.igvf.org/tabular-files/IGVFFI2668ZFEB/@@download/IGVFFI2668ZFEB.tsv.gz"
             ],
             read_index='bc:115:122,bc:153:160,bc:191:198,r1:0:99,r2:0:99',
             index_input='IGVFFI1918YZDJ.fastq.gz,IGVFFI4773YQEF.fastq.gz',

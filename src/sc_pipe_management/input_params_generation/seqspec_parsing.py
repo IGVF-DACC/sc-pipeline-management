@@ -97,6 +97,12 @@ class GetSeqSpecMetadata:
                     id_by_name[read_name] = read_id
         return [id_by_name[read_name] for read_name in ['Read 1', 'Read 2', 'Barcode index'] if id_by_name.get(read_name) is not None]
 
+    def _parse_onlist_files(self, onlist_files: list[str]) -> list[str]:
+        # If it's a list with one string containing commas, split it
+        if len(onlist_files) == 1 and ',' in onlist_files[0]:
+            return sorted(onlist_files[0].split(','))
+        return sorted(onlist_files)
+
     def _get_onlist_files(self) -> list[str]:
         """Get the onlist files from the seqspec file."""
         curr_run_log = subprocess.run(['seqspec', 'file', '-m', self._get_seqspec_modality(), '-s', 'region-type',
@@ -105,7 +111,7 @@ class GetSeqSpecMetadata:
             raise const.BadDataException(
                 f'Error: seqspec file {self.seqspec_file_path} does not have onlist files.')
         onlist_files = curr_run_log.stdout.decode('utf-8').strip().split('\n')
-        return onlist_files
+        return self._parse_onlist_files(onlist_files)
 
     def generate_seqspec_metadata(self, seqfiles_metadata: list[portal_parsing.SeqFileMetadata]) -> SeqSpecMetadata:
         """Generate seqspec metadata from the seqspec file and seqfiles metadata."""
