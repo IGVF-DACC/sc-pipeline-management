@@ -1,3 +1,15 @@
+import pandas as pd
+import os
+import requests
+import dataclasses
+import igvf_client
+
+
+import sc_pipe_management.input_params_generation as const
+import sc_pipe_management.input_params_generation.portal_metadata_parsing as portal_parsing
+import sc_pipe_management.input_params_generation.seqspec_parsing as seqspec_parsing
+
+
 def get_atac_seqfile_read_titles(read_names: list) -> str:
     """Get ATACseq read titles. Will always have read1, read2, and barcode index even if read2 and barcode may be concatenated.
 
@@ -91,56 +103,132 @@ def download_file_via_https(seqspec_file_url: str, partial_root_dir: str) -> str
                 return False
 
 
-@dataclasses.dataclass(frozen=True)
-class SeqSpecQualityCheckResult:
-    """Dataclass to hold seqspec quality check result."""
-    seqspec_onlist_errors: str | None
-    seqspec_index_errors: str | None
-    seqspec_discrepancy_errors: str | None
-    seqspec_measet_discrepancy_errors: str | None
+class QualityCheckInputData:
+    """Class to hold quality check input data."""
 
-
-class SeqSpecQualityCheck:
-    """Class to perform quality check on seqspec metadata."""
-
-    def __init__(self, anaset_metadata: portal_parsing.InputAnalysisSetMetadata, igvf_api: igvf_client.api.igvf_api.IgvfApi):
-        self.anaset_metadata = anaset_metadata
+    def __init__(self, analysis_set_metadata: portal_parsing.AnalysisSetMetadata, igvf_api: igvf_client.api.igvf_api.IgvfApi, partial_root_dir: str):
+        self.analysis_set_metadata = analysis_set_metadata
+        self.rna_input_info = self.analysis_set_metadata.rna_input_info
+        self.atac_input_info = self.analysis_set_metadata.atac_input_info
         self.igvf_api = igvf_api
-        self.rna_measet_metadata = self.anaset_metadata.rna_input_info
-        self.atac_measet_metadata = self.anaset_metadata.atac_input_info
+        self.partial_root_dir = partial_root_dir
 
-    def _check_onlist_files(self) -> str | None:
-        """Check if the onlist files are valid."""
-        if not self.seqspec_metadata.onlist_files:
-            return 'No onlist files found in the seqspec file.'
-        return None
+    def _get_seqspec_accession_from_path(self, seqspec_file_path: str) -> str:
+        """Get the seqspec accession from the seqspec file path."""
+        return const.READ_ID_REGEX.search(seqspec_file_path).group(1)
 
-    def _check_index_read_ids(self) -> str | None:
-        """Check if the index read IDs are valid."""
-        if not self.seqspec_metadata.get_index_read_ids():
-            return 'No index read IDs found in the seqspec file.'
-        return None
+    def _get_all_seqspec_metadata_per_assay_type(self, measet_metadata_list: list[portal_parsing.MeasurementSetMetadata]) -> list[seqspec_parsing.SeqSpecMetadata]:
+        """Get all seqspec metadata for a given assay type."""
+        all_seqspec_metadata = []
+        for measet_metadata in measet_metadata_list:
+            unique_seqspecs = set()
+            for seqfile_item in measet_metadata.seqfile_items:
+                if seqfile_item.seqspec_urls:
+                    unique_seqspecs.update(seqfile_item.seqspec_urls)
+            # Download and parse each unique seqspec file
+            for seqspec_url in list(unique_seqspecs):
+                # Download the seqspec file
+                curr_seqspec_file_path = download_file_via_https(
+                    seqspec_file_url=seqspec_url, partial_root_dir=self.partial_root_dir)
+                # Get the seqspec metadata
+                curr_seqspec_metadata = seqspec_parsing.GetSeqSpecMetadata(
+                    seqspec_file_path=curr_seqspec_file_path, igvf_api=self.igvf_api).generate_seqspec_metadata()
+                # Save it to the list
+                all_seqspec_metadata.append(curr_seqspec_metadata)
+        return all_seqspec_metadata
 
-    def _check_discrepancies(self) -> str | None:
-        """Check for discrepancies in the seqspec metadata."""
-        # Placeholder for actual discrepancy checks
-        return None
+    def _get_all_seqspec_tool_outputs_per_assay_type(self, all_seqspec_metadata: list[seqspec_parsing.SeqSpecMetadata]) -> list[seqspec_parsing.SeqSpecToolOutputs]:
+        """Get all seqspec tool outputs for a given assay type."""
+        all_seqspec_tool_outputs = []
+        for seqspec_metadata in all_seqspec_metadata:
+            curr_seqspec_tool_outputs = seqspec_parsing.SeqSpecToolOutputs(
+                seqspec_metadata=seqspec_metadata).generate_seqspec_tool_outputs()
+            all_seqspec_tool_outputs.append(curr_seqspec_tool_outputs)
+        return all_seqspec_tool_outputs
 
-    def _check_measet_discrepancies(self) -> str | None:
-        """Check for discrepancies in the measet."""
-        # Placeholder for actual measet discrepancy checks
-        return None
+    def check_if_modality_match(self, all_seqspec_metadata: list[seqspec_parsing.SeqSpecMetadata], expected_modality: str) -> bool:
+        """Check if all seqspec modalities match the expected modality."""
+        errors = []
+        for seqspec_metadata in all_seqspec_metadata:
+            if seqspec_metadata.modality != expected_modality:
+                error_seqspec_accession = self._get_seqspec_accession_from_path(
+                    seqspec_metadata.seqspec_file_path)
+                errors.append(
+                    f"Modality mismatch: expected '{expected_modality}', got '{seqspec_metadata.modality}' from seqspec file {error_seqspec_accession} instead.")
+        if errors:
+            raise const.BadDataException(
+                "Modality mismatches found:\n" + "\n".join(errors))
+        return True
 
-    def run_quality_check(self) -> SeqSpecQualityCheckResult:
-        """Run quality check on the seqspec metadata."""
-        onlist_errors = self._check_onlist_files()
-        index_errors = self._check_index_read_ids()
-        discrepancy_errors = self._check_discrepancies()
-        measet_discrepancy_errors = self._check_measet_discrepancies()
+    def check_if_onlist_match(self, all_seqspec_metadata: list[seqspec_parsing.SeqSpecMetadata], expected_onlist_files: list[str]) -> bool:
+        """Check if all seqspec onlist methods match the expected onlist method."""
+        errors = []
+        for seqspec_metadata in all_seqspec_metadata:
+            unique_onlist_files = sorted(set(seqspec_metadata.onlist_files))
+            if unique_onlist_files != sorted(expected_onlist_files):
+                error_seqspec_accession = self._get_seqspec_accession_from_path(
+                    seqspec_metadata.seqspec_file_path)
+                errors.append(
+                    f"Onlist files mismatch: expected {sorted(expected_onlist_files)}, got {unique_onlist_files} from seqspec file {error_seqspec_accession} instead.")
+        if errors:
+            raise const.BadDataException(
+                "Onlist method mismatches found:\n" + "\n".join(errors))
+        return True
 
-        return SeqSpecQualityCheckResult(
-            seqspec_onlist_errors=onlist_errors,
-            seqspec_index_errors=index_errors,
-            seqspec_discrepancy_errors=discrepancy_errors,
-            seqspec_measet_discrepancy_errors=measet_discrepancy_errors
-        )
+    def check_if_read_index_match(self, all_seqspec_tool_outputs: list[seqspec_parsing.SeqSpecToolOutputs]) -> bool:
+        """Check if all seqspec read index strings match the expected read index string."""
+        errors = []
+        for seqspec_tool_output in all_seqspec_tool_outputs:
+            if seqspec_tool_output.read_index_string != expected_read_index:
+                error_seqspec_accession = self._get_seqspec_accession_from_path(
+                    seqspec_tool_output.seqspec_metadata.seqspec_file_path)
+                errors.append(
+                    f"Read index string mismatch: expected '{expected_read_index}', got '{seqspec_tool_output.read_index_string}' from seqspec file {error_seqspec_accession} instead.")
+        if errors:
+            raise const.BadDataException(
+                "Read index string mismatches found:\n" + "\n".join(errors))
+        return True
+
+
+@dataclasses.dataclass(frozen=True)
+class TerraPipelineParams:
+    analysis_set_acc: str = ''
+    # Measurement Set accessions
+    atac_MeaSetIDs: list[str] = dataclasses.field(default_factory=list)
+    rna_MeaSetIDs: list[str] = dataclasses.field(default_factory=list)
+    # Sample IDs
+    subpool_id: str = ''
+    # Taxa (for filtering reference files)
+    taxa: str = ''
+    # FASTQ file accessions (for accessioning, not used in the pipeline)
+    atac_read1_accessions: list[str] = dataclasses.field(default_factory=list)
+    atac_read2_accessions: list[str] = dataclasses.field(default_factory=list)
+    atac_barcode_accessions: list[str] = dataclasses.field(
+        default_factory=list)
+    rna_read1_accessions: list[str] = dataclasses.field(default_factory=list)
+    rna_read2_accessions: list[str] = dataclasses.field(default_factory=list)
+    rna_barcode_accessions: list[str] = dataclasses.field(default_factory=list)
+    atac_seqspec_urls: set[str] = dataclasses.field(default_factory=set)
+    rna_seqspec_urls: set[str] = dataclasses.field(default_factory=set)
+    # FASTQ file URLs and Parse-specific barcode file (for running the pipeline)
+    atac_read1: list[str] = dataclasses.field(default_factory=list)
+    atac_read2: list[str] = dataclasses.field(default_factory=list)
+    atac_barcode: list[str] = dataclasses.field(default_factory=list)
+    rna_read1: list[str] = dataclasses.field(default_factory=list)
+    rna_read2: list[str] = dataclasses.field(default_factory=list)
+    rna_barcode: list[str] = dataclasses.field(default_factory=list)
+    barcode_replacement_file: str = ''
+    # Seqspec tool outputs (used in the pipeline)
+    atac_barcode_inclusion_list: str = ''
+    atac_read_format: str = ''
+    rna_barcode_inclusion_list: str = ''
+    rna_read_format: str = ''
+    # Other params
+    onlist_mapping: bool = False
+    kb_strand: str = 'forward'
+    chromap_index: str = ''
+    genome_fasta: str = ''
+    kb_index: str = ''
+    genome_ref: str = ''
+    # Error reporting
+    possible_errors: str = ''
