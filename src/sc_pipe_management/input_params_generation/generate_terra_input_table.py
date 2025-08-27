@@ -5,7 +5,7 @@ import dataclasses
 import igvf_client
 
 
-import sc_pipe_management.input_params_generation as const
+import sc_pipe_management.input_params_generation.constant as const
 import sc_pipe_management.input_params_generation.portal_metadata_parsing as portal_parsing
 import sc_pipe_management.input_params_generation.seqspec_parsing as seqspec_parsing
 import sc_pipe_management.igvf_and_terra_api_tools as api_tools
@@ -96,11 +96,12 @@ def download_file_via_https(seqspec_file_url: str, igvf_api: igvf_client.api.igv
             f'Error: Download failed with status code: {response.status_code}.')
 
 
-class QualityCheckInputData:
+class QCandParseSeqspecs:
     """Class method for checking seqspecs against portal metadata."""
 
     def __init__(self, analysis_set_metadata: portal_parsing.InputAnalysisSetMetadata, igvf_api: igvf_client.api.igvf_api.IgvfApi, partial_root_dir: str):
         self.analysis_set_metadata = analysis_set_metadata
+        self.analysis_set_acc = self.analysis_set_metadata.analysis_set_acc
         self.rna_input_info = self.analysis_set_metadata.rna_input_info
         self.atac_input_info = self.analysis_set_metadata.atac_input_info
         self.igvf_api = igvf_api
@@ -115,27 +116,33 @@ class QualityCheckInputData:
         all_seqspec_metadata = []
         for measet_metadata in measet_metadata_list:
             unique_seqspecs = set()
-            for seqfile_item in measet_metadata.seqfile_items:
+            for seqfile_item in measet_metadata.seqfiles:
                 if seqfile_item.seqspec_urls:
                     unique_seqspecs.update(seqfile_item.seqspec_urls)
             # Download and parse each unique seqspec file
             for seqspec_url in list(unique_seqspecs):
                 # Download the seqspec file
                 curr_seqspec_file_path = download_file_via_https(
-                    seqspec_file_url=seqspec_url, partial_root_dir=self.partial_root_dir)
+                    seqspec_file_url=seqspec_url, igvf_api=self.igvf_api, partial_root_dir=self.partial_root_dir)
                 # Get the seqspec metadata
                 curr_seqspec_metadata = seqspec_parsing.GetSeqSpecMetadata(
-                    seqspec_file_path=curr_seqspec_file_path, igvf_api=self.igvf_api).generate_seqspec_metadata()
+                    seqspec_file_path=curr_seqspec_file_path, igvf_api=self.igvf_api).generate_seqspec_metadata(seqfiles_metadata=measet_metadata.seqfiles)
                 # Save it to the list
                 all_seqspec_metadata.append(curr_seqspec_metadata)
         return all_seqspec_metadata
 
-    def _get_all_seqspec_tool_outputs_per_assay_type(self, all_seqspec_metadata: list[seqspec_parsing.SeqSpecMetadata]) -> list[seqspec_parsing.SeqSpecToolOutput]:
+    def _get_all_seqspec_tool_outputs_per_assay_type(self, all_seqspec_metadata: list[seqspec_parsing.SeqSpecMetadata], onlist_method: str) -> list[seqspec_parsing.SeqSpecToolOutput]:
         """Get all seqspec tool outputs for a given assay type."""
         all_seqspec_tool_outputs = []
         for seqspec_metadata in all_seqspec_metadata:
-            curr_seqspec_tool_outputs = seqspec_parsing.SeqSpecToolOutputs(
-                seqspec_metadata=seqspec_metadata).generate_seqspec_tool_outputs()
+            curr_final_barcode_file_name = '_'.join([self.analysis_set_acc, seqspec_metadata.modality,
+                                                     self._get_seqspec_accession_from_path(
+                                                         seqspec_file_path=seqspec_metadata.seqspec_file_path),
+                                                     'final_inclusion_list.txt'])
+            curr_seqspec_tool_outputs = seqspec_parsing.GetSeqSpecToolOutput(
+                seqspec_metadata=seqspec_metadata,
+                onlist_method=onlist_method,
+                output_barcode_list_file=os.path.join(self.partial_root_dir, curr_final_barcode_file_name)).generate_seqspec_tool_output()
             all_seqspec_tool_outputs.append(curr_seqspec_tool_outputs)
         return all_seqspec_tool_outputs
 
@@ -157,12 +164,18 @@ class QualityCheckInputData:
         """Check if all seqspec onlist methods match the expected onlist method."""
         errors = []
         for seqspec_metadata in all_seqspec_metadata:
-            unique_onlist_files = sorted(set(seqspec_metadata.onlist_files))
-            if unique_onlist_files != sorted(expected_onlist_files):
+            # Sort and parse IGVF accessions from the onlist files in test files
+            unique_onlist_file_accs = [self._get_seqspec_accession_from_path(
+                entry) for entry in sorted(set(seqspec_metadata.onlist_files))]
+            # Sort and parse IGVF accessions from the expected onlist files
+            expected_onlist_file_accs = [self._get_seqspec_accession_from_path(
+                entry) for entry in sorted(set(expected_onlist_files))]
+            # Compare the two lists
+            if unique_onlist_file_accs != expected_onlist_file_accs:
                 error_seqspec_accession = self._get_seqspec_accession_from_path(
                     seqspec_metadata.seqspec_file_path)
                 errors.append(
-                    f"Onlist files mismatch: expected {sorted(expected_onlist_files)}, got {unique_onlist_files} from seqspec file {error_seqspec_accession} instead.")
+                    f"Onlist files mismatch: expected {expected_onlist_file_accs}, got {unique_onlist_file_accs} from seqspec file {error_seqspec_accession} instead.")
         if errors:
             raise const.BadDataException(
                 "Onlist method mismatches found:\n" + "\n".join(errors))
@@ -193,9 +206,9 @@ class QualityCheckInputData:
         """Check if all seqspec read index strings match the first read index string."""
         mismatch_cnt = 0
         # Use the first read index string as the reference
-        reference_read_index = all_seqspec_tool_outputs[0].read_index
+        reference_read_index = all_seqspec_tool_outputs[0].read_index_string
         for seqspec_tool_output in all_seqspec_tool_outputs:
-            if seqspec_tool_output.read_index != reference_read_index:
+            if seqspec_tool_output.read_index_string != reference_read_index:
                 mismatch_cnt += 1
         if mismatch_cnt > 0:
             raise const.BadDataException(
@@ -219,52 +232,47 @@ class QualityCheckInputData:
         """Quality check the input analysis set metadata."""
         possible_errors = ''
         try:
-            rna_all_seqspec_metadata = self._get_all_seqspec_metadata_per_assay_type(
-                measet_metadata_list=self.rna_input_info)
+            all_seqspec_metadata = self._get_all_seqspec_metadata_per_assay_type(
+                measet_metadata_list=measet_metadata_list)
             # Assuming all RNA measets have the same onlist files (or else the portal will audit)
-            expected_onlist_files = self.rna_input_info[0].onlist_files
-            expected_onlist_method = self.rna_input_info[0].onlist_method
+            expected_onlist_files = measet_metadata_list[0].onlist_files
+            expected_onlist_method = measet_metadata_list[0].onlist_method
             # Check modality (fixed to rna)
             self.check_if_modality_match(
-                all_seqspec_metadata=rna_all_seqspec_metadata, expected_modality=assay_type.lower())
+                all_seqspec_metadata=all_seqspec_metadata, expected_modality=assay_type.lower())
             # Check onlist files
             self.check_if_onlist_match(
-                all_seqspec_metadata=rna_all_seqspec_metadata, expected_onlist_files=expected_onlist_files)
+                all_seqspec_metadata=all_seqspec_metadata, expected_onlist_files=expected_onlist_files)
             # Check onlist method
             self.check_if_onlist_method_match(
-                all_seqspec_metadata=rna_all_seqspec_metadata, expected_onlist_method=expected_onlist_method)
-            # Get all seqspec tool outputs
-            rna_all_seqspec_tool_outputs = self._get_all_seqspec_tool_outputs_per_assay_type(
-                all_seqspec_metadata=rna_all_seqspec_metadata)
+                all_seqspec_metadata=all_seqspec_metadata, expected_onlist_method=expected_onlist_method)
+            # Get all seqspec tool outputs (it assumes that all measurement sets should have the same onlist method)
+            # Portal checks for inconsistent onlist methods across measurement sets of the same assay type
+            all_seqspec_tool_outputs = self._get_all_seqspec_tool_outputs_per_assay_type(
+                all_seqspec_metadata=all_seqspec_metadata, onlist_method=expected_onlist_method)
             # Check read index strings
             self.check_if_read_index_match(
-                all_seqspec_tool_outputs=rna_all_seqspec_tool_outputs, assay_type=assay_type.upper())
+                all_seqspec_tool_outputs=all_seqspec_tool_outputs, assay_type=assay_type.upper())
             # Check empty inclusion lists
             self.check_if_empty_inclusion_list(
-                all_seqspec_tool_outputs=rna_all_seqspec_tool_outputs, assay_type=assay_type.upper())
+                all_seqspec_tool_outputs=all_seqspec_tool_outputs, assay_type=assay_type.upper())
         except const.BadDataException as e:
             possible_errors += str(e)
         if possible_errors:
-            return possible_errors
-        return None
+            # This syntax is to satisfy Terra input table format
+            return seqspec_parsing.SeqSpecToolOutput(read_index_string="None", final_barcode_file="None", errors=possible_errors)
+        return all_seqspec_tool_outputs[0]
 
     def quality_check_input_data(self) -> str:
         """Quality check the input analysis set metadata."""
-        all_possible_errors = ''
+        seqspecs_for_input_params = {'rna': None, 'atac': None}
         if self.rna_input_info:
-            rna_possible_errors = self._quality_check_one_assay_type(
+            seqspecs_for_input_params['rna'] = self._quality_check_one_assay_type(
                 measet_metadata_list=self.rna_input_info, assay_type='rna')
-            if rna_possible_errors:
-                all_possible_errors += rna_possible_errors
         if self.atac_input_info:
-            atac_possible_errors = self._quality_check_one_assay_type(
+            seqspecs_for_input_params['atac'] = self._quality_check_one_assay_type(
                 measet_metadata_list=self.atac_input_info, assay_type='atac')
-            if atac_possible_errors:
-                all_possible_errors += atac_possible_errors
-        if all_possible_errors:
-            return all_possible_errors
-        # This is specifically for Terra, which uses "None" to indicate no value for string fields
-        return "None"
+        return seqspecs_for_input_params
 
 
 @dataclasses.dataclass(frozen=True)
