@@ -50,7 +50,7 @@ class QCandParseSeqspecs:
         """Get the seqspec accession from the seqspec file path."""
         return const.READ_ID_REGEX.search(seqspec_file_path).group(1)
 
-    def _get_all_seqspec_metadata_per_assay_type(self, measet_metadata_list: list[portal_parsing.MeasurementSetMetadata]) -> list[seqspec_parsing.SeqSpecMetadata]:
+    def _get_all_seqspec_metadata_per_assay_type(self, measet_metadata_list: list[portal_parsing.MeasurementSetMetadata], assay_type: str) -> list[seqspec_parsing.SeqSpecMetadata]:
         """Get all seqspec metadata for a given assay type."""
         all_seqspec_metadata = []
         for measet_metadata in measet_metadata_list:
@@ -65,7 +65,7 @@ class QCandParseSeqspecs:
                     seqspec_file_url=seqspec_url, igvf_api=self.igvf_api, partial_root_dir=self.partial_root_dir)
                 # Get the seqspec metadata
                 curr_seqspec_metadata = seqspec_parsing.GetSeqSpecMetadata(
-                    seqspec_file_path=curr_seqspec_file_path, igvf_api=self.igvf_api).generate_seqspec_metadata(seqfiles_metadata=measet_metadata.seqfiles)
+                    seqspec_file_path=curr_seqspec_file_path, igvf_api=self.igvf_api).generate_seqspec_metadata(seqfiles_metadata=measet_metadata.seqfiles, assay_type=assay_type)
                 # Save it to the list
                 all_seqspec_metadata.append(curr_seqspec_metadata)
         return all_seqspec_metadata
@@ -167,12 +167,12 @@ class QCandParseSeqspecs:
                 f"{empty_cnt} {assay_type} final inclusion lists are empty.")
         return True
 
-    def _quality_check_one_assay_type(self, measet_metadata_list: list[portal_parsing.MeasurementSetMetadata], assay_type: str) -> str | None:
+    def quality_check_one_assay_type(self, measet_metadata_list: list[portal_parsing.MeasurementSetMetadata], assay_type: str) -> str | None:
         """Quality check the input analysis set metadata."""
         possible_errors = ''
         try:
             all_seqspec_metadata = self._get_all_seqspec_metadata_per_assay_type(
-                measet_metadata_list=measet_metadata_list)
+                measet_metadata_list=measet_metadata_list, assay_type=assay_type)
             # Assuming all RNA measets have the same onlist files (or else the portal will audit)
             expected_onlist_files = measet_metadata_list[0].onlist_files
             expected_onlist_method = measet_metadata_list[0].onlist_method
@@ -201,17 +201,6 @@ class QCandParseSeqspecs:
             # This syntax is to satisfy Terra input table format
             return seqspec_parsing.SeqSpecToolOutput(read_index_string="None", final_barcode_file="None", errors=possible_errors)
         return all_seqspec_tool_outputs[0]
-
-    def quality_check_input_data(self) -> dict:
-        """Quality check the input analysis set metadata."""
-        seqspecs_for_input_params = {'rna': None, 'atac': None}
-        if self.rna_input_info:
-            seqspecs_for_input_params['rna'] = self._quality_check_one_assay_type(
-                measet_metadata_list=self.rna_input_info, assay_type='rna')
-        if self.atac_input_info:
-            seqspecs_for_input_params['atac'] = self._quality_check_one_assay_type(
-                measet_metadata_list=self.atac_input_info, assay_type='atac')
-        return seqspecs_for_input_params
 
 
 @dataclasses.dataclass(frozen=True)
