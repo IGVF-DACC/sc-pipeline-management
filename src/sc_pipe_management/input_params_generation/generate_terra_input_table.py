@@ -546,36 +546,47 @@ class ConvertParamsToTerraTable:
         return self._mod_input_table_for_terra(pipeline_input_table=terra_input_df)
 
 
-def generate_complete_terra_input_table(analysis_set_accessions: list[str], igvf_api: igvf_client.api.igvf_api.IgvfApi, partial_root_dir: str, terra_etype: str, local_barcode_file_dir: str, gs_barcode_list_bucket: str) -> pd.DataFrame:
-    """Generate the complete Terra input table for all analysis sets."""
-    all_terra_input_params = []
-    for analysis_set_acc in analysis_set_accessions:
-        # Get the analysis set metadata
-        analysis_set_metadata = portal_parsing.GetAnalysisSetMedata(
-            igvf_api=igvf_api, analysis_set_accession=analysis_set_acc).get_input_analysis_set_metadata()
-        # Generate Terra input params for the analysis set
-        terra_input_params = GenerateTerraInputParams(analysis_set_metadata=analysis_set_metadata,
-                                                      igvf_api=igvf_api,
-                                                      partial_root_dir=partial_root_dir).generate_terra_input_params()
-        all_terra_input_params.append(terra_input_params)
-    # Convert all Terra input params to a Terra input table
-    terra_input_table = ConvertParamsToTerraTable(all_terra_input_params=all_terra_input_params,
-                                                  terra_etype=terra_etype,
-                                                  local_barcode_file_dir=local_barcode_file_dir,
-                                                  gs_barcode_list_bucket=gs_barcode_list_bucket).generate_terra_input_table()
-    return terra_input_table
+class CompleteTerraForming:
+    """Class method for generating and saving the complete Terra input table."""
 
+    def __init__(self, analysis_set_accessions: list[str], igvf_api: igvf_client.api.igvf_api.IgvfApi, partial_root_dir: str, terra_etype: str, local_barcode_file_dir: str, gs_barcode_list_bucket: str):
+        self.analysis_set_accessions = analysis_set_accessions
+        self.igvf_api = igvf_api
+        self.partial_root_dir = partial_root_dir
+        self.terra_etype = terra_etype
+        self.local_barcode_file_dir = local_barcode_file_dir
+        self.gs_barcode_list_bucket = gs_barcode_list_bucket
 
-def save_pipeline_input_table(pipeline_input_table: pd.DataFrame, output_dir: str) -> pd.DataFrame:
-    """Save the pipeline input table to a TSV file.
+    def generate_complete_terra_input_table(self) -> pd.DataFrame:
+        """Generate the complete Terra input table for all analysis sets."""
+        all_terra_input_params = []
+        for analysis_set_acc in self.analysis_set_accessions:
+            # Get the analysis set metadata
+            analysis_set_metadata = portal_parsing.GetAnalysisSetMedata(
+                igvf_api=self.igvf_api, analysis_set_accession=analysis_set_acc).get_input_analysis_set_metadata()
+            # Generate Terra input params for the analysis set
+            terra_input_params = GenerateTerraInputParams(analysis_set_metadata=analysis_set_metadata,
+                                                          igvf_api=self.igvf_api,
+                                                          partial_root_dir=self.partial_root_dir).generate_terra_input_params()
+            all_terra_input_params.append(terra_input_params)
+        # Convert all Terra input params to a Terra input table
+        terra_input_table = ConvertParamsToTerraTable(all_terra_input_params=all_terra_input_params,
+                                                      terra_etype=self.terra_etype,
+                                                      local_barcode_file_dir=self.local_barcode_file_dir,
+                                                      gs_barcode_list_bucket=self.gs_barcode_list_bucket).generate_terra_input_table()
+        return terra_input_table
 
-    Args:
-        pipeline_input_table (pd.DataFrame): The pipeline input table
-        output_dir (str): The output directory
-    """
-    curr_datetime = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-    if os.path.exists(output_dir) is False:
-        os.makedirs(output_dir)
-    # Save the pipeline input table to a TSV file
-    pipeline_input_table.to_csv(os.path.join(
-        output_dir, f'single-cell_uniform_pipeline_input_table_{curr_datetime}_withGSpath.tsv'), sep='\t')
+    def save_pipeline_input_table(self) -> pd.DataFrame:
+        """Save the pipeline input table to a TSV file.
+
+        Args:
+            pipeline_input_table (pd.DataFrame): The pipeline input table
+            output_dir (str): The output directory
+        """
+        curr_datetime = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+        if os.path.exists(self.partial_root_dir) is False:
+            os.makedirs(self.partial_root_dir)
+        # Save the pipeline input table to a TSV file
+        complete_terra_input_table = self.generate_complete_terra_input_table()
+        complete_terra_input_table.to_csv(os.path.join(
+            self.partial_root_dir, f'single-cell_uniform_pipeline_input_table_{curr_datetime}_withGSpath.tsv'), sep='\t')
