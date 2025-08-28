@@ -33,7 +33,7 @@ def download_file_via_https(seqspec_file_url: str, igvf_api: igvf_client.api.igv
 
 def get_seqspec_accession_from_path(seqspec_file_path: str) -> str:
     """Get the seqspec accession from the seqspec file path."""
-    return const.READ_ID_REGEX.search(seqspec_file_path).group(1)
+    return const.IGVF_ACCESSION_REGEX.search(seqspec_file_path).group(1)
 
 
 class QCandParseSeqspecs:
@@ -49,7 +49,7 @@ class QCandParseSeqspecs:
 
     def _get_seqspec_accession_from_path(self, seqspec_file_path: str) -> str:
         """Get the seqspec accession from the seqspec file path."""
-        return const.READ_ID_REGEX.search(seqspec_file_path).group(1)
+        return const.IGVF_ACCESSION_REGEX.search(seqspec_file_path).group(1)
 
     def _get_all_seqspec_metadata_per_assay_type(self, measet_metadata_list: list[portal_parsing.MeasurementSetMetadata], assay_type: str) -> list[seqspec_parsing.SeqSpecMetadata]:
         """Get all seqspec metadata for a given assay type."""

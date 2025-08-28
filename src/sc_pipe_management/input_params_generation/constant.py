@@ -24,10 +24,7 @@ ASSAYS_NEED_ONLIST_MAPPING = ['10x multiome', '10x multiome with MULTI-seq']
 BASE_IGVF_PORTAL_URL = 'https://api.data.igvf.org'
 
 # Read ID Regex
-READ_ID_REGEX = re.compile(r'(IGVF[A-Z0-9]*)')
-
-# Object ID Regex
-OBJ_ID_REGEX = re.compile(r'(/tabular-files/IGVF[A-Z0-9]*/')
+IGVF_ACCESSION_REGEX = re.compile(r'(IGVF[A-Z0-9]*)')
 
 # seqspec index tool
 ASSAY_TYPE_TO_TOOL_FORMAT = {'rna': 'kb-single', 'atac': 'chromap'}

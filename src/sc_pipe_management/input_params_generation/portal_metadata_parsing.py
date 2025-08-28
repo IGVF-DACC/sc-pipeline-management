@@ -37,12 +37,15 @@ class SeqFileMetadata:
         For RNAseq, if Read2 and Barcode index are concatenated, return Read2 only."""
         if len(self.read_names) == 1:
             if self.read_names[0] != 'Barcode index':
+                # return read1 or read2
                 return [self.read_names[0].lower().replace(' ', '')]
             else:
                 return ['barcode']
         elif self.read_names == ['Read 2', 'Barcode index']:
+            # If Read2 and Barcode index are concatenated, RNAseq only needs read2
             if assay_type == 'rna':
                 return ['read2']
+            # If ATACseq, return the same fastq file for both read2 and barcode
             elif assay_type == 'atac':
                 return ['read2', 'barcode']
         else:

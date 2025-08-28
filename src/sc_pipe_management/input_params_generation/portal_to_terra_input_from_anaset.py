@@ -335,19 +335,19 @@ def find_igvf_acc_in_seqspec(spec: seqspec.Read.Read) -> str | None:
     """
     # If read_id is an IGVF accession, return it
     read_id = spec.read_id
-    if READ_ID_REGEX.match(read_id):
-        return READ_ID_REGEX.search(read_id).group(1)
+    if IGVF_ACCESSION_REGEX.match(read_id):
+        return IGVF_ACCESSION_REGEX.search(read_id).group(1)
     # If read_id is not an IGVF accession, check the file_ids
     file_specs = spec.files
     for file_spec in file_specs:
         file_id = file_spec.file_id
         # If the read_id is not an IGVF accession, check the file_id
-        if READ_ID_REGEX.match(file_id):
-            return READ_ID_REGEX.search(file_id).group(1)
+        if IGVF_ACCESSION_REGEX.match(file_id):
+            return IGVF_ACCESSION_REGEX.search(file_id).group(1)
         # If file_id is not an IGVF accession, check the URL
         for item in file_spec.url.split('/'):
-            if READ_ID_REGEX.match(item):
-                return READ_ID_REGEX.search(item).group(1)
+            if IGVF_ACCESSION_REGEX.match(item):
+                return IGVF_ACCESSION_REGEX.search(item).group(1)
     return None
 
 
