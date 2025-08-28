@@ -8,72 +8,6 @@ import igvf_client
 import sc_pipe_management.input_params_generation.constant as const
 import sc_pipe_management.input_params_generation.portal_metadata_parsing as portal_parsing
 import sc_pipe_management.input_params_generation.seqspec_parsing as seqspec_parsing
-import sc_pipe_management.igvf_and_terra_api_tools as api_tools
-
-
-def get_atac_seqfile_read_titles(read_names: list) -> str:
-    """Get ATACseq read titles. Will always have read1, read2, and barcode index even if read2 and barcode may be concatenated.
-
-    Args:
-        read_names (list): seqfile.read_names values
-
-    Returns:
-        str: assay-type_read-names, e.g., rna_read1
-    """
-    assay_type = 'atac'
-    read_file_titles = []
-    for read_name in read_names:
-        read_file_titles.append(
-            '_'.join([assay_type, const.READ_NAME_TO_READ_TYPE_MAP[read_name]]))
-    return read_file_titles
-
-
-def get_rna_seqfile_read_titles(read_names: list) -> str:
-    """Get RNA seq file read titles. If reads are not concatenated, will always have read1, read2, and barcode index.
-    If reads are concatenated, will only have read1 and read2. The barcode fastaq will be ignored.
-
-    Args:
-        read_names (list): seqfile.read_names values
-
-    Returns:
-        str: assay-type_read-names, e.g., rna_read1
-    """
-    assay_type = 'rna'
-    read_file_titles = []
-    if len(read_names) == 1:
-        for read_name in read_names:
-            read_file_titles.append(
-                '_'.join([assay_type, const.READ_NAME_TO_READ_TYPE_MAP[read_name]]))
-    else:
-        # NOTE: Hard coded for cases if read2 and barcode are concatenated. Ignore barcode index.
-        if sorted(read_names) == sorted(['Read 2', 'Barcode index']):
-            read_file_titles.append(
-                '_'.join([assay_type, const.READ_NAME_TO_READ_TYPE_MAP['Read 2']]))
-        else:
-            read_file_titles.append(
-                '_'.join([assay_type, const.READ_NAME_TO_READ_TYPE_MAP[read_name]]))
-    return read_file_titles
-
-
-def get_seqfile_readnames(seqfile_item, assay_type: str) -> str:
-    """HACK: Use sequence file metadata to infer FASTQ file read types.
-
-    Args:
-        seqfile_item (_type_): Return item from the API
-        assay_type (str): translated from assay term into atac or rna
-
-    Returns:
-        str: e.g., atac_read1, rna_read2
-    """
-    read_file_titles = []
-    curr_read_names = seqfile_item.read_names
-    if not curr_read_names:
-        raise const.BadDataException(
-            'Error: No read names found in the sequence file item.')
-    if assay_type == 'atac':
-        return get_atac_seqfile_read_titles(read_names=curr_read_names)
-    elif assay_type == 'rna':
-        return get_rna_seqfile_read_titles(read_names=curr_read_names)
 
 
 def download_file_via_https(seqspec_file_url: str, igvf_api: igvf_client.api.igvf_api.IgvfApi, partial_root_dir: str) -> str:
@@ -94,6 +28,11 @@ def download_file_via_https(seqspec_file_url: str, igvf_api: igvf_client.api.igv
     else:
         raise const.BadDataException(
             f'Error: Download failed with status code: {response.status_code}.')
+
+
+def get_seqspec_accession_from_path(self, seqspec_file_path: str) -> str:
+    """Get the seqspec accession from the seqspec file path."""
+    return const.READ_ID_REGEX.search(seqspec_file_path).group(1)
 
 
 class QCandParseSeqspecs:
@@ -136,7 +75,7 @@ class QCandParseSeqspecs:
         all_seqspec_tool_outputs = []
         for seqspec_metadata in all_seqspec_metadata:
             curr_final_barcode_file_name = '_'.join([self.analysis_set_acc, seqspec_metadata.modality,
-                                                     self._get_seqspec_accession_from_path(
+                                                     get_seqspec_accession_from_path(
                                                          seqspec_file_path=seqspec_metadata.seqspec_file_path),
                                                      'final_inclusion_list.txt'])
             curr_seqspec_tool_outputs = seqspec_parsing.GetSeqSpecToolOutput(
@@ -151,7 +90,7 @@ class QCandParseSeqspecs:
         errors = []
         for seqspec_metadata in all_seqspec_metadata:
             if seqspec_metadata.modality != expected_modality:
-                error_seqspec_accession = self._get_seqspec_accession_from_path(
+                error_seqspec_accession = get_seqspec_accession_from_path(
                     seqspec_metadata.seqspec_file_path)
                 errors.append(
                     f"Modality mismatch: expected '{expected_modality}', got '{seqspec_metadata.modality}' from seqspec file {error_seqspec_accession} instead.")
@@ -165,14 +104,14 @@ class QCandParseSeqspecs:
         errors = []
         for seqspec_metadata in all_seqspec_metadata:
             # Sort and parse IGVF accessions from the onlist files in test files
-            unique_onlist_file_accs = [self._get_seqspec_accession_from_path(
+            unique_onlist_file_accs = [get_seqspec_accession_from_path(
                 entry) for entry in sorted(set(seqspec_metadata.onlist_files))]
             # Sort and parse IGVF accessions from the expected onlist files
-            expected_onlist_file_accs = [self._get_seqspec_accession_from_path(
+            expected_onlist_file_accs = [get_seqspec_accession_from_path(
                 entry) for entry in sorted(set(expected_onlist_files))]
             # Compare the two lists
             if unique_onlist_file_accs != expected_onlist_file_accs:
-                error_seqspec_accession = self._get_seqspec_accession_from_path(
+                error_seqspec_accession = get_seqspec_accession_from_path(
                     seqspec_metadata.seqspec_file_path)
                 errors.append(
                     f"Onlist files mismatch: expected {expected_onlist_file_accs}, got {unique_onlist_file_accs} from seqspec file {error_seqspec_accession} instead.")
@@ -193,7 +132,7 @@ class QCandParseSeqspecs:
                 expected_onlist_method != 'no combination')
             # Collect errors
             if error_condition_1 or error_condition_2:
-                error_seqspec_accession = self._get_seqspec_accession_from_path(
+                error_seqspec_accession = get_seqspec_accession_from_path(
                     seqspec_metadata.seqspec_file_path)
                 errors.append(
                     f"Onlist method mismatch: expected '{expected_onlist_method}', got {len(seqspec_metadata.onlist_files)} from seqspec file {error_seqspec_accession} instead.")
@@ -263,7 +202,7 @@ class QCandParseSeqspecs:
             return seqspec_parsing.SeqSpecToolOutput(read_index_string="None", final_barcode_file="None", errors=possible_errors)
         return all_seqspec_tool_outputs[0]
 
-    def quality_check_input_data(self) -> str:
+    def quality_check_input_data(self) -> dict:
         """Quality check the input analysis set metadata."""
         seqspecs_for_input_params = {'rna': None, 'atac': None}
         if self.rna_input_info:
