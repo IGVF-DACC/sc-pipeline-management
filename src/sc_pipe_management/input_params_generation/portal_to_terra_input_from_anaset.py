@@ -23,6 +23,12 @@ class BadDataException(Exception):
 # 2) Possibly check the release status if a SeqFile has multiple seqspec files
 
 
+READ_NAME_TO_READ_TYPE_MAP = {'Read 1': 'read1',
+                              'Read 2': 'read2',
+                              'Barcode index': 'barcode'
+                              }
+
+
 def terra_str_formatter(input_strs: list) -> str:
     """Convert Python default array of string output to Terra format (in [] with double quotes)
 
