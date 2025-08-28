@@ -30,7 +30,7 @@ def download_file_via_https(seqspec_file_url: str, igvf_api: igvf_client.api.igv
             f'Error: Download failed with status code: {response.status_code}.')
 
 
-def get_seqspec_accession_from_path(self, seqspec_file_path: str) -> str:
+def get_seqspec_accession_from_path(seqspec_file_path: str) -> str:
     """Get the seqspec accession from the seqspec file path."""
     return const.READ_ID_REGEX.search(seqspec_file_path).group(1)
 
