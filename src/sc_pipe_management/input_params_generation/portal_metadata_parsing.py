@@ -150,6 +150,15 @@ class GetMeasurementSetMetadata:
                 seqfile_metadata_list.append(curr_seqfile_metadata)
         return seqfile_metadata_list
 
+    def _get_barcode_replacement_file_url(self) -> str | None:
+        """Get the barcode replacement file URL if exists."""
+        if self.measet_obj.barcode_replacement_file:
+            brf_obj = self.igvf_api.get_by_id(
+                self.measet_obj.barcode_replacement_file).actual_instance
+            return construct_full_href_url(
+                igvf_href=brf_obj.href)
+        return None
+
     def get_measurement_set_metadata(self) -> MeasurementSetMetadata:
         """Get the measurement set metadata."""
         return MeasurementSetMetadata(
@@ -160,7 +169,7 @@ class GetMeasurementSetMetadata:
             # The following fields are checked by portal audits
             onlist_method=self.measet_obj.onlist_method,
             onlist_files=self.measet_obj.onlist_files,
-            barcode_replacement_file=self.measet_obj.barcode_replacement_file
+            barcode_replacement_file=self._get_barcode_replacement_file_url()
         )
 
 
