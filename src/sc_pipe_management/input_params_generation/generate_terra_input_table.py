@@ -245,3 +245,170 @@ class TerraPipelineParams:
     genome_ref: str = ''
     # Error reporting
     possible_errors: str = ''
+
+
+class GenerateTerraInputTable:
+    """Class method for generating Terra input table."""
+
+    def __init__(self, analysis_set_metadata: portal_parsing.InputAnalysisSetMetadata, igvf_api: igvf_client.api.igvf_api.IgvfApi, partial_root_dir: str):
+        # Analysis set metadata
+        self.analysis_set_metadata = analysis_set_metadata
+        self.analysis_set_acc = self.analysis_set_metadata.analysis_set_acc
+        # Measurement sets metadata
+        self.rna_input_info = self.analysis_set_metadata.rna_input_info
+        self.atac_input_info = self.analysis_set_metadata.atac_input_info
+        # Sample Info
+        self.samples = self.analysis_set_metadata.sample_info
+        # IGVF API client
+        self.igvf_api = igvf_api
+        # Partial root directory for saving intermediate files
+        self.partial_root_dir = partial_root_dir
+
+    def _check_and_get_seqspecs_for_input_params(self, measet_metadata_list: list[portal_parsing.MeasurementSetMetadata], assay_type: str) -> seqspec_parsing.SeqSpecToolOutput:
+        """Quality check the input analysis set metadata and get seqspec tool outputs."""
+        seqspec_qc_generator_mthd = QCandParseSeqspecs(analysis_set_metadata=self.analysis_set_metadata,
+                                                       igvf_api=self.igvf_api,
+                                                       partial_root_dir=self.partial_root_dir)
+        return seqspec_qc_generator_mthd.quality_check_one_assay_type(measet_metadata_list=measet_metadata_list, assay_type=assay_type)
+
+    def _get_input_measet_accsions(self, measet_metadata_list: list[portal_parsing.MeasurementSetMetadata]) -> list[str]:
+        """Get all measurement set accessions for a given assay type."""
+        return [measet_metadata.measet_acc for measet_metadata in measet_metadata_list]
+
+    def _get_input_seqspec_urls(self, measet_metadata_list: list[portal_parsing.MeasurementSetMetadata]) -> list[str]:
+        """Get all seqspec URLs for a given assay type."""
+        unique_seqspec_urls = set()
+        for measet_metadata in measet_metadata_list:
+            for seqfile_item in measet_metadata.seqfiles:
+                if seqfile_item.seqspec_urls:
+                    unique_seqspec_urls.update(seqfile_item.seqspec_urls)
+        return sorted(unique_seqspec_urls)
+
+    def _get_barcode_replacement_file(self, measet_metadata_list: list[portal_parsing.MeasurementSetMetadata]) -> str:
+        """Get the barcode replacement file for the analysis set."""
+        unique_replacement_files = set()
+        for measet_metadata in measet_metadata_list:
+            if measet_metadata.barcode_replacement_file:
+                unique_replacement_files.add(
+                    measet_metadata.barcode_replacement_file)
+        if len(unique_replacement_files) > 1:
+            raise const.BadDataException(
+                f"Multiple barcode replacement files found for analysis set {self.analysis_set_acc}.")
+        elif len(unique_replacement_files) == 1:
+            return list(unique_replacement_files)[0]
+        else:
+            # This is to satisfy Terra input table format
+            return "None"
+
+    def _generate_fastq_urls_per_assay(self, measet_metadata_list: list[portal_parsing.MeasurementSetMetadata], assay_type: str) -> dict:
+        """Generate all FASTQ file info for a given assay type."""
+        assay_type = assay_type.lower()
+        # Get all sequence file metadata from all measurement sets of a specific assay type
+        all_sequence_file_metadata = []
+        for measet_metadata in measet_metadata_list:
+            # for seqfile_metadata in measet_metadata.seqfiles:
+            # curr_pipeline_read_type = seqfile_metadata.get_read_names_from_seqfile()
+            all_sequence_file_metadata.extend(measet_metadata.seqfiles)
+        # Sort them by file set, read type, sequencing run, lane, and flowcell ID
+        sorted_all_sequence_file_metadata = sorted(
+            all_sequence_file_metadata,
+            key=lambda x: (
+                x.file_set,
+                x.illumina_read_type,
+                x.sequencing_run,
+                x.lane if x.lane is not None else 99,
+                x.flowcell_id if x.flowcell_id is not None else 99
+            )
+        )
+
+        # Output the FASTQ file URLs
+        seqfile_urls_and_accs_by_reads = {f'{assay_type}_read1': [],
+                                          f'{assay_type}_read2': [],
+                                          f'{assay_type}_barcode': []
+                                          }
+        for seqfile_metadata in sorted_all_sequence_file_metadata:
+            curr_pipeline_read_types = seqfile_metadata.get_read_names_from_seqfile(
+                assay_type=assay_type)
+            for curr_pipeline_read_type in curr_pipeline_read_types:
+                curr_dict_key = '_'.join(
+                    [assay_type, curr_pipeline_read_type])
+                seqfile_urls_and_accs_by_reads.setdefault(curr_dict_key, []).append(
+                    seqfile_metadata.file_url)
+        # Add on accessions
+        for read_type in list(seqfile_urls_and_accs_by_reads.keys()):
+            urls = seqfile_urls_and_accs_by_reads[read_type]
+            seqfile_urls_and_accs_by_reads[f'{read_type}_accessions'] = [
+                get_seqspec_accession_from_path(url) for url in urls
+            ]
+        return seqfile_urls_and_accs_by_reads
+
+    def _get_all_input_params_per_assay_type(self, measet_metadata_list: list[portal_parsing.MeasurementSetMetadata], assay_type: str) -> dict[str, list | str]:
+        """Get all input params for a given assay type."""
+        # Get all measurement set accessions
+        measet_accessions = self._get_input_measet_accsions(
+            measet_metadata_list=measet_metadata_list)
+        # Get all seqspec URLs
+        seqspec_urls = self._get_input_seqspec_urls(
+            measet_metadata_list=measet_metadata_list)
+        # Generate FASTQ file URLs and accessions
+        seqfile_urls_and_accs_by_reads = self._generate_fastq_urls_per_assay(
+            measet_metadata_list=measet_metadata_list, assay_type=assay_type)
+        # Seqspec tool outputs
+        seqspec_tool_outputs = self._check_and_get_seqspecs_for_input_params(
+            measet_metadata_list=measet_metadata_list, assay_type=assay_type)
+        # Build the return dict
+        terra_data_params_dict = dict({
+            f'{assay_type}_MeaSetIDs': measet_accessions,
+            f'{assay_type}_read1_accessions': seqfile_urls_and_accs_by_reads.get(f'{assay_type}_read1_accessions', []),
+            f'{assay_type}_read2_accessions': seqfile_urls_and_accs_by_reads.get(f'{assay_type}_read2_accessions', []),
+            f'{assay_type}_barcode_accessions': seqfile_urls_and_accs_by_reads.get(f'{assay_type}_barcode_accessions', []),
+            f'{assay_type}_seqspec_urls': seqspec_urls,
+            f'{assay_type}_read1': seqfile_urls_and_accs_by_reads.get(f'{assay_type}_read1', []),
+            f'{assay_type}_read2': seqfile_urls_and_accs_by_reads.get(f'{assay_type}_read2', []),
+            f'{assay_type}_barcode': seqfile_urls_and_accs_by_reads.get(f'{assay_type}_barcode', []),
+            f'{assay_type}_barcode_inclusion_list': seqspec_tool_outputs.final_barcode_file,
+            f'{assay_type}_read_format': seqspec_tool_outputs.read_index_string
+        })
+        if assay_type == 'rna':
+            # Barcode replacement file if RNAseq
+            terra_data_params_dict['barcode_replacement_file'] = self._get_barcode_replacement_file(
+                measet_metadata_list=measet_metadata_list)
+        return terra_data_params_dict
+
+    def _get_taxa(self) -> str:
+        """Get the taxa for the analysis set."""
+        unique_taxa = set()
+        for sample in self.samples:
+            if sample.taxa:
+                unique_taxa.add(sample.taxa)
+        if len(unique_taxa) > 1:
+            raise const.BadDataException(
+                f"Multiple taxa found for analysis set {self.analysis_set_acc}.")
+        elif len(unique_taxa) == 1:
+            return list(unique_taxa)[0]
+        else:
+            raise const.BadDataException(
+                f"No taxa found for analysis set {self.analysis_set_acc}.")
+
+    def _get_reference_files(self, taxa: str) -> const.RunReferenceFiles:
+        """Get the reference files for the analysis set."""
+        return const.TAXA_TO_GENOME_REF_FILES[taxa]
+
+    def _get_subpool_id(self) -> str:
+        """Get the subpool ID for the analysis set."""
+        unique_subpool_ids = set()
+        for sample in self.samples:
+            if sample.subpool_id:
+                unique_subpool_ids.add(sample.subpool_id)
+        if len(unique_subpool_ids) >= 1:
+            return '-'.join(sorted(unique_subpool_ids))
+        else:
+            raise const.BadDataException(
+                f"No subpool ID found for analysis set {self.analysis_set_acc}.")
+
+    def _get_onlist_mapping_bool(self) -> bool:
+        """Determine if onlist mapping is needed for the analysis set."""
+        # If any of the measurement sets has combinatorial onlist method, then we need onlist mapping
+        if any(assay_title in const.ASSAYS_NEED_ONLIST_MAPPING for assay_title in self.analysis_set_metadata.preferred_assay_titles):
+            return True
+        return False
