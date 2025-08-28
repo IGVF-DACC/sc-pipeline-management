@@ -503,3 +503,47 @@ class GenerateTerraInputTable:
         params['possible_errors'] = "\n".join(possible_errors)
         terra_input_params = TerraPipelineParams(**params)
         return terra_input_params
+
+
+class ConvertParamsToTerraTable:
+    """Class method for converting Terra input params to a Terra input table."""
+
+    def __init__(self, terra_input_params: TerraPipelineParams):
+        self.terra_input_params = terra_input_params
+
+    def _terra_str_formatter(self, input_strs: list) -> str:
+        """Convert Python default array of string output to Terra format (in [] with double quotes)
+
+        Args:
+            input_strs (list): a list of URLs, accessions, etc
+
+        Returns:
+            str: A string version of the input string list with double quotes
+        """
+        return '[' + ','.join([f'"{v}"' for v in input_strs]) + ']'
+
+    def _reformat_arrays_to_terra_format(self):
+        """Reformat all read file URLs arrays to Terra format."""
+        array_attrs = [
+            'atac_read1', 'atac_read2', 'atac_barcode',
+            'rna_read1', 'rna_read2', 'rna_barcode'
+        ]
+        params_dict = dataclasses.asdict(self.terra_input_params)
+        for attr in array_attrs:
+            val = params_dict[attr]
+            if isinstance(val, list) and val:
+                params_dict[attr] = self._terra_str_formatter(val)
+            elif isinstance(val, list) and not val:
+                params_dict[attr] = "[]"
+            elif isinstance(val, str) and val == '' and attr != 'barcode_replacement_file':
+                params_dict[attr] = "None"
+        # Special handling for barcode_replacement_file: leave as empty string if not applicable
+        # Return a new TerraPipelineParams instance
+        return TerraPipelineParams(**params_dict)
+
+    def generate_terra_input_table(self) -> pd.DataFrame:
+        """Generate the Terra input table as a pandas DataFrame."""
+        formatted_terra_input_params = self._reformat_arrays_to_terra_format()
+        params_dict = dataclasses.asdict(formatted_terra_input_params)
+        terra_input_df = pd.DataFrame([params_dict])
+        return terra_input_df
