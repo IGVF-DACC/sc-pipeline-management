@@ -23,19 +23,20 @@ IGVF_PROD_CLIENT_API = igvf_tools.get_igvf_client_auth(igvf_api_keys=IGVF_PROD_A
 
 class TestCompleteTerraForming:
 
-    def setup_method(self):
-        # Expected Table
-        self.expected_terra_table = pd.read_csv(
+    @pytest.fixture
+    def expected_terra_table(self):
+        return pd.read_csv(
             'src/tests/test_files/test_input_datatable_generation_reference.tsv', sep='\t', index_col=0)
-        # Analysis Sets
-        self.test_analysis_set_accessions = [
-            'IGVFDS9664YLAD',    # 10X multiome
-            'IGVFDS0223KLTB',    # Parse SPLiT-seq
-            'IGVFDS0657NHTA'     # ShareSeq
+
+    @pytest.fixture
+    def test_terra_table_imported(self):
+        test_analysis_set_accessions = [
+            'IGVFDS9664YLAD',
+            'IGVFDS0223KLTB',
+            'IGVFDS0657NHTA'
         ]
-        # Generate Table
-        self.test_terra_table = terra_form.CompleteTerraForming(
-            analysis_set_accessions=self.test_analysis_set_accessions,
+        test_terra_table = terra_form.CompleteTerraForming(
+            analysis_set_accessions=test_analysis_set_accessions,
             igvf_api=IGVF_PROD_CLIENT_API,
             partial_root_dir='src/tests/test_files',
             terra_etype='unittest_pipeline_tester',
@@ -43,18 +44,22 @@ class TestCompleteTerraForming:
                 os.getcwd(), 'final_barcode_list/'),
             gs_barcode_list_bucket='gs://unittest_mock_bucket/submissions/final_barcode_onlist/'
         ).generate_complete_terra_input_table()
+        test_terra_table.to_csv(
+            'src/tests/test_files/test_input_datatable_generation_output.tsv', sep='\t')
+        return pd.read_csv(
+            'src/tests/test_files/test_input_datatable_generation_output.tsv', sep='\t', index_col=0)
 
-    def test_table_shape(self):
-        assert self.expected_terra_table.shape == self.test_terra_table.shape
+    def test_table_shape(self, expected_terra_table, test_terra_table_imported):
+        assert expected_terra_table.shape == test_terra_table_imported.shape
 
-    def test_table_columns(self):
-        assert sorted(list(self.expected_terra_table.columns)) == sorted(
-            list(self.test_terra_table.columns))
+    def test_table_columns(self, expected_terra_table, test_terra_table_imported):
+        assert sorted(list(expected_terra_table.columns)) == sorted(
+            list(test_terra_table_imported.columns))
 
-    def test_table_rows(self):
-        assert sorted(list(self.expected_terra_table.index)) == sorted(
-            list(self.test_terra_table.index))
+    def test_table_rows(self, expected_terra_table, test_terra_table_imported):
+        assert sorted(list(expected_terra_table.index)) == sorted(
+            list(test_terra_table_imported.index))
 
-    def test_table_content(self):
+    def test_table_content(self, expected_terra_table, test_terra_table_imported):
         pd.testing.assert_frame_equal(
-            self.expected_terra_table, self.test_terra_table)
+            expected_terra_table, test_terra_table_imported, check_like=True)
