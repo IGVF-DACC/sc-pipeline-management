@@ -32,12 +32,19 @@ class SeqFileMetadata:
     seqspec_urls: list[str]
     read_names: list[str]
 
-    def get_read_names_from_seqfile(self) -> str:
-        """Get the read names from the seqfile object."""
+    def get_read_names_from_seqfile(self, assay_type: str) -> str:
+        """Get the read names from the seqfile object. For ATACseq, if Read2 and Barcode index are concatenated, return both.
+        For RNAseq, if Read2 and Barcode index are concatenated, return Read2 only."""
         if len(self.read_names) == 1:
-            return self.read_names[0]
+            if self.read_names[0] != 'Barcode index':
+                return [self.read_names[0].lower().replace(' ', '')]
+            else:
+                return ['barcode']
         elif self.read_names == ['Read 2', 'Barcode index']:
-            return 'Read 2'
+            if assay_type == 'rna':
+                return ['read2']
+            elif assay_type == 'atac':
+                return ['read2', 'barcode']
         else:
             raise const.BadDataException(
                 f'Malformed seqfile read names: {self.read_names}. Expected only one read name or Read 2 and Barcode index.')
@@ -70,6 +77,8 @@ class InputAnalysisSetMetadata:
     atac_input_info: list[MeasurementSetMetadata] | None
     # Sample metadata
     sample_info: list[SampleMetadata]
+    # Assay titles
+    preferred_assay_titles: list[str]
 
 
 class GetSeqFileMetadata:
@@ -198,5 +207,6 @@ class GetAnalysisSetMedata:
             analysis_set_acc=self.analysis_set_accession,
             rna_input_info=measet_metadata_by_assay_type['rna'],
             atac_input_info=measet_metadata_by_assay_type['atac'],
-            sample_info=self._get_input_samples_info()
+            sample_info=self._get_input_samples_info(),
+            preferred_assay_titles=self.analysis_set_obj.preferred_assay_titles
         )
