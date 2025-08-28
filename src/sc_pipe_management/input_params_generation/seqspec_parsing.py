@@ -76,7 +76,7 @@ class GetSeqSpecMetadata:
                 read_ids.append((spec.read_id, igvf_accession))
         return read_ids
 
-    def _generate_ordered_read_ids(self, seqfiles_metadata: list[portal_parsing.SeqFileMetadata]) -> list[str]:
+    def _generate_ordered_read_ids(self, seqfiles_metadata: list[portal_parsing.SeqFileMetadata], assay_type: str) -> list[str]:
         """Get the read1,read2,barcode files order from the seqspec read_id and portal metadata."""
         # Get read IDs from the seqspec file
         read_ids = self._parse_read_ids_from_seqspec_file()
@@ -88,12 +88,22 @@ class GetSeqSpecMetadata:
                     f'Error: No IGVF accession found for read ID {read_id}.')
             for seqfile_metadata in seqfiles_metadata:
                 if seqfile_metadata.file_accession == igvf_accession:
-                    read_name = seqfile_metadata.get_read_names_from_seqfile()
-                    if read_name in id_by_name:
-                        raise const.BadDataException(
-                            f'Error: Multiple sequence files found for the same {read_name}.')
-                    id_by_name[read_name] = read_id
-        return [id_by_name[read_name] for read_name in ['Read 1', 'Read 2', 'Barcode index'] if id_by_name.get(read_name) is not None]
+                    read_names = seqfile_metadata.get_read_names_from_seqfile(
+                        assay_type=assay_type)
+                    for read_name in read_names:
+                        if read_name in id_by_name:
+                            raise const.BadDataException(
+                                f'Error: Multiple sequence files found for the same {read_name}.')
+                        id_by_name[read_name] = read_id
+        # Ensure the order is read1, read2, barcode, and remove duplicates if any
+        result = []
+        seen = set()
+        for read_name in ['read1', 'read2', 'barcode']:
+            val = id_by_name.get(read_name)
+            if val is not None and val not in seen:
+                result.append(val)
+                seen.add(val)
+        return result
 
     def _parse_onlist_files(self, onlist_files: list[str]) -> list[str]:
         # If it's a list with one string containing commas, split it
@@ -111,10 +121,12 @@ class GetSeqSpecMetadata:
         onlist_files = curr_run_log.stdout.decode('utf-8').strip().split('\n')
         return self._parse_onlist_files(onlist_files)
 
-    def generate_seqspec_metadata(self, seqfiles_metadata: list[portal_parsing.SeqFileMetadata]) -> SeqSpecMetadata:
+    def generate_seqspec_metadata(self, seqfiles_metadata: list[portal_parsing.SeqFileMetadata], assay_type: str) -> SeqSpecMetadata:
         """Generate seqspec metadata from the seqspec file and seqfiles metadata."""
         # Generate ordered read IDs
-        ordered_read_ids = self._generate_ordered_read_ids(seqfiles_metadata)
+        ordered_read_ids = self._generate_ordered_read_ids(
+            seqfiles_metadata=seqfiles_metadata, assay_type=assay_type)
+        # Return the seqspec metadata
         return SeqSpecMetadata(
             seqspec_file_path=self.seqspec_file_path,
             modality=self._get_seqspec_modality(),
