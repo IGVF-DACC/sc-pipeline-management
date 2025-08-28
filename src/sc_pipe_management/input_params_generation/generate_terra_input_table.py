@@ -251,6 +251,33 @@ class GenerateTerraInputTable:
     """Class method for generating Terra input table."""
 
     def __init__(self, analysis_set_metadata: portal_parsing.InputAnalysisSetMetadata, igvf_api: igvf_client.api.igvf_api.IgvfApi, partial_root_dir: str):
+        self.data = {'analysis_set_acc': '',
+                     'atac_MeaSetIDs': [],
+                     'rna_MeaSetIDs': [],
+                     'subpool_id': '',
+                     'taxa': '',
+                     'atac_read1_accessions': [],
+                     'atac_read2_accessions': [],
+                     'atac_barcode_accessions': [],
+                     'rna_read1_accessions': [],
+                     'rna_read2_accessions': [],
+                     'rna_barcode_accessions': [],
+                     'atac_seqspec_urls': set(),
+                     'rna_seqspec_urls': set(),
+                     'atac_read1': [],
+                     'atac_read2': [],
+                     'atac_barcode': [],
+                     'rna_read1': [],
+                     'rna_read2': [],
+                     'rna_barcode': [],
+                     'atac_barcode_inclusion_list': '',
+                     'atac_read_format': '',
+                     'rna_barcode_inclusion_list': '',
+                     'rna_read_format': '',
+                     'onlist_mapping': False,
+                     'barcode_replacement_file': '',
+                     'possible_errors': ''
+                     }
         # Analysis set metadata
         self.analysis_set_metadata = analysis_set_metadata
         self.analysis_set_acc = self.analysis_set_metadata.analysis_set_acc
@@ -357,7 +384,7 @@ class GenerateTerraInputTable:
         seqspec_tool_outputs = self._check_and_get_seqspecs_for_input_params(
             measet_metadata_list=measet_metadata_list, assay_type=assay_type)
         # Build the return dict
-        terra_data_params_dict = dict({
+        partial_params_dict = dict({
             f'{assay_type}_MeaSetIDs': measet_accessions,
             f'{assay_type}_read1_accessions': seqfile_urls_and_accs_by_reads.get(f'{assay_type}_read1_accessions', []),
             f'{assay_type}_read2_accessions': seqfile_urls_and_accs_by_reads.get(f'{assay_type}_read2_accessions', []),
@@ -371,9 +398,11 @@ class GenerateTerraInputTable:
         })
         if assay_type == 'rna':
             # Barcode replacement file if RNAseq
-            terra_data_params_dict['barcode_replacement_file'] = self._get_barcode_replacement_file(
+            partial_params_dict['barcode_replacement_file'] = self._get_barcode_replacement_file(
                 measet_metadata_list=measet_metadata_list)
-        return terra_data_params_dict
+        if seqspec_tool_outputs.errors:
+            partial_params_dict['possible_errors'] = seqspec_tool_outputs.possible_errors
+        return partial_params_dict
 
     def _get_taxa(self) -> str:
         """Get the taxa for the analysis set."""
@@ -412,3 +441,65 @@ class GenerateTerraInputTable:
         if any(assay_title in const.ASSAYS_NEED_ONLIST_MAPPING for assay_title in self.analysis_set_metadata.preferred_assay_titles):
             return True
         return False
+
+    def generate_terra_input_params(self) -> TerraPipelineParams:
+        possible_errors = []
+        params = {}
+        params['kb_strand'] = 'forward'
+        params['analysis_set_acc'] = self.analysis_set_acc
+
+        try:
+            params['onlist_mapping'] = self._get_onlist_mapping_bool()
+        except const.BadDataException as e:
+            possible_errors.append(f"onlist_mapping: {e}")
+
+        try:
+            params['taxa'] = self._get_taxa()
+        except const.BadDataException as e:
+            possible_errors.append(f"taxa: {e}")
+            params['taxa'] = ''
+
+        try:
+            params['subpool_id'] = self._get_subpool_id()
+        except const.BadDataException as e:
+            possible_errors.append(f"subpool_id: {e}")
+            params['subpool_id'] = ''
+
+        try:
+            reference_files = self._get_reference_files(
+                taxa=params.get('taxa', ''))
+            params.update(dataclasses.asdict(reference_files))
+        except const.BadDataException as e:
+            possible_errors.append(f"reference_files: {e}")
+
+        if self.analysis_set_metadata.rna_input_info:
+            try:
+                rna_partial = self._get_all_input_params_per_assay_type(
+                    measet_metadata_list=self.analysis_set_metadata.rna_input_info, assay_type='rna')
+                params.update(rna_partial)
+                if 'possible_errors' in rna_partial and rna_partial['possible_errors']:
+                    possible_errors.append(
+                        f"rna: {rna_partial['possible_errors']}")
+            except const.BadDataException as e:
+                possible_errors.append(f"rna: {e}")
+
+        if self.analysis_set_metadata.atac_input_info:
+            try:
+                atac_partial = self._get_all_input_params_per_assay_type(
+                    measet_metadata_list=self.analysis_set_metadata.atac_input_info, assay_type='atac')
+                params.update(atac_partial)
+                if 'possible_errors' in atac_partial and atac_partial['possible_errors']:
+                    possible_errors.append(
+                        f"atac: {atac_partial['possible_errors']}")
+            except const.BadDataException as e:
+                possible_errors.append(f"atac: {e}")
+
+        # Fill in any missing fields with their default values
+        for field in dataclasses.fields(TerraPipelineParams):
+            if field.name not in params:
+                params[field.name] = field.default if field.default is not dataclasses.MISSING else field.default_factory(
+                ) if field.default_factory is not dataclasses.MISSING else None
+
+        params['possible_errors'] = "\n".join(possible_errors)
+        terra_input_params = TerraPipelineParams(**params)
+        return terra_input_params
