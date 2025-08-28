@@ -3,6 +3,7 @@ import os
 import requests
 import dataclasses
 import igvf_client
+import datetime
 
 
 import sc_pipe_management.input_params_generation.constant as const
@@ -72,6 +73,10 @@ class QCandParseSeqspecs:
 
     def _get_all_seqspec_tool_outputs_per_assay_type(self, all_seqspec_metadata: list[seqspec_parsing.SeqSpecMetadata], onlist_method: str) -> list[seqspec_parsing.SeqSpecToolOutput]:
         """Get all seqspec tool outputs for a given assay type."""
+        final_barcode_dir = os.path.join(
+            self.partial_root_dir, 'final_barcode_lists')
+        if not os.path.exists(final_barcode_dir):
+            os.makedirs(final_barcode_dir)
         all_seqspec_tool_outputs = []
         for seqspec_metadata in all_seqspec_metadata:
             curr_final_barcode_file_name = '_'.join([self.analysis_set_acc, seqspec_metadata.modality,
@@ -81,7 +86,7 @@ class QCandParseSeqspecs:
             curr_seqspec_tool_outputs = seqspec_parsing.GetSeqSpecToolOutput(
                 seqspec_metadata=seqspec_metadata,
                 onlist_method=onlist_method,
-                output_barcode_list_file=os.path.join(self.partial_root_dir, curr_final_barcode_file_name)).generate_seqspec_tool_output()
+                output_barcode_list_file=os.path.join(final_barcode_dir, curr_final_barcode_file_name)).generate_seqspec_tool_output()
             all_seqspec_tool_outputs.append(curr_seqspec_tool_outputs)
         return all_seqspec_tool_outputs
 
@@ -247,37 +252,10 @@ class TerraPipelineParams:
     possible_errors: str = ''
 
 
-class GenerateTerraInputTable:
+class GenerateTerraInputParams:
     """Class method for generating Terra input table."""
 
     def __init__(self, analysis_set_metadata: portal_parsing.InputAnalysisSetMetadata, igvf_api: igvf_client.api.igvf_api.IgvfApi, partial_root_dir: str):
-        self.data = {'analysis_set_acc': '',
-                     'atac_MeaSetIDs': [],
-                     'rna_MeaSetIDs': [],
-                     'subpool_id': '',
-                     'taxa': '',
-                     'atac_read1_accessions': [],
-                     'atac_read2_accessions': [],
-                     'atac_barcode_accessions': [],
-                     'rna_read1_accessions': [],
-                     'rna_read2_accessions': [],
-                     'rna_barcode_accessions': [],
-                     'atac_seqspec_urls': set(),
-                     'rna_seqspec_urls': set(),
-                     'atac_read1': [],
-                     'atac_read2': [],
-                     'atac_barcode': [],
-                     'rna_read1': [],
-                     'rna_read2': [],
-                     'rna_barcode': [],
-                     'atac_barcode_inclusion_list': '',
-                     'atac_read_format': '',
-                     'rna_barcode_inclusion_list': '',
-                     'rna_read_format': '',
-                     'onlist_mapping': False,
-                     'barcode_replacement_file': '',
-                     'possible_errors': ''
-                     }
         # Analysis set metadata
         self.analysis_set_metadata = analysis_set_metadata
         self.analysis_set_acc = self.analysis_set_metadata.analysis_set_acc
@@ -508,18 +486,14 @@ class GenerateTerraInputTable:
 class ConvertParamsToTerraTable:
     """Class method for converting Terra input params to a Terra input table."""
 
-    def __init__(self, terra_input_params: TerraPipelineParams):
-        self.terra_input_params = terra_input_params
+    def __init__(self, all_terra_input_params: list[TerraPipelineParams], terra_etype: str, local_barcode_file_dir: str, gs_barcode_list_bucket: str):
+        self.all_terra_input_params = all_terra_input_params
+        self.terra_etype = terra_etype
+        self.local_barcode_file_dir = local_barcode_file_dir
+        self.gs_barcode_list_bucket = gs_barcode_list_bucket
 
     def _terra_str_formatter(self, input_strs: list) -> str:
-        """Convert Python default array of string output to Terra format (in [] with double quotes)
-
-        Args:
-            input_strs (list): a list of URLs, accessions, etc
-
-        Returns:
-            str: A string version of the input string list with double quotes
-        """
+        """Convert Python default array of string output to Terra format (in [] with double quotes)."""
         return '[' + ','.join([f'"{v}"' for v in input_strs]) + ']'
 
     def _reformat_arrays_to_terra_format(self):
@@ -528,22 +502,80 @@ class ConvertParamsToTerraTable:
             'atac_read1', 'atac_read2', 'atac_barcode',
             'rna_read1', 'rna_read2', 'rna_barcode'
         ]
-        params_dict = dataclasses.asdict(self.terra_input_params)
-        for attr in array_attrs:
-            val = params_dict[attr]
-            if isinstance(val, list) and val:
-                params_dict[attr] = self._terra_str_formatter(val)
-            elif isinstance(val, list) and not val:
-                params_dict[attr] = "[]"
-            elif isinstance(val, str) and val == '' and attr != 'barcode_replacement_file':
-                params_dict[attr] = "None"
-        # Special handling for barcode_replacement_file: leave as empty string if not applicable
-        # Return a new TerraPipelineParams instance
-        return TerraPipelineParams(**params_dict)
+        string_attrs = [
+            'atac_read_format', 'rna_read_format',
+            'atac_barcode_inclusion_list', 'rna_barcode_inclusion_list',
+            'barcode_replacement_file'
+        ]
+        all_terra_input_params_formatted = []
+        for terra_input_params in self.all_terra_input_params:
+            params_dict = dataclasses.asdict(terra_input_params)
+            # Format arrays
+            for attr in array_attrs:
+                val = params_dict[attr]
+                if isinstance(val, list) and val:
+                    params_dict[attr] = self._terra_str_formatter(val)
+                elif isinstance(val, list) and not val:
+                    params_dict[attr] = "[]"
+            # Format strings
+            for attr in string_attrs:
+                val = params_dict[attr]
+                # barcode_replacement_file: leave as empty string if not applicable
+                if attr == 'barcode_replacement_file':
+                    continue
+                if isinstance(val, str) and val == '':
+                    params_dict[attr] = "None"
+            all_terra_input_params_formatted.append(
+                TerraPipelineParams(**params_dict))
+        return all_terra_input_params_formatted
+
+    def _mod_input_table_for_terra(self, pipeline_input_table: pd.DataFrame) -> pd.DataFrame:
+        """Modify the pipeline input table to have Terra table ID in column name and replace local file path with gs:// bucket path."""
+        pipeline_input_table.index = pipeline_input_table['analysis_set_acc']
+        pipeline_input_table.index.name = f'entity:{self.terra_etype}_id'
+        pipeline_input_table_with_gspaths = pipeline_input_table.replace(
+            self.local_barcode_file_dir.rstrip('/'), self.gs_barcode_list_bucket.rstrip('/'), regex=True)
+        return pipeline_input_table_with_gspaths
 
     def generate_terra_input_table(self) -> pd.DataFrame:
         """Generate the Terra input table as a pandas DataFrame."""
         formatted_terra_input_params = self._reformat_arrays_to_terra_format()
-        params_dict = dataclasses.asdict(formatted_terra_input_params)
-        terra_input_df = pd.DataFrame([params_dict])
-        return terra_input_df
+        params_dicts = [dataclasses.asdict(params)
+                        for params in formatted_terra_input_params]
+        terra_input_df = pd.DataFrame(params_dicts)
+        return self._mod_input_table_for_terra(pipeline_input_table=terra_input_df)
+
+
+def generate_complete_terra_input_table(analysis_set_accessions: list[str], igvf_api: igvf_client.api.igvf_api.IgvfApi, partial_root_dir: str, terra_etype: str, local_barcode_file_dir: str, gs_barcode_list_bucket: str) -> pd.DataFrame:
+    """Generate the complete Terra input table for all analysis sets."""
+    all_terra_input_params = []
+    for analysis_set_acc in analysis_set_accessions:
+        # Get the analysis set metadata
+        analysis_set_metadata = portal_parsing.GetAnalysisSetMedata(
+            igvf_api=igvf_api, analysis_set_accession=analysis_set_acc).get_input_analysis_set_metadata()
+        # Generate Terra input params for the analysis set
+        terra_input_params = GenerateTerraInputParams(analysis_set_metadata=analysis_set_metadata,
+                                                      igvf_api=igvf_api,
+                                                      partial_root_dir=partial_root_dir).generate_terra_input_params()
+        all_terra_input_params.append(terra_input_params)
+    # Convert all Terra input params to a Terra input table
+    terra_input_table = ConvertParamsToTerraTable(all_terra_input_params=all_terra_input_params,
+                                                  terra_etype=terra_etype,
+                                                  local_barcode_file_dir=local_barcode_file_dir,
+                                                  gs_barcode_list_bucket=gs_barcode_list_bucket).generate_terra_input_table()
+    return terra_input_table
+
+
+def save_pipeline_input_table(pipeline_input_table: pd.DataFrame, output_dir: str) -> pd.DataFrame:
+    """Save the pipeline input table to a TSV file.
+
+    Args:
+        pipeline_input_table (pd.DataFrame): The pipeline input table
+        output_dir (str): The output directory
+    """
+    curr_datetime = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+    if os.path.exists(output_dir) is False:
+        os.makedirs(output_dir)
+    # Save the pipeline input table to a TSV file
+    pipeline_input_table.to_csv(os.path.join(
+        output_dir, f'single-cell_uniform_pipeline_input_table_{curr_datetime}_withGSpath.tsv'), sep='\t')
