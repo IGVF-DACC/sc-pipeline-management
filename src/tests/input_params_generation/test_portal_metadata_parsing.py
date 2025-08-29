@@ -23,8 +23,8 @@ def mock_igvf_api():
 def test_construct_full_href_url():
     """Test the construct_full_href_url function."""
     with patch.object(const, 'BASE_IGVF_PORTAL_URL', "https://example.com/"):
-        igvf_href = "/files/IGVFFI123456/@@download"
-        expected_url = "https://example.com/files/IGVFFI123456/@@download"
+        igvf_href = "/files/IGVFFI123456/@@download/IGVFFI123456.fastq.gz"
+        expected_url = "https://example.com/files/IGVFFI123456/@@download/IGVFFI123456.fastq.gz"
         assert portal_parsing.construct_full_href_url(
             igvf_href) == expected_url
 
@@ -158,6 +158,10 @@ class TestGetMeasurementSetMetadata:
         """Test get_measurement_set_metadata method."""
         mock_igvf_api.get_by_id.return_value.actual_instance = mock_measet_obj
 
+        # Patch barcode replacement file's href to be a string
+        mock_igvf_api.get_by_id.return_value.actual_instance.barcode_replacement_file = "/tabular-files/barcodefile1/"
+        mock_igvf_api.get_by_id.return_value.actual_instance.href = "/tabular-files/barcodefile1/@@download/barcodefile1"
+
         with patch.object(const, 'ASSAY_NAMES_CONVERSION_REF', {"/assay-terms/OBI_0003109/": "rna"}):
             with patch('sc_pipe_management.input_params_generation.portal_metadata_parsing.GetSeqFileMetadata') as mock_get_seqfile:
                 mock_get_seqfile.return_value.get_seqfile_metadata.return_value = mock_seqfile_metadata
@@ -174,12 +178,16 @@ class TestGetMeasurementSetMetadata:
                 assert measet_metadata.onlist_method == "no combination"
                 assert measet_metadata.onlist_files == [
                     "/tabular-files/file1/"]
-                assert measet_metadata.barcode_replacement_file == "/tabular-files/barcodefile1/"
+                assert measet_metadata.barcode_replacement_file == "https://api.data.igvf.org/tabular-files/barcodefile1/@@download/barcodefile1"
 
     def test_get_measurement_set_metadata_onlist_mapping_true(self, mock_igvf_api, mock_measet_obj, mock_seqfile_metadata):
         """Test get_measurement_set_metadata method when onlist_mapping is True."""
         mock_measet_obj.preferred_assay_titles = ['10x multiome']
         mock_igvf_api.get_by_id.return_value.actual_instance = mock_measet_obj
+
+        # Patch barcode replacement file's href to be a string
+        mock_igvf_api.get_by_id.return_value.actual_instance.barcode_replacement_file = "/tabular-files/barcodefile1/"
+        mock_igvf_api.get_by_id.return_value.actual_instance.href = "/tabular-files/barcodefile1/"
 
         with patch.object(const, 'ASSAY_NAMES_CONVERSION_REF', {"/assay-terms/OBI_0003109/": "rna"}):
             with patch('sc_pipe_management.input_params_generation.portal_metadata_parsing.GetSeqFileMetadata') as mock_get_seqfile:
