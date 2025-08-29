@@ -74,7 +74,7 @@ class QCandParseSeqspecs:
     def _get_all_seqspec_tool_outputs_per_assay_type(self, all_seqspec_metadata: list[seqspec_parsing.SeqSpecMetadata], onlist_method: str) -> list[seqspec_parsing.SeqSpecToolOutput]:
         """Get all seqspec tool outputs for a given assay type."""
         final_barcode_dir = os.path.join(
-            self.partial_root_dir, 'final_barcode_lists')
+            self.partial_root_dir, 'final_barcode_onlist')
         if not os.path.exists(final_barcode_dir):
             os.makedirs(final_barcode_dir)
         all_seqspec_tool_outputs = []
