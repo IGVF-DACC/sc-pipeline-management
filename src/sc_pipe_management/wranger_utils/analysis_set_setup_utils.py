@@ -254,5 +254,5 @@ def create_all_analysis_set_payload(all_input_file_sets: list[list], lab: str, a
                                                   upload_file=False,
                                                   resumed_posting=False
                                                   )
-        post_res.append(igvf_post_mthd.single_post_to_portal())
+        post_res.append(igvf_post_mthd._single_post_to_portal())
     return post_res
