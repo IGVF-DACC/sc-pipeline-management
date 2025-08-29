@@ -1,23 +1,12 @@
 
 import logging
+import datetime
+import os
 
-import accession.terra_to_portal_posting as t2portal
 import wranger_utils.constant as const
 
 
 # NOTE: The intent of this script is to be run in a Jupyter notebook so that the results can be easily inspected before posting new analysis sets to the portal.
-
-
-def write_list_to_file(list_to_write: list, file_path: str) -> None:
-    """Write a list of strings to a file, one per line.
-
-    Args:
-        list_to_write (list): A list of strings to write to the file.
-        file_path (str): The path to the file where the list should be written.
-    """
-    with open(file_path, 'w') as f:
-        for item in list_to_write:
-            f.write(f"{item}\n")
 
 
 def remove_duplicate_sublists(list_of_lists: list[list]) -> list[list]:
@@ -232,7 +221,7 @@ def create_analysis_set_payload(input_file_sets: list, lab: list, award: list, i
     return payload
 
 
-def create_all_analysis_set_payload(all_input_file_sets: list[list], lab: str, award: str, igvf_utils_api, igvf_client_api) -> list:
+def post_all_anasets_to_portal(all_input_file_sets: list[list], lab: str, award: str, igvf_utils_api, igvf_client_api) -> list:
     """Post new analysis sets to the portal based on a list of input file sets.
 
     Args:
@@ -245,14 +234,62 @@ def create_all_analysis_set_payload(all_input_file_sets: list[list], lab: str, a
     Returns:
         list: A list of new analysis set accessions created.
     """
-    post_res = []
-    for input_file_sets in all_input_file_sets:
-        curr_payload = create_analysis_set_payload(
-            input_file_sets, lab, award, igvf_client_api)
-        igvf_post_mthd = t2portal.IGVFPostService(igvf_utils_api=igvf_utils_api,
-                                                  data_obj_payload=curr_payload,
-                                                  upload_file=False,
-                                                  resumed_posting=False
-                                                  )
-        post_res.append(igvf_post_mthd._single_post_to_portal())
+    post_res = {}
+    try:
+        for input_file_sets in all_input_file_sets:
+            # Create payload
+            curr_payload = create_analysis_set_payload(
+                input_file_sets, lab, award, igvf_client_api)
+            _schema_property = igvf_utils_api.get_profile_from_payload(
+                curr_payload).properties
+            # Post to portal
+            stdout = igvf_utils_api.post(curr_payload,
+                                         upload_file=False,
+                                         return_original_status_code=True,
+                                         truncate_long_strings_in_payload_log=True)
+            # Log the new analysis set accession
+            post_res[curr_payload['aliases'][0]] = stdout[0]['accession']
+    except Exception as e:
+        post_res[curr_payload['aliases'][0]] = f'Error: {e}'
     return post_res
+
+
+def write_anaset_accs_to_file(portal_post_res: dict[str, str], lab_id: str, release_statuses: list, preferred_assay_titles: list, additional_desc: str = None, partial_root_dir: str = '/Users/zheweishen/IGVF/IGVF_Repos/sc-pipeline-management/terra_datatables/setup') -> str:
+    """Write a list of strings to a file, one per line.
+
+    Args:
+        portal_post_res (dict[str, str]): A dictionary with alias as key and accession as value.
+        file_path (str): The path to the file where the list should be written.
+
+    Returns:
+        str: The path to the file where the list was written.
+    """
+    # File path elements
+    lab_lastname = lab_id.split('/')[-2].split('-')[-1]
+    measet_statuses = '-'.join(release_statuses)
+    assay_title = preferred_assay_titles[0].replace(' ', '-')
+    today = datetime.datetime.today().strftime('%Y%m%d')
+
+    # Set up output directory
+    partial_root_dir = partial_root_dir
+    terra_etype = '_'.join([
+        lab_lastname,
+        measet_statuses,
+        assay_title,
+        *(x for x in [additional_desc] if x not in (None, '')),
+        today
+    ])
+    file_dir = os.path.join(
+        partial_root_dir, lab_lastname.capitalize(), terra_etype)
+
+    if not os.path.exists(file_dir):
+        os.mkdir(file_dir)
+
+    # Set up file name and write to file
+    file_name = os.path.join(file_dir, f'{terra_etype}.txt')
+    with open(file_name, 'w') as f:
+        for _, accession in portal_post_res.items():
+            if accession.startswith('IGVF'):
+                f.write(f"{accession}\n")
+
+    return file_name
