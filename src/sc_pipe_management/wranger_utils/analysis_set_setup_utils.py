@@ -1,64 +1,11 @@
-import igvf_and_terra_api_tools as api_tools
-import accession.terra_to_portal_posting as t2portal
-import argparse
-from functools import wraps
-from datetime import datetime
-import requests
+
 import logging
 
-
-def limit_type(value):
-    """Custom type function that accepts 'all' or converts to int."""
-    if value.lower() == 'all':
-        return 'all'
-    try:
-        return int(value)
-    except ValueError:
-        raise argparse.ArgumentTypeError(
-            f"limit must be 'all' or an integer, got '{value}'")
+import accession.terra_to_portal_posting as t2portal
+import wranger_utils.constant as const
 
 
-def get_parser():
-    parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('--post_endpoint', type=str, choices=['sandbox', 'prod', 'staging'],
-                        help="""The POST endpoint, sandbox, prod, or staging.""")
-    parser.add_argument('--lab', type=str,
-                        help="""Lab ID for the analysis set.""")
-    parser.add_argument('--award', type=str,
-                        help="""Award ID for the analysis set.""")
-    parser.add_argument('--preferred_assay_title', type=str,
-                        help="""Preferred assay title for the measurement set query.""")
-    parser.add_argument('--limit', type=limit_type, default='all',
-                        help="""Query result limit. Defaults to all.""")
-    parser.add_argument('--output_dir', type=str, default='./',
-                        help="""Path to the output directory to save the new analysis set accessions.""")
-    return parser
-
-
-POSSIBLE_SINGLE_CELL_PIPELINE_PHRASES = ['scpipe',
-                                         'single cell',
-                                         'single cell uniform pipeline',
-                                         'uniform pipeline',
-                                         'sc-pipe',
-                                         'scpipeline',
-                                         'sc-uniform-pipeline',
-                                         'sc-pipeline',
-                                         'uniform-pipeline']
-
-
-EXCLUDED_NONCOMP_AUDITS = ['missing sequence specification',
-                           'missing barcode replacement file',
-                           'missing read names',
-                           'missing barcode onlist']
-
-EXCLUDED_ERROR_AUDITS = ['upload status not validated',
-                         'unexpected barcode onlist',
-                         'inconsistent sequence specifications',
-                         'inconsistent preferred assay title']
-
-MEASET_STATUSES = ['released', 'preview']
+# NOTE: The intent of this script is to be run in a Jupyter notebook so that the results can be easily inspected before posting new analysis sets to the portal.
 
 
 def write_list_to_file(list_to_write: list, file_path: str) -> None:
@@ -85,15 +32,13 @@ def remove_duplicate_sublists(list_of_lists: list[list]) -> list[list]:
     return [list(t) for t in set(tuple(sublist) for sublist in list_of_lists)]
 
 
-def generate_filtered_fields(lab_id: str, award_id: str, preferred_assay_titles: list, excluded_nc_audits: list, excluded_error_audits: list, statues: list, sample_names: list = []) -> dict:
+def generate_filtered_fields(lab_id: str, award_id: str, preferred_assay_titles: list, statues: list, sample_names: list = []) -> dict:
     """Generate a dictionary of filtered fields for querying.
 
     Args:
         lab_id (str): e.g. /labs/j-michael-cherry/
         award_id (str): e.g. /awards/HG012012/
         preferred_assay_titles (list): e.g., ["10x multiome"]
-        excluded_nc_audits (list): a list of NOT_COMPLIANT audit categories to exclude
-        excluded_error_audits (list): a list of ERROR audit categories to exclude
         statues (list): a list of statuses to include, e.g., ['released']
         sample_names (list): a list of sample term names to include, e.g., ['induced pluripotent stem cell']. Defaults to [].
 
@@ -104,8 +49,8 @@ def generate_filtered_fields(lab_id: str, award_id: str, preferred_assay_titles:
                      'lab.@id': lab_id,
                      'award.@id': award_id,
                      'preferred_assay_titles': preferred_assay_titles,
-                     'audit.NOT_COMPLIANT.category!': excluded_nc_audits,
-                     'audit.ERROR.category!': excluded_error_audits
+                     'audit.NOT_COMPLIANT.category!': const.EXCLUDED_NONCOMP_AUDITS,
+                     'audit.ERROR.category!': const.EXCLUDED_ERROR_AUDITS
                      }
     if sample_names:
         base_criteria.update({'samples.sample_terms.term_name': sample_names})
@@ -178,7 +123,7 @@ def check_is_scpipeline(file_set_id: str, igvf_client_api) -> bool:
             possible_descriptions.extend(file_set_obj.aliases)
         if file_set_obj.description:
             possible_descriptions.append(file_set_obj.description)
-        return any(kwd in entry for entry in possible_descriptions for kwd in POSSIBLE_SINGLE_CELL_PIPELINE_PHRASES)
+        return any(kwd in entry for entry in possible_descriptions for kwd in const.POSSIBLE_SINGLE_CELL_PIPELINE_PHRASES)
 
 
 def check_is_duped_for_all(measurement_set_id: str, igvf_client_api) -> bool:
@@ -311,124 +256,3 @@ def create_all_analysis_set_payload(all_input_file_sets: list[list], lab: str, a
                                                   )
         post_res.append(igvf_post_mthd.single_post_to_portal())
     return post_res
-
-
-## decorator for preventing time out ##
-def retry(tries=1, delay=5, backoff=2):
-    import time
-    """Retry calling the decorated function using an exponential backoff.
-
-    http://www.saltycrane.com/blog/2009/11/trying-out-retry-decorator-python/
-    original from: http://wiki.python.org/moin/PythonDecoratorLibrary#Retry
-
-    args:
-        tries (int): number of times to try (not retry) before giving up
-        delay (int): initial delay between retries in seconds
-        backoff (int): backoff multiplier e.g. value of 2 will double the delay each retry
-    """
-    def deco_retry(f):
-
-        @wraps(f)
-        def f_retry(*args, **kwargs):
-            mtries, mdelay = tries, delay
-            while mtries > 1:
-                try:
-                    return f(*args, **kwargs)
-                except Exception as e:
-                    logging.debug(str(e))
-                    msg = "Retrying in %d seconds..." % (mdelay)
-                    logging.info(msg)
-                    time.sleep(mdelay)
-                    mtries -= 1
-                    mdelay *= backoff
-            return f(*args, **kwargs)
-
-        return f_retry  # true decorator
-
-    return deco_retry
-
-
-def main():
-    parser = get_parser()
-    args = parser.parse_args()
-
-    # Set up igvf client connection
-    @retry(tries=1, delay=3, backoff=2)
-    def do_igvf_client_api(igvf_api_keys, post_endpoint):
-        """Set up IGVF client API connection
-        """
-        return api_tools.get_igvf_client_auth(igvf_api_keys=igvf_api_keys,
-                                              igvf_endpoint=post_endpoint)
-
-    @retry(tries=1, delay=3, backoff=2)
-    def do_igvf_utils_api(igvf_api_keys, post_endpoint):
-        """Set up IGVF utils API connection
-        """
-        if post_endpoint != 'staging':
-            return api_tools.get_igvf_utils_connection(igvf_api_keys=igvf_api_keys,
-                                                       igvf_utils_mode=post_endpoint,
-                                                       submission_mode=True)
-        else:
-            return api_tools.get_igvf_utils_connection(igvf_api_keys=igvf_api_keys,
-                                                       igvf_utils_mode=api_tools.SITE_URLS_BY_ENDPOINTS[
-                                                           post_endpoint],
-                                                       submission_mode=True)
-
-    # Get the IGVF API keys
-    igvf_api_keys = api_tools.set_up_api_keys(
-        igvf_endpoint=args.post_endpoint)
-
-    # Call IGVF APIs
-    igvf_client_api = do_igvf_client_api(
-        igvf_api_keys=igvf_api_keys, post_endpoint=args.post_endpoint)
-    igvf_utils_api = do_igvf_utils_api(
-        igvf_api_keys=igvf_api_keys, post_endpoint=args.post_endpoint)
-
-    # Query for measurement sets
-    filtered_fields = generate_filtered_fields(
-        lab_id=args.lab,
-        award_id=args.award,
-        # query one assay title at a time
-        preferred_assay_titles=[args.preferred_assay_title],
-        excluded_nc_audits=EXCLUDED_NONCOMP_AUDITS,
-        excluded_error_audits=EXCLUDED_ERROR_AUDITS,
-        statues=MEASET_STATUSES
-    )
-
-    # Do the query
-    query_res = query_for_measets(
-        filtered_fields=filtered_fields, igvf_client_api=igvf_client_api, limit=args.limit)
-    if query_res is None:
-        logging.info('>>>>>>>>>> No measurement sets found. Exiting.')
-        return
-
-    # Get all input file sets for new analysis sets
-    all_input_file_sets = get_all_input_file_sets(
-        query_res=query_res, igvf_client_api=igvf_client_api)
-    if not all_input_file_sets:
-        logging.info('>>>>>>>>>> No new analysis sets to create. Exiting.')
-        return
-
-    # Post new analysis sets to the portal
-    try:
-        post_res = create_all_analysis_set_payload(
-            all_input_file_sets=all_input_file_sets,
-            lab=args.lab,
-            award=args.award,
-            igvf_utils_api=igvf_utils_api,
-            igvf_client_api=igvf_client_api
-        )
-    except requests.exceptions.HTTPError as e:
-        logging.debug(f'>>>>>>>>>>> Error posting new analysis sets: {e}')
-        return
-
-    # Save the new analysis set accessions to a file
-    unique_name = f'{args.lab.split("/")[-2]}_{args.preferred_assay_title.replace(" ", "-")}_{datetime.now().strftime("%m%d%Y")}'
-    output_file_path = f"{args.output_dir.rstrip('/')}/new_anasets_to_run_{unique_name}.txt"
-    write_list_to_file(list_to_write=post_res, file_path=output_file_path)
-    logging.info(
-        f'>>>>>>>>>> New analysis set accessions saved to {output_file_path}')
-
-
-if __name__ == "__main__":
-    main()
