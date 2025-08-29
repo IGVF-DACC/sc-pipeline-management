@@ -4,6 +4,7 @@ import requests
 import dataclasses
 import igvf_client
 import datetime
+import logging
 
 
 import sc_pipe_management.input_params_generation.constant as const
@@ -479,7 +480,8 @@ class GenerateTerraInputParams:
                 params[field.name] = field.default if field.default is not dataclasses.MISSING else field.default_factory(
                 ) if field.default_factory is not dataclasses.MISSING else None
 
-        params['possible_errors'] = "\n".join(possible_errors)
+        params['possible_errors'] = "\n".join(
+            possible_errors) if possible_errors else "None"
         terra_input_params = TerraPipelineParams(**params)
         return terra_input_params
 
@@ -562,6 +564,8 @@ class CompleteTerraForming:
         """Generate the complete Terra input table for all analysis sets."""
         all_terra_input_params = []
         for analysis_set_acc in self.analysis_set_accessions:
+            logging.info(
+                f'>>>>>>>>> Processing analysis set {analysis_set_acc}...')
             # Get the analysis set metadata
             analysis_set_metadata = portal_parsing.GetAnalysisSetMedata(
                 igvf_api=self.igvf_api, analysis_set_accession=analysis_set_acc).get_input_analysis_set_metadata()
@@ -577,17 +581,17 @@ class CompleteTerraForming:
                                                       gs_barcode_list_bucket=self.gs_barcode_list_bucket).generate_terra_input_table()
         return terra_input_table
 
-    def save_pipeline_input_table(self) -> pd.DataFrame:
-        """Save the pipeline input table to a TSV file.
 
-        Args:
-            pipeline_input_table (pd.DataFrame): The pipeline input table
-            output_dir (str): The output directory
-        """
-        curr_datetime = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-        if os.path.exists(self.partial_root_dir) is False:
-            os.makedirs(self.partial_root_dir)
-        # Save the pipeline input table to a TSV file
-        complete_terra_input_table = self.generate_complete_terra_input_table()
-        complete_terra_input_table.to_csv(os.path.join(
-            self.partial_root_dir, f'single-cell_uniform_pipeline_input_table_{curr_datetime}_withGSpath.tsv'), sep='\t')
+def save_pipeline_input_table(terra_data_table: pd.DataFrame, partial_root_dir: str) -> pd.DataFrame:
+    """Save the pipeline input table to a TSV file.
+
+    Args:
+        pipeline_input_table (pd.DataFrame): The pipeline input table
+        output_dir (str): The output directory
+    """
+    curr_datetime = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+    if os.path.exists(partial_root_dir) is False:
+        os.makedirs(partial_root_dir)
+    # Save the pipeline input table to a TSV file
+    terra_data_table.to_csv(os.path.join(
+        partial_root_dir, f'single-cell_uniform_pipeline_input_table_{curr_datetime}_withGSpath.tsv'), sep='\t')

@@ -23,7 +23,7 @@ IGVF_PROD_CLIENT_API = igvf_tools.get_igvf_client_auth(igvf_api_keys=IGVF_PROD_A
 
 # Constants
 GS_BARCODE_LIST_BUCKET = 'gs://unittest_mock_bucket/submissions/final_barcode_onlist/'
-LOCAL_BARCODE_FILE_DIR = 'src/tests/test_files/final_barcode_lists/'
+LOCAL_BARCODE_FILE_DIR = 'src/tests/test_files/final_barcode_onlist/'
 PARTIAL_ROOT_DIR = 'src/tests/test_files'
 
 TEST_ANALYSIS_SET_ACCESSIONS = [
@@ -47,8 +47,7 @@ class TestCompleteTerraForming:
             igvf_api=IGVF_PROD_CLIENT_API,
             partial_root_dir=PARTIAL_ROOT_DIR,
             terra_etype='unittest_pipeline_tester',
-            local_barcode_file_dir=os.path.join(
-                PARTIAL_ROOT_DIR, 'final_barcode_lists/'),
+            local_barcode_file_dir=LOCAL_BARCODE_FILE_DIR,
             gs_barcode_list_bucket=GS_BARCODE_LIST_BUCKET
         ).generate_complete_terra_input_table()
         test_terra_table.to_csv(

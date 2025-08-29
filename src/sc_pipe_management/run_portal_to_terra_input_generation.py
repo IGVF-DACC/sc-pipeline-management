@@ -1,12 +1,21 @@
-import igvf_and_terra_api_tools as api_tools
-import portal_to_terra_input_from_anaset as portal2terra_transfer
+import sys
+import os
+
+# Get the absolute path to the 'src' directory (one level up from the 'tests' directory)
+src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+# Add the 'src' directory to sys.path if it's not already there
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
 import argparse
-import firecloud.api as fapi
 from datetime import datetime
 import os
 import subprocess
-import pandas
 import logging
+
+import igvf_and_terra_api_tools as api_tools
+import sc_pipe_management.input_params_generation.generate_terra_input_table as terra_forming
 
 
 def setup_logging(log_file: str):
@@ -32,6 +41,7 @@ def get_parser():
         formatter_class=argparse.RawTextHelpFormatter)
     group = parser.add_mutually_exclusive_group(required=True)
     # IGVF query endoint
+    # TODO: consider just defaulting to 'prod' and removing this argument
     parser.add_argument('--igvf_endpoint', type=str, choices=['sandbox', 'prod', 'staging'],
                         help="""The IGVF endpoint, sandbox, prod, or staging.""")
     # Either input an analysis set or a file containing a list of analysis sets
@@ -47,15 +57,6 @@ def get_parser():
     # Terra eType name to modify the index column
     parser.add_argument('--terra_etype', type=str,
                         help="""Terra eType name for the pipeline data table.""")
-    # Where the local final barcodes are stored
-    parser.add_argument('--local_barcode_file_dir', type=str, default=None,
-                        help=""""Local directory for the pipeline final barcode files. Defaults to $(pwd)/final_barcode_list/$(date +%m%d%Y)")""")
-    # Where on GCP the barcode files are stored
-    parser.add_argument('--gs_barcode_list_bucket', type=str, default=None,
-                        help="""Google Storage bucket for the pipeline final barcode files. Defaults to gs://fc-secure-de19fd29-2253-41cd-9751-1788cf7ad1a5/submissions/final_barcode_onlist/$(date +%m%d%Y)""")
-    # Output directory for the pipeline input table
-    parser.add_argument('--output_dir', type=str, default=None,
-                        help="""Path to the output directory.""")
     return parser
 
 
@@ -86,49 +87,44 @@ def main():
             final_input_analysis_sets = ','.join(f.read().splitlines())
     elif args.input_analysis_set:
         final_input_analysis_sets = args.input_analysis_set
-    else:
-        analysis_input_error_msg = 'Please provide either --input_analysis_set or --input_analysis_set_file.'
-        logging.error(analysis_input_error_msg)
-        raise ValueError(analysis_input_error_msg)
     logging.info(final_input_analysis_sets)
 
-    # Get default barcode file directory if not provided
-    if args.local_barcode_file_dir is None:
-        local_barcode_file_dir = os.path.join(
-            os.getcwd(), "final_barcode_list", today, args.terra_etype)
-    else:
-        local_barcode_file_dir = args.local_barcode_file_dir
+    # Where all the files generated will be stored locally
+    partial_root_dir = os.path.join(
+        os.getcwd(), "terra_datatables", "input", today, args.terra_etype)
 
-    # Get default GCP bucket if not provided (make sure it doesn't end with a /)
-    if args.gs_barcode_list_bucket is None:
-        gs_barcode_list_bucket = f"gs://fc-secure-de19fd29-2253-41cd-9751-1788cf7ad1a5/submissions/final_barcode_onlist/{today}/{args.terra_etype}"
-    else:
-        gs_barcode_list_bucket = args.gs_barcode_list_bucket.rstrip('/')
+    # Where barcode onlist files will be stored locally
+    local_barcode_file_dir = os.path.join(
+        partial_root_dir, "final_barcode_onlist")
 
-    # Get default input parameter table dir
-    if args.output_dir is None:
-        args.output_dir = os.path.join(
-            os.getcwd(), "terra_datatables", "input", today, args.terra_etype)
+    # Where barcode onlist files will be stored on Terra (make sure it doesn't end with a /)
+    # Will be used to swap out the local dir in the final barcode file paths
+    gs_barcode_list_bucket = f"gs://fc-secure-de19fd29-2253-41cd-9751-1788cf7ad1a5/submissions/final_barcode_onlist/{today}/{args.terra_etype}"
 
     # Log all input args
     logging.info("Command-line arguments: %s", vars(args))
 
-    # Generate the pipeline input table
-    table = portal2terra_transfer.generate_pipeline_input_table(
-        query_analysis_set_accs=final_input_analysis_sets.split(','),
+    # Generate the pipeline input table and save locally
+    terra_data_table = terra_forming.CompleteTerraForming(
+        analysis_set_accessions=final_input_analysis_sets.split(','),
+        igvf_api=igvf_portal_api,
+        partial_root_dir=partial_root_dir,
         terra_etype=args.terra_etype,
         local_barcode_file_dir=local_barcode_file_dir,
-        gs_barcode_list_bucket=gs_barcode_list_bucket,
-        igvf_api=igvf_portal_api)
-    logging.info("Pipeline input table generated.")
+        gs_barcode_list_bucket=gs_barcode_list_bucket
+    ).generate_complete_terra_input_table()
 
-    # Output the table to local folder as a Copy
-    portal2terra_transfer.save_pipeline_input_table(
-        pipeline_input_table=table, output_dir=args.output_dir)
-    logging.info("Pipeline input table saved to local folder.")
+    logging.info("Pipeline input table generated and save locally.")
+
+    # Save the pipeline input table locally
+    terra_forming.save_pipeline_input_table(
+        terra_data_table=terra_data_table,
+        partial_root_dir=partial_root_dir)
+
+    logging.info("Pipeline input table saved locally.")
 
     # If input generation has errors, log a warning and do not upload to Terra
-    if any(x != 'None' for x in table['possible_errors'].values):
+    if any(x != "None" for x in terra_data_table['possible_errors'].values):
         logging.warning(
             'The pipeline input table has possible errors in parameter generation. Will not upload to Terra. Check the locally saved datable for details.')
     else:
@@ -137,7 +133,7 @@ def main():
             api_tools.upload_portal_input_tsv_to_terra(
                 terra_namespace=args.terra_namespace,
                 terra_workspace=args.terra_workspace,
-                portal_input_table=table,
+                portal_input_table=terra_data_table,
                 verbose=True
             )
             logging.info("Pipeline input table uploaded to Terra.")
