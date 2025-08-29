@@ -10,7 +10,7 @@ if src_path not in sys.path:
 
 import unittest
 from unittest.mock import Mock, patch, MagicMock
-import sc_pipe_management.analysis_set_setup_utils as utils
+import sc_pipe_management.wranger_utils.analysis_set_setup_utils as utils
 
 # TODO: this will be replaced by AnalysisSet pipeline status once the ticket is in
 

@@ -29,3 +29,5 @@ coverage.xml
 src/sc_pipe_management/accession/sandbox_accessioning.ipynb
 src/sc_pipe_management/accession/IU_Logs/
 src/sc_pipe_management/input_params_generation/sc-pipeline_sandbox.ipynb
+src/tests/test_files/final_barcode_onlist
+src/sc_pipe_management/input_params_generation/input_generation_notebook.ipynb
