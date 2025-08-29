@@ -82,13 +82,14 @@ class QCandParseSeqspecs:
             curr_final_barcode_file_name = '_'.join([self.analysis_set_acc, seqspec_metadata.modality,
                                                      get_seqspec_accession_from_path(
                                                          seqspec_file_path=seqspec_metadata.seqspec_file_path),
-                                                     'final_inclusion_list.txt'])
+                                                     'final_barcode_inclusion_list.txt'])
             curr_seqspec_tool_outputs = seqspec_parsing.GetSeqSpecToolOutput(
                 seqspec_metadata=seqspec_metadata,
                 onlist_method=onlist_method,
                 output_barcode_list_file=os.path.join(final_barcode_dir, curr_final_barcode_file_name)).generate_seqspec_tool_output()
             all_seqspec_tool_outputs.append(curr_seqspec_tool_outputs)
-        return all_seqspec_tool_outputs
+        # Sort the list by final_barcode_file for consistent ordering
+        return sorted(all_seqspec_tool_outputs, key=lambda x: x.final_barcode_file)
 
     def check_if_modality_match(self, all_seqspec_metadata: list[seqspec_parsing.SeqSpecMetadata], expected_modality: str) -> bool:
         """Check if all seqspec modalities match the expected modality."""

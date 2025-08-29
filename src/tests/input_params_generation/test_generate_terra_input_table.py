@@ -2,6 +2,7 @@ import pytest
 import os
 import sys
 import pandas as pd
+import re
 
 # Add the absolute path to the 'src' directory to sys.path
 src_path = os.path.abspath(os.path.join(
@@ -20,6 +21,17 @@ IGVF_PROD_API_KEYS = igvf_tools.set_up_api_keys(igvf_endpoint=IGVF_ENDPOINT)
 IGVF_PROD_CLIENT_API = igvf_tools.get_igvf_client_auth(igvf_api_keys=IGVF_PROD_API_KEYS,
                                                        igvf_endpoint=IGVF_ENDPOINT)
 
+# Constants
+GS_BARCODE_LIST_BUCKET = 'gs://unittest_mock_bucket/submissions/final_barcode_onlist/'
+LOCAL_BARCODE_FILE_DIR = 'src/tests/test_files/final_barcode_lists/'
+PARTIAL_ROOT_DIR = 'src/tests/test_files'
+
+TEST_ANALYSIS_SET_ACCESSIONS = [
+    'IGVFDS9664YLAD',
+    'IGVFDS0223KLTB',
+    'IGVFDS0657NHTA'
+]
+
 
 class TestCompleteTerraForming:
 
@@ -30,24 +42,19 @@ class TestCompleteTerraForming:
 
     @pytest.fixture
     def test_terra_table_imported(self):
-        test_analysis_set_accessions = [
-            'IGVFDS9664YLAD',
-            'IGVFDS0223KLTB',
-            'IGVFDS0657NHTA'
-        ]
         test_terra_table = terra_form.CompleteTerraForming(
-            analysis_set_accessions=test_analysis_set_accessions,
+            analysis_set_accessions=TEST_ANALYSIS_SET_ACCESSIONS,
             igvf_api=IGVF_PROD_CLIENT_API,
-            partial_root_dir='src/tests/test_files',
+            partial_root_dir=PARTIAL_ROOT_DIR,
             terra_etype='unittest_pipeline_tester',
             local_barcode_file_dir=os.path.join(
-                os.getcwd(), 'final_barcode_list/'),
-            gs_barcode_list_bucket='gs://unittest_mock_bucket/submissions/final_barcode_onlist/'
+                PARTIAL_ROOT_DIR, 'final_barcode_lists/'),
+            gs_barcode_list_bucket=GS_BARCODE_LIST_BUCKET
         ).generate_complete_terra_input_table()
         test_terra_table.to_csv(
-            'src/tests/test_files/test_input_datatable_generation_output.tsv', sep='\t')
+            'src/tests/test_files/test_input_datatable_generation_generated.tsv', sep='\t')
         return pd.read_csv(
-            'src/tests/test_files/test_input_datatable_generation_output.tsv', sep='\t', index_col=0)
+            'src/tests/test_files/test_input_datatable_generation_generated.tsv', sep='\t', index_col=0)
 
     def test_table_shape(self, expected_terra_table, test_terra_table_imported):
         assert expected_terra_table.shape == test_terra_table_imported.shape
@@ -61,5 +68,9 @@ class TestCompleteTerraForming:
             list(test_terra_table_imported.index))
 
     def test_table_content(self, expected_terra_table, test_terra_table_imported):
-        pd.testing.assert_frame_equal(
-            expected_terra_table, test_terra_table_imported, check_like=True)
+        # Compare columns present in both tables
+        for col in expected_terra_table.columns:
+            assert col in test_terra_table_imported.columns, f"Missing column: {col}"
+            pd.testing.assert_series_equal(
+                expected_terra_table[col], test_terra_table_imported[col], check_names=False
+            )
