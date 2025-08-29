@@ -84,7 +84,7 @@ class TestSeqspecInfoGeneration:
 
                 # Check if read IDs match
                 curr_ordered_read_ids = test_pairs['test']._generate_ordered_read_ids(
-                    seqfiles_metadata=test_const.TEST_SEQFILES_METADATA)
+                    seqfiles_metadata=test_const.TEST_SEQFILES_METADATA, assay_type=assay_type)
                 assert curr_ordered_read_ids == test_pairs['reference'].ordered_read_ids, \
                     f"Ordered read IDs mismatch for {test_assay_title} {assay_type}: expected {test_pairs['reference'].ordered_read_ids}, got {curr_ordered_read_ids}"
 
@@ -102,7 +102,7 @@ class TestSeqspecInfoGeneration:
             for assay_type, test_pairs in test_seqspec_info.items():
                 # Generate the seqspec metadata
                 curr_seqspec_metadata = test_pairs['test'].generate_seqspec_metadata(
-                    seqfiles_metadata=test_const.TEST_SEQFILES_METADATA
+                    seqfiles_metadata=test_const.TEST_SEQFILES_METADATA, assay_type=assay_type
                 )
 
                 # Check if modality match
