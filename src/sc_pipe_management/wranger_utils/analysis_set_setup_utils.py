@@ -2,6 +2,7 @@
 import logging
 import datetime
 import os
+import dataclasses
 
 import wranger_utils.constant as const
 
@@ -221,8 +222,15 @@ def create_analysis_set_payload(input_file_sets: list, lab: list, award: list, i
     return payload
 
 
-def post_all_anasets_to_portal(all_input_file_sets: list[list], lab: str, award: str, igvf_utils_api, igvf_client_api) -> list:
-    """Post new analysis sets to the portal based on a list of input file sets.
+@dataclasses.dataclass
+class AnaSetCreationResult:
+    accession: str = None
+    input_file_sets: list = None
+    errors: str = None
+
+
+def post_all_anasets_to_portal(all_input_file_sets: list[list], lab: str, award: str, igvf_utils_api, igvf_client_api) -> list[AnaSetCreationResult]:
+    """Post new analysis sets to the portal based on a list of input file sets. Users are expected to handle exceptions and inspect results manually.
 
     Args:
         all_input_file_sets (list[list]): a list of lists, each containing input file set IDs for a new analysis set
@@ -232,11 +240,11 @@ def post_all_anasets_to_portal(all_input_file_sets: list[list], lab: str, award:
         igvf_client_api (_type_): IGVF client API instance.
 
     Returns:
-        list: A list of new analysis set accessions created.
+        list[AnaSetCreationResult]: A list of AnaSetCreationResult dataclass instances containing accession and error information for each posted analysis set.
     """
-    post_res = {}
-    try:
-        for input_file_sets in all_input_file_sets:
+    post_res = []
+    for input_file_sets in all_input_file_sets:
+        try:
             # Create payload
             curr_payload = create_analysis_set_payload(
                 input_file_sets, lab, award, igvf_client_api)
@@ -248,17 +256,25 @@ def post_all_anasets_to_portal(all_input_file_sets: list[list], lab: str, award:
                                          return_original_status_code=True,
                                          truncate_long_strings_in_payload_log=True)
             # Log the new analysis set accession
-            post_res[curr_payload['aliases'][0]] = stdout[0]['accession']
-    except Exception as e:
-        post_res[curr_payload['aliases'][0]] = f'Error: {e}'
+            post_res.append(AnaSetCreationResult(
+                accession=stdout[0]['accession'],
+                input_file_sets=input_file_sets,
+                errors=None
+            ))
+        except Exception as e:
+            post_res.append(AnaSetCreationResult(
+                accession=None,
+                input_file_sets=input_file_sets,
+                errors=str(e)
+            ))
     return post_res
 
 
-def write_anaset_accs_to_file(portal_post_res: dict[str, str], lab_id: str, release_statuses: list, preferred_assay_titles: list, additional_desc: str = None, partial_root_dir: str = '/Users/zheweishen/IGVF/IGVF_Repos/sc-pipeline-management/terra_datatables/setup') -> str:
+def write_anaset_accs_to_file(portal_post_res: list[AnaSetCreationResult], lab_id: str, release_statuses: list, preferred_assay_titles: list, additional_desc: str = None, partial_root_dir: str = '/Users/zheweishen/IGVF/IGVF_Repos/sc-pipeline-management/terra_datatables/setup') -> str:
     """Write a list of strings to a file, one per line.
 
     Args:
-        portal_post_res (dict[str, str]): A dictionary with alias as key and accession as value.
+        portal_post_res (list[AnaSetCreationResult]): A list of AnaSetCreationResult dataclass instances containing accession and error information for each posted analysis set.
         file_path (str): The path to the file where the list should be written.
 
     Returns:
@@ -288,8 +304,9 @@ def write_anaset_accs_to_file(portal_post_res: dict[str, str], lab_id: str, rele
     # Set up file name and write to file
     file_name = os.path.join(file_dir, f'{terra_etype}.txt')
     with open(file_name, 'w') as f:
-        for _, accession in portal_post_res.items():
-            if accession.startswith('IGVF'):
-                f.write(f"{accession}\n")
+        for anaset_result in portal_post_res:
+            # However, it is expected that there will be no errors at this point
+            if anaset_result.accession:
+                f.write(f"{anaset_result.accession}\n")
 
     return file_name
