@@ -68,8 +68,10 @@ class TestCompleteTerraForming:
 
     def test_table_content(self, expected_terra_table, test_terra_table_imported):
         # Compare columns present in both tables
-        for col in expected_terra_table.columns:
-            assert col in test_terra_table_imported.columns, f"Missing column: {col}"
-            pd.testing.assert_series_equal(
-                expected_terra_table[col], test_terra_table_imported[col], check_names=False
-            )
+        pd.testing.assert_frame_equal(
+            expected_terra_table,
+            test_terra_table_imported,
+            check_like=True,      # Set to True to ignore column and row order
+            check_dtype=True,
+            check_exact=True
+        )

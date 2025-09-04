@@ -300,8 +300,9 @@ class GenerateTerraInputParams:
         elif len(unique_replacement_files) == 1:
             return list(unique_replacement_files)[0]
         else:
-            # This is to satisfy Terra input table format
-            return "None"
+            # Terra takes this an optional File type. Because it is optional, return empty string if not present
+            # Terra will read it in as NaN/Null
+            return ""
 
     def _generate_fastq_urls_per_assay(self, measet_metadata_list: list[portal_parsing.MeasurementSetMetadata], assay_type: str) -> dict:
         """Generate all FASTQ file info for a given assay type."""
@@ -501,10 +502,10 @@ class ConvertParamsToTerraTable:
             'atac_read1', 'atac_read2', 'atac_barcode',
             'rna_read1', 'rna_read2', 'rna_barcode'
         ]
+        # Barcode replacement file is an optional value, it must be Null/NaN in Terra if not present
         string_attrs = [
             'atac_read_format', 'rna_read_format',
-            'atac_barcode_inclusion_list', 'rna_barcode_inclusion_list',
-            'barcode_replacement_file'
+            'atac_barcode_inclusion_list', 'rna_barcode_inclusion_list'
         ]
         all_terra_input_params_formatted = []
         for terra_input_params in self.all_terra_input_params:
@@ -519,9 +520,6 @@ class ConvertParamsToTerraTable:
             # Format strings
             for attr in string_attrs:
                 val = params_dict[attr]
-                # barcode_replacement_file: leave as empty string if not applicable
-                if attr == 'barcode_replacement_file':
-                    continue
                 if isinstance(val, str) and val == '':
                     params_dict[attr] = "None"
             all_terra_input_params_formatted.append(
