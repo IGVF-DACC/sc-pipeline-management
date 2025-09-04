@@ -1,18 +1,15 @@
-import sys
 import os
+import sys
+from unittest.mock import Mock, patch
+import unittest
 
-# Get the absolute path to the 'src' directory (one level up from the 'tests' directory)
-src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-
-# Add the 'src' directory to sys.path if it's not already there
+# Add the absolute path to the 'src' directory to sys.path
+src_path = os.path.abspath(os.path.join(
+    os.path.dirname(__file__), '../../../src'))
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
-import unittest
-from unittest.mock import Mock, patch, MagicMock
-import sc_pipe_management.analysis_set_setup_utils as utils
-
-# TODO: this will be replaced by AnalysisSet pipeline status once the ticket is in
+import sc_pipe_management.wranger_utils.analysis_set_setup_utils as utils
 
 
 class TestAnalysisSetUtils(unittest.TestCase):
