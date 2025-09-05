@@ -1,34 +1,40 @@
+# OS and Editor files
 .DS_Store
+.vscode/
 .ipynb_checkpoints
-__pycache__/
-final_barcode_list/
-IU_Logs/
-refactor_portal_to_terra.py
-report_tables/
-Run_logs/
-src/data/*
 src/.ipynb_checkpoints
-src/sc_pipe_management/qc_metrics/
-src/sc_pipe_management/run_config/
-src/sc_pipe_management/workflow_configs/
-src/sc_pipe_management/*.ipynb
+
+# Python cache and coverage
+__pycache__/
 src/tests/test_data/__pycache__
+.coverage
+coverage.xml
+
+# Notebooks
+src/sc_pipe_management/*.ipynb
+src/sc_pipe_management/accession/*.ipynb
+src/sc_pipe_management/accession/sandbox_accessioning.ipynb
+src/sc_pipe_management/input_params_generation/sc-pipeline_sandbox.ipynb
+src/sc_pipe_management/input_params_generation/input_generation_notebook.ipynb
+src/sc_pipe_management/wranger_utils/analysis_set_setup.ipynb
+
+# Data and output files
+src/data/*
 src/tests/test_files/test_input_datatable_generation_generated.tsv
 src/tests/test_files/IGVFFI2791JOTW.yaml.gz
+src/tests/test_files/final_barcode_onlist
+src/tests/test_files/final_barcode_lists/
+final_barcode_list/
+report_tables/
+Run_logs/
+IU_Logs/
 src/terra_datatable/
 temp/
 terra_datatables/
 terra_post_report_tables/
-.vscode/
-coverage.xml
-.coverage
-src/sc_pipe_management/accession/*.ipynb
+
+# Configs and logs
+src/sc_pipe_management/qc_metrics/
+src/sc_pipe_management/run_config/
+src/sc_pipe_management/workflow_configs/
 src/sc_pipe_management/accession/IU_Logs/
-.coverage
-coverage.xml
-src/sc_pipe_management/accession/sandbox_accessioning.ipynb
-src/sc_pipe_management/accession/IU_Logs/
-src/sc_pipe_management/input_params_generation/sc-pipeline_sandbox.ipynb
-src/tests/test_files/final_barcode_onlist
-src/sc_pipe_management/input_params_generation/input_generation_notebook.ipynb
-src/sc_pipe_management/wranger_utils/analysis_set_setup.ipynb
