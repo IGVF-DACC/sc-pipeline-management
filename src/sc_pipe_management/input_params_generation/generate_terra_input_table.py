@@ -378,7 +378,7 @@ class GenerateTerraInputParams:
             partial_params_dict['barcode_replacement_file'] = self._get_barcode_replacement_file(
                 measet_metadata_list=measet_metadata_list)
         if seqspec_tool_outputs.errors:
-            partial_params_dict['possible_errors'] = seqspec_tool_outputs.possible_errors
+            partial_params_dict['possible_errors'] = seqspec_tool_outputs.errors
         return partial_params_dict
 
     def _get_taxa(self) -> str:
