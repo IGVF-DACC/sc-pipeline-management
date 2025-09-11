@@ -48,14 +48,13 @@ class QCandParseSeqspecs:
         self.igvf_api = igvf_api
         self.partial_root_dir = partial_root_dir
 
-    def _check_if_empty_inclusion_list(self, seqspec_tool_output: seqspec_parsing.SeqSpecToolOutput, assay_type: str) -> bool:
+    def _validate_final_barcode_file(self, seqspec_tool_output: seqspec_parsing.SeqSpecToolOutput, assay_type: str):
         """Check if any of the final inclusion lists created is empty."""
         with open(seqspec_tool_output.final_barcode_file, 'r') as file_obj:
             first_char = file_obj.read(1)
             if not first_char.isalpha():
                 raise const.BadDataException(
                     f"The {assay_type} final inclusion lists are empty.")
-        return True
 
     def _get_all_seqspec_metadata_per_assay_type(self, measet_metadata_list: list[portal_parsing.MeasurementSetMetadata], assay_type: str) -> list[seqspec_parsing.SeqSpecMetadata]:
         """Get all seqspec metadata for a given assay type."""
@@ -89,12 +88,9 @@ class QCandParseSeqspecs:
             seqspec_metadata=seqspec_metadata,
             onlist_method=onlist_method,
             output_barcode_list_file=os.path.join(final_barcode_dir, curr_final_barcode_file_name)).generate_seqspec_tool_output()
-        # Check if empty cells
-        has_entries = self._check_if_empty_inclusion_list(
+        # Validate the final barcode file is not empty
+        self._validate_final_barcode_file(
             seqspec_tool_output=curr_seqspec_tool_output, assay_type=assay_type)
-        if not has_entries:
-            raise const.BadDataException(
-                f"The {assay_type} final inclusion lists are empty.")
         return curr_seqspec_tool_output
 
     def check_if_modality_match(self, all_seqspec_metadata: list[seqspec_parsing.SeqSpecMetadata], expected_modality: str) -> bool:
@@ -196,13 +192,13 @@ class QCandParseSeqspecs:
             # Check read index strings
             self.check_if_read_index_match(
                 all_seqspec_metadata=all_seqspec_metadata, onlist_method=expected_onlist_method, assay_type=assay_type.upper())
+            # If all good, use the first seqspec metadata to generate the seqspec tool output
+            return self._get_single_seqspec_tool_output_per_assay_type(seqspec_metadata=all_seqspec_metadata[0], onlist_method=expected_onlist_method, assay_type=assay_type)
         except const.BadDataException as e:
             possible_errors += str(e)
         if possible_errors:
             # This syntax is to satisfy Terra input table format
             return seqspec_parsing.SeqSpecToolOutput(read_index_string="None", final_barcode_file="None", errors=possible_errors)
-        # If all good, use the first seqspec metadata to generate the seqspec tool output
-        return self._get_single_seqspec_tool_output_per_assay_type(seqspec_metadata=all_seqspec_metadata[0], onlist_method=expected_onlist_method, assay_type=assay_type)
 
 
 @dataclasses.dataclass(frozen=True)
