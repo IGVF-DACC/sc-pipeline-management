@@ -35,6 +35,9 @@ class SeqFileMetadata:
     def get_read_names_from_seqfile(self, assay_type: str) -> list[str]:
         """Get the read names from the seqfile object. For ATACseq, if Read2 and Barcode index are concatenated, return both.
         For RNAseq, if Read2 and Barcode index are concatenated, return Read2 only."""
+        if assay_type not in ['rna', 'atac']:
+            raise const.BadDataException(
+                f'Unexpected assay type: {assay_type}. Expected "rna" or "atac".')
         if len(self.read_names) == 1:
             if self.read_names[0] != 'Barcode index':
                 # return read1 or read2

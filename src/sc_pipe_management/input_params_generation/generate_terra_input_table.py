@@ -48,6 +48,14 @@ class QCandParseSeqspecs:
         self.igvf_api = igvf_api
         self.partial_root_dir = partial_root_dir
 
+    def _validate_final_barcode_file(self, seqspec_tool_output: seqspec_parsing.SeqSpecToolOutput, assay_type: str):
+        """Check if any of the final inclusion lists created is empty."""
+        with open(seqspec_tool_output.final_barcode_file, 'r') as file_obj:
+            first_char = file_obj.read(1)
+            if not first_char.isalpha():
+                raise const.BadDataException(
+                    f"The {assay_type} final inclusion lists are empty.")
+
     def _get_all_seqspec_metadata_per_assay_type(self, measet_metadata_list: list[portal_parsing.MeasurementSetMetadata], assay_type: str) -> list[seqspec_parsing.SeqSpecMetadata]:
         """Get all seqspec metadata for a given assay type."""
         all_seqspec_metadata = []
@@ -68,25 +76,22 @@ class QCandParseSeqspecs:
                 all_seqspec_metadata.append(curr_seqspec_metadata)
         return all_seqspec_metadata
 
-    def _get_all_seqspec_tool_outputs_per_assay_type(self, all_seqspec_metadata: list[seqspec_parsing.SeqSpecMetadata], onlist_method: str) -> list[seqspec_parsing.SeqSpecToolOutput]:
-        """Get all seqspec tool outputs for a given assay type."""
+    def _get_single_seqspec_tool_output_per_assay_type(self, seqspec_metadata: seqspec_parsing.SeqSpecMetadata, onlist_method: str, assay_type: str) -> seqspec_parsing.SeqSpecToolOutput:
+        """Get one seqspec tool output for a given assay type."""
         final_barcode_dir = os.path.join(
             self.partial_root_dir, 'final_barcode_onlist')
         if not os.path.exists(final_barcode_dir):
             os.makedirs(final_barcode_dir)
-        all_seqspec_tool_outputs = []
-        for seqspec_metadata in all_seqspec_metadata:
-            curr_final_barcode_file_name = '_'.join([self.analysis_set_acc, seqspec_metadata.modality,
-                                                     get_seqspec_accession_from_path(
-                                                         seqspec_file_path=seqspec_metadata.seqspec_file_path),
-                                                     'final_barcode_inclusion_list.txt'])
-            curr_seqspec_tool_outputs = seqspec_parsing.GetSeqSpecToolOutput(
-                seqspec_metadata=seqspec_metadata,
-                onlist_method=onlist_method,
-                output_barcode_list_file=os.path.join(final_barcode_dir, curr_final_barcode_file_name)).generate_seqspec_tool_output()
-            all_seqspec_tool_outputs.append(curr_seqspec_tool_outputs)
-        # Sort the list by final_barcode_file for consistent ordering
-        return sorted(all_seqspec_tool_outputs, key=lambda x: x.final_barcode_file)
+        curr_final_barcode_file_name = '_'.join(
+            [self.analysis_set_acc, seqspec_metadata.modality, 'final_barcode_inclusion_list.txt'])
+        curr_seqspec_tool_output = seqspec_parsing.GetSeqSpecToolOutput(
+            seqspec_metadata=seqspec_metadata,
+            onlist_method=onlist_method,
+            output_barcode_list_file=os.path.join(final_barcode_dir, curr_final_barcode_file_name)).generate_seqspec_tool_output()
+        # Validate the final barcode file is not empty
+        self._validate_final_barcode_file(
+            seqspec_tool_output=curr_seqspec_tool_output, assay_type=assay_type)
+        return curr_seqspec_tool_output
 
     def check_if_modality_match(self, all_seqspec_metadata: list[seqspec_parsing.SeqSpecMetadata], expected_modality: str) -> bool:
         """Check if all seqspec modalities match the expected modality."""
@@ -144,30 +149,25 @@ class QCandParseSeqspecs:
                 "Onlist method mismatches found:\n" + "\n".join(errors))
         return True
 
-    def check_if_read_index_match(self, all_seqspec_tool_outputs: list[seqspec_parsing.SeqSpecToolOutput], assay_type: str) -> bool:
+    def check_if_read_index_match(self, all_seqspec_metadata: list[seqspec_parsing.SeqSpecMetadata], onlist_method: str, assay_type: str) -> bool:
         """Check if all seqspec read index strings match the first read index string."""
         mismatch_cnt = 0
-        # Use the first read index string as the reference
-        reference_read_index = all_seqspec_tool_outputs[0].read_index_string
-        for seqspec_tool_output in all_seqspec_tool_outputs:
-            if seqspec_tool_output.read_index_string != reference_read_index:
+        # First, get all read strings
+        all_read_index_strings = []
+        for seqspec_metadata in all_seqspec_metadata:
+            curr_seqspec_tool_mthd = seqspec_parsing.GetSeqSpecToolOutput(
+                seqspec_metadata=seqspec_metadata,
+                onlist_method=onlist_method,
+                output_barcode_list_file='place_holder.txt')
+            all_read_index_strings.append(
+                curr_seqspec_tool_mthd._get_seqspec_index())
+        # Then, check if they all match the first one
+        for read_string in all_read_index_strings[1:]:
+            if read_string != all_read_index_strings[0]:
                 mismatch_cnt += 1
         if mismatch_cnt > 0:
             raise const.BadDataException(
                 f"{mismatch_cnt} {assay_type} read index string mismatches found.")
-        return True
-
-    def check_if_empty_inclusion_list(self, all_seqspec_tool_outputs: list[seqspec_parsing.SeqSpecToolOutput], assay_type: str) -> bool:
-        """Check if any of the final inclusion lists created is empty."""
-        empty_cnt = 0
-        for seqspec_tool_output in all_seqspec_tool_outputs:
-            with open(seqspec_tool_output.final_barcode_file, 'r') as file_obj:
-                first_char = file_obj.read(1)
-                if not first_char.isalpha():
-                    empty_cnt += 1
-        if empty_cnt > 0:
-            raise const.BadDataException(
-                f"{empty_cnt} {assay_type} final inclusion lists are empty.")
         return True
 
     def quality_check_one_assay_type(self, measet_metadata_list: list[portal_parsing.MeasurementSetMetadata], assay_type: str) -> str | None:
@@ -189,21 +189,16 @@ class QCandParseSeqspecs:
             self.check_if_onlist_method_match(
                 all_seqspec_metadata=all_seqspec_metadata, expected_onlist_method=expected_onlist_method)
             # Get all seqspec tool outputs (it assumes that all measurement sets should have the same onlist method)
-            # Portal checks for inconsistent onlist methods across measurement sets of the same assay type
-            all_seqspec_tool_outputs = self._get_all_seqspec_tool_outputs_per_assay_type(
-                all_seqspec_metadata=all_seqspec_metadata, onlist_method=expected_onlist_method)
             # Check read index strings
             self.check_if_read_index_match(
-                all_seqspec_tool_outputs=all_seqspec_tool_outputs, assay_type=assay_type.upper())
-            # Check empty inclusion lists
-            self.check_if_empty_inclusion_list(
-                all_seqspec_tool_outputs=all_seqspec_tool_outputs, assay_type=assay_type.upper())
+                all_seqspec_metadata=all_seqspec_metadata, onlist_method=expected_onlist_method, assay_type=assay_type.upper())
+            # If all good, use the first seqspec metadata to generate the seqspec tool output
+            return self._get_single_seqspec_tool_output_per_assay_type(seqspec_metadata=all_seqspec_metadata[0], onlist_method=expected_onlist_method, assay_type=assay_type)
         except const.BadDataException as e:
             possible_errors += str(e)
         if possible_errors:
             # This syntax is to satisfy Terra input table format
             return seqspec_parsing.SeqSpecToolOutput(read_index_string="None", final_barcode_file="None", errors=possible_errors)
-        return all_seqspec_tool_outputs[0]
 
 
 @dataclasses.dataclass(frozen=True)
