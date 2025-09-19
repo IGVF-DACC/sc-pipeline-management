@@ -16,7 +16,22 @@ src/sc_pipe_management/accession/*.ipynb
 src/sc_pipe_management/accession/sandbox_accessioning.ipynb
 src/sc_pipe_management/input_params_generation/sc-pipeline_sandbox.ipynb
 src/sc_pipe_management/input_params_generation/input_generation_notebook.ipynb
+<<<<<<< HEAD
+<<<<<<< HEAD
 src/Jupyter\ Notebook/analysis_set_setup.ipynb
+||||||| parent of 9886763 (mv ipynb around)
+src/sc_pipe_management/wranger_utils/analysis_set_setup.ipynb
+src/Jupyter\ Notebook/analysis_set_setup.ipynb
+=======
+src/sc_pipe_management/wranger_utils/analysis_set_setup.ipynb
+||||||| parent of a262b3f (fix typo)
+src/sc_pipe_management/wranger_utils/analysis_set_setup.ipynb
+=======
+src/sc_pipe_management/wrangler_utils/analysis_set_setup.ipynb
+>>>>>>> a262b3f (fix typo)
+src/JupyterNotebook/analysis_set_setup.ipynb
+src/JupyterNotebook/qa_script.ipynb
+>>>>>>> 9886763 (mv ipynb around)
 
 # Data and output files
 src/data/*
@@ -32,6 +47,7 @@ src/terra_datatable/
 temp/
 terra_datatables/
 terra_post_report_tables/
+src/tests/test_files/test_qa_result.json
 
 # Configs and logs
 src/sc_pipe_management/qc_metrics/

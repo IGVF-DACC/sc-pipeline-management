@@ -9,7 +9,7 @@ src_path = os.path.abspath(os.path.join(
 if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
-import sc_pipe_management.wranger_utils.analysis_set_setup_utils as utils
+import sc_pipe_management.wrangler_utils.analysis_set_setup_utils as utils
 
 
 class TestAnalysisSetUtils(unittest.TestCase):
