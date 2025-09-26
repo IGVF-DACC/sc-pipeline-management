@@ -16,7 +16,8 @@ src/sc_pipe_management/accession/*.ipynb
 src/sc_pipe_management/accession/sandbox_accessioning.ipynb
 src/sc_pipe_management/input_params_generation/sc-pipeline_sandbox.ipynb
 src/sc_pipe_management/input_params_generation/input_generation_notebook.ipynb
-src/Jupyter\ Notebook/analysis_set_setup.ipynb
+src/JupyterNotebook/analysis_set_setup.ipynb
+src/JupyterNotebook/qa_script.ipynb
 
 # Data and output files
 src/data/*
@@ -32,6 +33,7 @@ src/terra_datatable/
 temp/
 terra_datatables/
 terra_post_report_tables/
+src/tests/test_files/test_qa_result.json
 
 # Configs and logs
 src/sc_pipe_management/qc_metrics/
