@@ -33,7 +33,7 @@ def _get_active_file_objs(file_ids: list[str], igvf_client_api: const.IgvfApiTyp
         if file_obj.status in ['in progress', 'released']]
 
 
-def _get_raw_data_access_level(analysis_file_obj: const.FileObjTypes, igvf_client_api: const.IgvfApiType) -> bool:
+def _check_if_controlled_access(analysis_file_obj: const.FileObjTypes, igvf_client_api: const.IgvfApiType) -> bool:
     """Get the raw data access level from the analysis file object."""
     all_input_seqfile_objs = []
     for file_set in analysis_file_obj.input_file_sets:
@@ -333,7 +333,7 @@ class QualityCheckAnalysisSet:
         self.analysis_set_obj = self.igvf_client_api.get_by_id(
             f'/analysis-sets/{self.analysis_set_acc}').actual_instance
         self.analysis_set_files = self.analysis_set_obj.files
-        self.controlled_access = _get_raw_data_access_level(
+        self.controlled_access = _check_if_controlled_access(
             self.analysis_set_obj, self.igvf_client_api)
         self.pipeline_parameters = self.analysis_set_obj.pipeline_parameters
 
