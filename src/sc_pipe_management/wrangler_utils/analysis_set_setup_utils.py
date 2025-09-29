@@ -4,7 +4,7 @@ import datetime
 import os
 import dataclasses
 
-import wranger_utils.constant as const
+import wrangler_utils.constant as const
 
 
 # NOTE: The intent of this script is to be run in a Jupyter notebook so that the results can be easily inspected before posting new analysis sets to the portal.
