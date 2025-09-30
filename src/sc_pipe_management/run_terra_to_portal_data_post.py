@@ -23,6 +23,20 @@ import sc_pipe_management.accession.constants as const
 import sc_pipe_management.accession.terra_to_portal_posting as tr2igvf
 
 
+def setup_logging(log_file: str):
+    """Generate a log file for the script.
+
+    Args:
+        log_file (str): Log file path.
+    """
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s - %(levelname)s - %(message)s',
+                        handlers=[
+                            logging.FileHandler(log_file),
+                            logging.StreamHandler(),
+                        ])
+
+
 def read_exclusion_file(file_path: str) -> list:
     """Read exclusion file and return list of accessions.
 
@@ -159,6 +173,12 @@ def main():
     today = datetime.now().strftime("%m%d%Y")
     pipeline_output_dir = os.path.join(
         get_default_output_root_dir(), args.terra_etype)
+
+    # Set up logging
+    log_dir = './Run_Logs'
+    os.makedirs(log_dir, exist_ok=True)
+    setup_logging(log_file=os.path.join(
+        os.getcwd(), log_dir, f'terra_to_portal_accession_{today}.log'))
 
     # Call FireCloud API
     do_firecloud_api()
