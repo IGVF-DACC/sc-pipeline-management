@@ -27,13 +27,13 @@ See `requirements.txt` for package details.
 * Python 3.11
 * igvf-client
 * igvf-utils
-* firecloud
+* firecloud (0.16.37)
 * seqspec
 
 #### Installation
 
-* The igvf-client, igvf-utils, and seqspec packages can be install directly from the requirements.txt using `pip install -r requirements.txt`
-* The firecloud package needs to be installed manually due to setuptools incompatibilities. Download the either the zip or tar.gz source file from [FireCloud release v0.16.37](https://github.com/broadinstitute/fiss/releases/tag/v0.16.37) and unzip. Run `python setup.py install`.
+* All packages can be install directly from the requirements.txt using `pip install -r requirements.txt`
+* If FireCloud installation cannot complete using the automatic installation, it can be install manually. Download the either the zip or tar.gz source file from [FireCloud release v0.16.37](https://github.com/broadinstitute/fiss/releases/tag/v0.16.37) and unzip. Run `python setup.py install`.
 
 ### 2. Additional requirement
 
