@@ -1,4 +1,3 @@
-
 import logging
 import datetime
 import os
@@ -174,25 +173,63 @@ def get_all_input_file_sets(query_res: list, igvf_client_api) -> list:
     return remove_duplicate_sublists([entry for entry in input_fileset_collection if entry is not None])
 
 
-def get_sample_accessions(input_file_sets: list, igvf_client_api) -> str:
-    """ Get a concatenated string of unique sample accessions from a list of measurement set IDs.
+@dataclasses.dataclass(frozen=True)
+class SampleMetadata:
+    sample_accessions: list
+    subpool_ids: list | None
+
+    def generate_alias_body(self) -> str:
+        parts = [
+            'AnalysisSet',
+            '-'.join(self.sample_accessions) if self.sample_accessions else None,
+            '-'.join(self.subpool_ids) if self.subpool_ids else None,
+            'single-cell-uniform-pipeline'
+        ]
+        return '_'.join(part for part in parts if part is not None)
+
+
+class GetSampleMetadata:
+    """ A class to get sample metadata from a list of measurement set IDs.
 
     Args:
-        input_file_sets (list): _description_
-        igvf_client_api (_type_): _description_
-
-    Returns:
-        str: _description_
+        input_file_sets (list): a list of measurement set IDs
+        igvf_client_api (_type_): IGVF client API instance.
     """
-    sample_accessions = set()
-    for file_set_id in input_file_sets:
-        # Parse will be curated sets
-        if file_set_id.startswith('/measurement-sets/'):
-            file_set_obj = igvf_client_api.get_by_id(file_set_id)
-            curr_samples = [entry.split('/')[-2]
-                            for entry in file_set_obj.samples]
-            sample_accessions.update(curr_samples)
-    return '_'.join(sorted(sample_accessions))
+
+    def __init__(self, input_file_sets: list, igvf_client_api):
+        self.input_file_sets = input_file_sets
+        self.igvf_client_api = igvf_client_api
+
+    def _get_sample_ids(self) -> list:
+        """ Get a concatenated string of unique sample accessions from a list of measurement set IDs.
+        """
+        sample_ids = set()
+        all_measet_objs = [self.igvf_client_api.get_by_id(
+            file_set_id).actual_instance for file_set_id in self.input_file_sets if file_set_id.startswith('/measurement-sets/')]
+        for measet_obj in all_measet_objs:
+            sample_ids.update(measet_obj.samples)
+        return sorted(sample_ids)
+
+    def _get_sample_subpool_ids(self) -> list | None:
+        """ Get a list of unique cellular sub-pool IDs from a list of measurement set IDs.
+        """
+        sample_ids = self._get_sample_ids()
+        sample_objs = [self.igvf_client_api.get_by_id(
+            sample_acc).actual_instance for sample_acc in sample_ids]
+        subpool_ids = set()
+        for sample_obj in sample_objs:
+            if sample_obj.cellular_sub_pool:
+                subpool_ids.add(sample_obj.cellular_sub_pool)
+        if len(subpool_ids) == 0:
+            return None
+        return sorted(subpool_ids)
+
+    def get_samples_metadata(self) -> SampleMetadata:
+        return SampleMetadata(
+            sample_accessions=[entry.split('/')[-2]
+                               for entry in self._get_sample_ids()],
+            subpool_ids=self._get_sample_subpool_ids()
+        )
 
 
 def create_analysis_set_payload(input_file_sets: list, lab: list, award: list, igvf_client_api) -> dict:
@@ -208,14 +245,15 @@ def create_analysis_set_payload(input_file_sets: list, lab: list, award: list, i
         dict: A dictionary payload for creating a new analysis set.
     """
     alias_lab = lab.split('/')[-2]
-    sample_accessions = get_sample_accessions(
-        input_file_sets=input_file_sets, igvf_client_api=igvf_client_api)
+    sample_metadata = GetSampleMetadata(
+        input_file_sets=input_file_sets, igvf_client_api=igvf_client_api).get_samples_metadata()
+
     payload = {
         '_profile': 'analysis_set',
         'input_file_sets': input_file_sets,
         'lab': lab,
         'award': award,
-        'aliases': [f'{alias_lab}:Sample-{sample_accessions}_single-cell-uniform-pipeline'],
+        'aliases': [f'{alias_lab}:{sample_metadata.generate_alias_body()}'],
         'uniform_pipeline_status': 'preprocessing',
         'file_set_type': 'intermediate analysis'
     }
