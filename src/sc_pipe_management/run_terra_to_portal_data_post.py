@@ -22,13 +22,23 @@ import sc_pipe_management.accession.parse_terra_metadata as terra_parse
 import sc_pipe_management.accession.constants as const
 import sc_pipe_management.accession.terra_to_portal_posting as tr2igvf
 
+# Logging output dir
+LOG_DIR = './Run_Logs'
 
-def setup_logging(log_file: str):
+# Today's date
+TODAY = datetime.now().strftime("%m%d%Y")
+
+
+def setup_logging():
     """Generate a log file for the script.
 
     Args:
         log_file (str): Log file path.
     """
+    # Set up logging
+    os.makedirs(LOG_DIR, exist_ok=True)
+    log_file = os.path.join(
+        os.getcwd(), LOG_DIR, f'terra_to_portal_accession_{TODAY}.log')
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s - %(levelname)s - %(message)s',
                         handlers=[
@@ -65,15 +75,14 @@ def read_exclusion_file(file_path: str) -> list:
 def get_default_output_root_dir():
     """Check if the script is running on the expected hostname."""
     # Set up local output directory
-    today = datetime.now().strftime("%m%d%Y")
     if api_tools.is_gce_instance():
         # If running on GCE, use the Google VM output directory
         top_root_dir = os.path.join(
-            const.OUTPUT_ROOT_DIRS['googlevm'], "output", today)
+            const.OUTPUT_ROOT_DIRS['googlevm'], "output", TODAY)
     else:
         # If running locally, use the localhost output directory
         top_root_dir = os.path.join(
-            const.OUTPUT_ROOT_DIRS['localhost'], "output", today)
+            const.OUTPUT_ROOT_DIRS['localhost'], "output", TODAY)
     # Create the directory if it does not exist
     if not os.path.exists(top_root_dir):
         os.makedirs(top_root_dir)
@@ -170,15 +179,11 @@ def main():
         fapi._set_session()
 
     # Set up local output directory for the Terra data table
-    today = datetime.now().strftime("%m%d%Y")
     pipeline_output_dir = os.path.join(
         get_default_output_root_dir(), args.terra_etype)
 
     # Set up logging
-    log_dir = './Run_Logs'
-    os.makedirs(log_dir, exist_ok=True)
-    setup_logging(log_file=os.path.join(
-        os.getcwd(), log_dir, f'terra_to_portal_accession_{today}.log'))
+    setup_logging()
 
     # Call FireCloud API
     do_firecloud_api()
