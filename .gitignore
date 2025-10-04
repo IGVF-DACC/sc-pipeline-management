@@ -11,13 +11,8 @@ src/tests/test_data/__pycache__
 coverage.xml
 
 # Notebooks
-src/sc_pipe_management/*.ipynb
-src/sc_pipe_management/accession/*.ipynb
-src/sc_pipe_management/accession/sandbox_accessioning.ipynb
-src/sc_pipe_management/input_params_generation/sc-pipeline_sandbox.ipynb
-src/sc_pipe_management/input_params_generation/input_generation_notebook.ipynb
 src/local_notebooks
-src/JupyterNotebook/qa_script.ipynb
+
 
 # Data and output files
 src/data/*
