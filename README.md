@@ -16,7 +16,7 @@
 ## Purpose
 
 * To automate the process of generating single cell pipeline input parameters from and POSTing pipeline output data to IGVF portal
-* More details on the codes are under the `doc` folder.
+* More details on the codes are under the `docs/` folder.
 
 ## Requirement
 
@@ -33,13 +33,16 @@ See `requirements.txt` for package details.
 #### Installation
 
 * All packages can be install directly from the requirements.txt using `pip install -r requirements.txt`
-* If FireCloud installation cannot complete using the automatic installation, it can be install manually. Download the either the zip or tar.gz source file from [FireCloud release v0.16.37](https://github.com/broadinstitute/fiss/releases/tag/v0.16.37) and unzip. Run `python setup.py install`.
+* If FireCloud installation cannot complete using `requirements.txt`, it can be install manually. Download the either the zip or tar.gz source file from [FireCloud release v0.16.37](https://github.com/broadinstitute/fiss/releases/tag/v0.16.37) and unzip. Run `python setup.py install` from the same directory.
 
 ### 2. Additional requirement
 
 * **Set up Google cloud (Terra) access credentials.** FireCloud uses the [Google Cloud SDK](https://cloud.google.com/sdk/) to manage authorization. To use the firecloud CLI or API, you must install the SDK and login locally with `gcloud auth login`.
+  * This is needed for 1) running input parameters generation, and 2) accessioning to IGVF portal.
   * Install Google CLI following this link: <https://cloud.google.com/sdk/docs/install-sdk>.
+
 * **IGVF portal access credentials.** Generate API credentials under the IGVF profiles page after logging into the portal. Store the public API key and secret API key as environmental variables. See [IGVF API credential configration guide](https://github.com/IGVF-DACC/igvf_utils/wiki/Configuration) for more details.
+  * This is needed for **all** the scripts in this repo.
 
 ## The input parameters that the codes will generate
 
@@ -58,141 +61,70 @@ See `requirements.txt` for package details.
 13. IGVF portal Analysis Set accession
 14. Subpool ID (associated IGVF sample accessions)
 
-## Run example
+## Pipeline output and submission to IGVF portal
 
-### Note
+* The overall data posted and relations to other objects on the IGVF portal is detailed in the [uniform pipeline workflow on IGVF portal](https://data.igvf.org/workflows/IGVFWF6403DVII/).
+* The main outputs for different assay types are as follows:
+  * ATACseq
+    * Alignment (bam)
+    * Bam index (bai)
+    * Fragment files (tsv/bed3+)
+    * Fragment index (tbi)
+    * A set of QC metrics
+  * RNAseq
+    * Sparse gene count matrix (H5AD)
+    * Kallisto output tarball (tar)
+    * A set of QC metrics
 
-* The `example_run_notebook.ipynb` contains plug-in-and-use codes for generating input data tables and posting output data to the IGVF data portal.
-* The [AnalysisSet on IGVF Sandbox](https://sandbox.igvf.org/analysis-sets/TSTDS33660419/) is an example.
+<!-- markdownlint-disable MD033 -->
+<img src="https://api.data.igvf.org/documents/6f250d2a-aff6-4ae5-ab71-9994a1bb584c/@@download/attachment/sc-pipeline_RNAseq_data.png" alt="RNAseq" width="500">
 
-### Run option 1: via Python Script
+<img src="https://api.data.igvf.org/documents/9273ea79-5120-41c9-85b4-f2e76caf65e8/@@download/attachment/sc-pipeline_ATACseq_data.png" alt="ATACseq" width="500">
+<!-- markdownlint-enable MD033 -->
 
-```bash
+## Generate input parameters for Terra pipeline run
+
+```python
 # Output the input data table for Terra to a local path using analysis set IDs from an input string
-python3 src/run_portal_to_terra_input_generation.py --igvf_endpoint=prod --input_analysis_set=IGVFDS5316CVFR --terra_etype=pipeline_test_run
+python3 src/sc_pipe_management/run_portal_to_terra_input_generation.py --igvf_endpoint=prod --input_analysis_set=IGVFDS5316CVFR --terra_etype=single_cell_run
 
 # Output the input data table for Terra to a local path using a txt file with one analysis file per line
-python3 src/run_portal_to_terra_input_generation.py --igvf_endpoint=prod --input_analysis_set_file=/local_dirs/analysis_set_accessions.txt --terra_etype=pipeline_test_run
-
-# post terra output data to IGVF portal and output a post result table to a local path
-python3 src/run_terra_to_portal_data_post.py --post_endpoint=prod --terra_namespace=DACC_ANVIL --terra_workspace='Playground for IGVF Single-Cell Data Processing' --terra_etype=DACC_single_cell_run_1 --upload_file=True --output_dir="$(pwd)/terra_input_datatables"
+python3 src/sc_pipe_management/run_portal_to_terra_input_generation.py --igvf_endpoint=prod --input_analysis_set_file=/local_dirs/analysis_set_accessions.txt --terra_etype=single_cell_run
 ```
 
-### Run option 2: via Jupyter Notebook
-
-#### Step 1. Construct and upload pipeline input parameters from IGVF portal
-
-* Requires an Analysis Set to be created in advance.
+## Accession new data to IGVF portal
 
 ```python
-# Set up IGVF Python client, IGVF utils, and FireCloud credentials
-import igvf_and_terra_api_tools as api_tools
-import portal_to_terra_input_from_anaset as portal2terra_transfer
-import terra_to_portal_posting as terra2portal_transfer
+# Post terra output data to IGVF portal and output a post result table to default path
+python3 src/sc_pipe_management/run_terra_to_portal_data_post.py --post_endpoint=prod --terra_etype=single_cell_run --upload_file=True
 
-from igvf_utils.connection import Connection
-import firecloud.api as fapi
+# Post output data with some runs excluded
+python3 src/sc_pipe_management/run_terra_to_portal_data_post.py --post_endpoint=prod --terra_etype=single_cell_run --excluded_accs=/local_dirs/excluded_analysis_set_accessions.txt --upload_file
 
-# Terra workspace info
-terra_namespace = 'DACC_ANVIL'
-terra_workspace = 'Playground for IGVF Single-Cell Data Processing'
-
-# Analysis Set for single cell pipeline run
-igvf_sandbox_analysis_sets = ['TSTDS33660419', 'TSTDS12024147']
-local_final_barcode_dir = os.path.join(os.getcwd(), 'final_barcode_list/')
-gs_barcode_list_bucket = 'gs://unittest_mock_bucket/submissions/final_barcode_onlist/'
-
-# Set up IGVF query API (Sandbox or Production)
-igvf_endpoint = 'sandbox'
-igvf_api_keys = api_tools.set_up_api_keys(igvf_endpoint=igvf_endpoint)
-igvf_api_sandbox = api_tools.get_igvf_client_auth(igvf_site=igvf_endpoint,
-                                                  igvf_api_keys=igvf_keys)
-
-# IGVF util (Sandbox or Production)
-iu_conn_sandbox = api_tools.get_igvf_utils_connection(igvf_api_keys=igvf_api_keys,
-                                                      igvf_utils_mode=igvf_endpoint,
-                                                      submission_mode=True)
-
-# To refresh FireCloud sessions
-fapi._set_session()
-
-# Construct the input table from portal based on analysis set accessions
-portal_to_terra_input_table = portal2terra_transfer.generate_pipeline_input_table(query_analysis_set_accs=unittest_analysis_sets,
-                                                                                  igvf_api=igvf_api_sandbox,
-                                                                                  terra_etype='unittest_pipeline_tester',
-                                                                                  local_barcode_file_dir=local_final_barcode_dir,
-                                                                                  gs_barcode_list_bucket=gs_barcode_list_bucket
-                                                                                  )
-
-# Very optional if want to output the table locally for inspection
-portal2terra_transfer.save_pipeline_input_table(pipeline_input_table=portal_to_terra_input_table, output_dir='./')
-
-# Upload this to Terra under the name 'DACC_Tester'
-portal_to_terra_entity_type = 'DACC_single_cell_run_1'
-api_tools.upload_portal_input_tsv_to_terra(terra_namespace=terra_namespace,
-                                            terra_workspace=terra_workspace,
-                                            terra_etype=portal_to_terra_entity_type,
-                                            porta_input_table=portal_to_terra_input_table,
-                                            verbose=True)
+# Resume posting output data after an unexpected pause or unposted data errors
+python3 src/sc_pipe_management/run_terra_to_portal_data_post.py --post_endpoint=prod --terra_etype=single_cell_run --upload_file=True --resumed_posting
 ```
 
-#### Step 2. Post pipeline run results to IGVF portal
+## Utils tools
 
-* This process will also upload a POST result report table to Terra.
+### Create analysis sets to start pipeline runs
+
+* The src/JupyterNotebook/analysis_set_setup.ipynb notebook contains plug-and-use templates and other utils to create new analysis sets based on a list of measurement sets.
+
+### Quality check posted results
+
+* This tool helps data wranglers, submitters, and other users who need to verify accessioning results in an automated fashion.
+
+#### Run option 1: Python script
 
 ```python
-# Set up IGVF Python client, IGVF utils, and FireCloud credentials
-import igvf_and_terra_api_tools as api_tools
-import terra_to_portal_posting as terra2portal_transfer
+# If Running against a list of accessions
+python3 src/sc_pipe_management/wrangler_utils/check_accession_results.py --igvf_endpoint prod --qc_analysis_set_file /local_dir/analysis_set_accessions.txt --output_file_path /local_dir/qa_results.json
 
-from igvf_utils.connection import Connection
-import firecloud.api as fapi
-
-# Set up IGVF query API (Sandbox or Production)
-igvf_endpoint = 'sandbox'
-# Get local API keys
-igvf_api_keys = api_tools.set_up_api_keys(igvf_endpoint=igvf_endpoint)
-# Get IGVF client API
-igvf_api_sandbox = api_tools.get_igvf_client_auth(igvf_site=igvf_endpoint,
-                                                  igvf_api_keys=igvf_keys)
-# IGVF util (Sandbox or Production)
-iu_conn_sandbox = api_tools.get_igvf_utils_connection(igvf_api_keys=igvf_api_keys,
-                                                      igvf_utils_mode=igvf_endpoint,
-                                                      submission_mode=True)
-
-# To refresh FireCloud sessions
-fapi._set_session()
-
-# Terra workspace info
-terra_namespace = 'DACC_ANVIL'
-terra_workspace = 'Playground for IGVF Single-Cell Data Processing'
-
-# Set up params for retrieving post-pipeline data table from Terra
-terra_to_portal_output_etype = 'DACC_single_cell_run_1'
-terra_to_portal_postres_etype = 'DACC_single_cell_run_1_postres'
-
-# Generate the input data table for Terra
-terra_to_portal_post_datatable = api_tools.get_terra_tsv_data_table(terra_namespace=terra_namespace,
-                                                                    terra_workspace=terra_workspace,
-                                                                    terra_etype=terra_to_portal_output_etype)
-
-# Post all rows in the data table to IGVF portal
-# Run all posting jobs
-terra_to_portal_post_runs = terra2portal_transfer.post_all_successful_runs(igvf_api=igvf_api_sandbox, igvf_utils_api=iu_conn_sandbox, upload_file=False, full_terra_data_table=terra_to_portal_post_datatable)
-
-# Get the full post success summary
-terra_to_portal_post_summary = terra2portal_transfer.summarize_post_status(post_results=terra_to_portal_post_runs)
-
-# Update the original output table with brief post summary
-terra_to_portal_post_summary = terra2portal_transfer.add_post_status_summary_to_output_data_table(full_terra_data_table=terra_to_portal_post_datatable, post_status_df=terra_to_portal_post_summary)
-
-# Optional, if want to output the post results table locally
-terra2portal_transfer.save_pipeline_postres_table(pipeline_postres_table=posting_all_data_report, output_dir='./')
-
-# Optional, upload the run results to Terra
-api_tools.upload_output_post_res_to_terra(terra_namespace=terra_namespace,
-                                          terra_workspace=terra_workspace,
-                                          terra_etype=terra_to_portal_postres_etype,
-                                          verbose=True
-                                         )
+# If Running against one analysis set
+python3 src/sc_pipe_management/wrangler_utils/check_accession_results.py --igvf_endpoint prod --qc_analysis_sets IGVFDS5316CVFR --output_file_path /local_dir/qa_results.json
 ```
+
+#### Run option 2: Jupyter notebook
+
+* The src/JupyterNotebook/qa_script.ipynb notebook contains plug-and-use templates to QA posted datasets.
