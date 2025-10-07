@@ -386,13 +386,20 @@ class GenerateTerraInputParams:
             raise const.BadDataException(
                 f"Multiple taxa found for analysis set {self.analysis_set_acc}.")
         elif len(unique_taxa) == 1:
-            return list(unique_taxa)[0]
+            if unique_taxa != {'Mixed species'}:
+                return list(unique_taxa)[0]
+            else:
+                raise const.BadDataException(
+                    f"Mixed species taxa found for analysis set {self.analysis_set_acc}.")
         else:
             raise const.BadDataException(
                 f"No taxa found for analysis set {self.analysis_set_acc}.")
 
     def _get_reference_files(self, taxa: str) -> const.RunReferenceFiles:
         """Get the reference files for the analysis set."""
+        if taxa not in const.TAXA_TO_GENOME_REF_FILES:
+            raise const.BadDataException(
+                f"Taxa '{taxa}' not recognized for analysis set {self.analysis_set_acc}.")
         return const.TAXA_TO_GENOME_REF_FILES[taxa]
 
     def _get_subpool_id(self) -> str:
