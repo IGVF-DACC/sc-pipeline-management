@@ -31,6 +31,7 @@ class SeqFileMetadata:
     file_url: str
     seqspec_urls: list[str]
     read_names: list[str]
+    status: str
 
     def get_read_names_from_seqfile(self, assay_type: str) -> list[str]:
         """Get the read names from the seqfile object. For ATACseq, if Read2 and Barcode index are concatenated, return both.
@@ -112,6 +113,7 @@ class GetSeqFileMetadata:
 
     def get_seqfile_metadata(self) -> SeqFileMetadata:
         """Get the sequence file metadata."""
+        # It will collect all linked SeqFiles regardless of their status.
         return SeqFileMetadata(
             file_accession=self.seqfile_obj.accession,
             file_set=self.seqfile_obj.file_set,
@@ -121,7 +123,8 @@ class GetSeqFileMetadata:
             flowcell_id=self.seqfile_obj.flowcell_id,
             file_url=construct_full_href_url(igvf_href=self.seqfile_obj.href),
             seqspec_urls=self._get_seqspec_urls(),
-            read_names=self.seqfile_obj.read_names
+            read_names=self.seqfile_obj.read_names,
+            status=self.seqfile_obj.status
         )
 
 
@@ -148,7 +151,10 @@ class GetMeasurementSetMetadata:
             if seqfile_id.startswith('/sequence-files/'):
                 curr_seqfile_metadata = GetSeqFileMetadata(
                     seqfile_id=seqfile_id, igvf_api=self.igvf_api).get_seqfile_metadata()
-                if curr_seqfile_metadata.read_names is None:
+
+                # If the seqfile is deprecated or has no read names, skip it
+                if (curr_seqfile_metadata.status in const.FILE_DEPRECATED_STATUSES) or \
+                        (curr_seqfile_metadata.read_names is None):
                     continue
                 seqfile_metadata_list.append(curr_seqfile_metadata)
         return seqfile_metadata_list
@@ -158,8 +164,10 @@ class GetMeasurementSetMetadata:
         if self.measet_obj.barcode_replacement_file:
             brf_obj = self.igvf_api.get_by_id(
                 self.measet_obj.barcode_replacement_file).actual_instance
-            return construct_full_href_url(
-                igvf_href=brf_obj.href)
+            # Return the URL only if the barcode replacement file is not deprecated
+            if brf_obj.status not in const.FILE_DEPRECATED_STATUSES:
+                return construct_full_href_url(
+                    igvf_href=brf_obj.href)
         return None
 
     def get_measurement_set_metadata(self) -> MeasurementSetMetadata:
