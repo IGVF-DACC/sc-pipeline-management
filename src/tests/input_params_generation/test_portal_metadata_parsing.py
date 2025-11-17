@@ -37,6 +37,7 @@ class TestGetSeqFileMetadata:
         """Mock sequence file object."""
         mock_obj = MagicMock()
         mock_obj.accession = "IGVFFI123456"
+        mock_obj.status = "released"
         mock_obj.file_set = "FileSet1"
         mock_obj.illumina_read_type = "Read1"
         mock_obj.sequencing_run = 1
@@ -143,7 +144,8 @@ class TestGetMeasurementSetMetadata:
             file_url="https://example.com/sequence-files/IGVFFI123456/@@download/IGVFFI123456.fastq.gz",
             seqspec_urls=[
                 "https://example.com/configuration-files/SEQSPEC123/@@download/SEQSPEC123.yaml.gz"],
-            read_names=["Read1", "Read2"]
+            read_names=["Read1", "Read2"],
+            status="released"
         )
 
     def test_init(self, mock_igvf_api):
@@ -213,6 +215,86 @@ class TestGetMeasurementSetMetadata:
                 measet_metadata = instance.get_measurement_set_metadata()
 
                 assert measet_metadata.barcode_replacement_file is None
+
+    def test_get_measurement_set_metadata_with_deprecated_seqfiles(self, mock_igvf_api, mock_measet_obj):
+        """Test get_measurement_set_metadata method when some seqfiles are deprecated."""
+        # Update mock_measet_obj to have multiple sequence files
+        mock_measet_obj.files = [
+            "/sequence-files/IGVFFI111111/",
+            "/sequence-files/IGVFFI222222/",  # This one will be deprecated
+            "/sequence-files/IGVFFI333333/"
+        ]
+
+        # Create mock sequence file objects with different statuses
+        mock_valid_seqfile1 = MagicMock()
+        mock_valid_seqfile1.accession = "IGVFFI111111"
+        mock_valid_seqfile1.status = "released"
+        mock_valid_seqfile1.read_names = ["Read1", "Read2"]
+        mock_valid_seqfile1.file_set = "FileSet1"
+        mock_valid_seqfile1.illumina_read_type = "Read1"
+        mock_valid_seqfile1.sequencing_run = 1
+        mock_valid_seqfile1.lane = 1
+        mock_valid_seqfile1.flowcell_id = "Flowcell123"
+        mock_valid_seqfile1.href = "/sequence-files/IGVFFI111111/@@download/IGVFFI111111.fastq.gz"
+        mock_valid_seqfile1.seqspecs = []
+
+        mock_deprecated_seqfile = MagicMock()
+        mock_deprecated_seqfile.accession = "IGVFFI222222"
+        # Revoked
+        mock_deprecated_seqfile.status = const.FILE_DEPRECATED_STATUSES[0]
+        mock_deprecated_seqfile.read_names = ["Read1", "Read2"]
+        mock_deprecated_seqfile.file_set = "FileSet1"
+        mock_deprecated_seqfile.illumina_read_type = "Read2"
+        mock_deprecated_seqfile.sequencing_run = 1
+        mock_deprecated_seqfile.lane = 2
+        mock_deprecated_seqfile.flowcell_id = "Flowcell123"
+        mock_deprecated_seqfile.href = "/sequence-files/IGVFFI222222/@@download/IGVFFI222222.fastq.gz"
+        mock_deprecated_seqfile.seqspecs = []
+
+        mock_valid_seqfile2 = MagicMock()
+        mock_valid_seqfile2.accession = "IGVFFI333333"
+        mock_valid_seqfile2.status = "in-progress"
+        mock_valid_seqfile2.read_names = ["Read1", "Read2"]
+        mock_valid_seqfile2.file_set = "FileSet1"
+        mock_valid_seqfile2.illumina_read_type = "I1"
+        mock_valid_seqfile2.sequencing_run = 1
+        mock_valid_seqfile2.lane = 3
+        mock_valid_seqfile2.flowcell_id = "Flowcell123"
+        mock_valid_seqfile2.href = "/sequence-files/IGVFFI333333/@@download/IGVFFI333333.fastq.gz"
+        mock_valid_seqfile2.seqspecs = []
+
+        # Create a mock barcode replacement file object with proper href
+        mock_barcode_file = MagicMock()
+        mock_barcode_file.href = "/tabular-files/barcodefile1/@@download/barcodefile1.txt"
+
+        # Setup get_by_id to return different objects based on the ID
+        def mock_get_by_id_side_effect(obj_id):
+            if obj_id == "/sequence-files/IGVFFI111111/":
+                return MagicMock(actual_instance=mock_valid_seqfile1)
+            elif obj_id == "/sequence-files/IGVFFI222222/":
+                return MagicMock(actual_instance=mock_deprecated_seqfile)
+            elif obj_id == "/sequence-files/IGVFFI333333/":
+                return MagicMock(actual_instance=mock_valid_seqfile2)
+            elif obj_id == "/tabular-files/barcodefile1/":
+                return MagicMock(actual_instance=mock_barcode_file)
+            else:
+                return MagicMock(actual_instance=mock_measet_obj)
+
+        mock_igvf_api.get_by_id.side_effect = mock_get_by_id_side_effect
+
+        with patch.object(const, 'ASSAY_NAMES_CONVERSION_REF', {"/assay-terms/OBI_0003109/": "rna"}):
+            with patch.object(const, 'BASE_IGVF_PORTAL_URL', "https://example.com/"):
+                instance = portal_parsing.GetMeasurementSetMetadata(
+                    measet_id="MEASET123", igvf_api=mock_igvf_api)
+                measet_metadata = instance.get_measurement_set_metadata()
+
+                # Should only have 2 seqfiles (the deprecated one should be filtered out)
+                assert len(measet_metadata.seqfiles) == 2
+                assert measet_metadata.seqfiles[0].file_accession == "IGVFFI111111"
+                assert measet_metadata.seqfiles[1].file_accession == "IGVFFI333333"
+                # Verify that the deprecated file was skipped
+                assert all(sf.file_accession !=
+                           "IGVFFI222222" for sf in measet_metadata.seqfiles)
 
 
 class TestGetAnalysisSetMetadata:

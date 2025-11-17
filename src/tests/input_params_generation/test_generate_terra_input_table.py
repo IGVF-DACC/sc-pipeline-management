@@ -28,7 +28,7 @@ PARTIAL_ROOT_DIR = 'src/tests/test_files'
 
 TEST_ANALYSIS_SET_ACCESSIONS = [
     'IGVFDS9664YLAD',
-    'IGVFDS0223KLTB',
+    'IGVFDS0223KLTB',     # Added 2 deleted SeqFiles to check status handling
     'IGVFDS0657NHTA'
 ]
 
