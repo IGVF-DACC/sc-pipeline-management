@@ -17,11 +17,13 @@
         "Error_15": "AlignmentFile TSTFI22789450 has unexpected reference files: ['/reference-files/TSTFI62695002/', '/reference-files/TSTFI36924773/']. Expected one of: [['/reference-files/IGVFFI0653VCGH/', '/reference-files/IGVFFI7969JLFC/'], ['/reference-files/IGVFFI5593VLWB/', '/reference-files/IGVFFI9282QLXO/']].",
         "Error_16": "AlignmentFile TSTFI22789450 has no quality metrics.",
         "Error_17": "IndexFile TSTFI46671674 has unexpected file name: gs://fc-secure-de19fd29-2253-41cd-9751-1788cf7ad1a5/submissions/final-outputs/46c47104-d94b-4aea-8ae6-2cb9c0cb8446/single_cell_pipeline/1bc62685-8243-4c9a-bd47-aca05c90d625/call-atac/wf_atac/481060e1-51db-4068-ba4d-584f82af0ce8/call-generate_bam/IGVFDS4768JVVU.bam.bai.",
-        "Error_18": "TabularFile TSTFI97311280 has unexpected analysis step version.",
-        "Error_19": "TabularFile TSTFI97311280 has invalid upload status.",
-        "Error_20": "TabularFile TSTFI97311280 has unexpected file name: gs://fc-secure-de19fd29-2253-41cd-9751-1788cf7ad1a5/submissions/final-outputs/46c47104-d94b-4aea-8ae6-2cb9c0cb8446/single_cell_pipeline/1bc62685-8243-4c9a-bd47-aca05c90d625/call-atac/wf_atac/481060e1-51db-4068-ba4d-584f82af0ce8/call-generate_fragments/IGVFDS4768JVVU.fragments.tsv.gz.",
-        "Error_21": "TabularFile TSTFI97311280 has no reference files.",
-        "Error_22": "TabularFile TSTFI97311280 has no quality metrics.",
-        "Error_23": "IndexFile TSTFI04969005 has unexpected file name: gs://fc-secure-de19fd29-2253-41cd-9751-1788cf7ad1a5/submissions/final-outputs/46c47104-d94b-4aea-8ae6-2cb9c0cb8446/single_cell_pipeline/1bc62685-8243-4c9a-bd47-aca05c90d625/call-atac/wf_atac/481060e1-51db-4068-ba4d-584f82af0ce8/call-generate_fragments/IGVFDS4768JVVU.fragments.tsv.gz.tbi."
+        "Error_18": "Index file TSTFI46671674 has invalid upload status.",
+        "Error_19": "TabularFile TSTFI97311280 has unexpected analysis step version.",
+        "Error_20": "TabularFile TSTFI97311280 has invalid upload status.",
+        "Error_21": "TabularFile TSTFI97311280 has unexpected file name: gs://fc-secure-de19fd29-2253-41cd-9751-1788cf7ad1a5/submissions/final-outputs/46c47104-d94b-4aea-8ae6-2cb9c0cb8446/single_cell_pipeline/1bc62685-8243-4c9a-bd47-aca05c90d625/call-atac/wf_atac/481060e1-51db-4068-ba4d-584f82af0ce8/call-generate_fragments/IGVFDS4768JVVU.fragments.tsv.gz.",
+        "Error_22": "TabularFile TSTFI97311280 has no reference files.",
+        "Error_23": "TabularFile TSTFI97311280 has no quality metrics.",
+        "Error_24": "IndexFile TSTFI04969005 has unexpected file name: gs://fc-secure-de19fd29-2253-41cd-9751-1788cf7ad1a5/submissions/final-outputs/46c47104-d94b-4aea-8ae6-2cb9c0cb8446/single_cell_pipeline/1bc62685-8243-4c9a-bd47-aca05c90d625/call-atac/wf_atac/481060e1-51db-4068-ba4d-584f82af0ce8/call-generate_fragments/IGVFDS4768JVVU.fragments.tsv.gz.tbi.",
+        "Error_25": "Index file TSTFI04969005 has invalid upload status."
     }
 }

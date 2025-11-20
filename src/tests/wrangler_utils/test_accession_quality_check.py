@@ -359,21 +359,84 @@ class TestIndexFileChecker:
     def test_check_index_file_presence_and_format_alignment(self, mock_get_active, mock_igvf_client):
         """Test check_index_file_presence_and_format for AlignmentFile."""
         mock_file_obj = Mock()
-        mock_file_obj.type = ['AlignmentFile']
+        mock_file_obj.type = ['AlignmentFile', 'File', 'Item']
         mock_file_obj.input_file_for = ['/index-files/test.bai']
         mock_file_obj.controlled_access = True
 
         mock_index = Mock()
         mock_index.file_format = 'bai'
+        mock_index.type = ['IndexFile', 'File', 'Item']
         mock_index.controlled_access = True
         mock_index.submitted_file_name = 'IGVFDS123456.bam.bai'
         mock_index.accession = 'IGVFFI123456'
+        mock_index.upload_status = 'validated'
 
         mock_get_active.return_value = [mock_index]
 
         checker = qa_run.IndexFileChecker('IGVFDS123456', mock_igvf_client)
         errors = checker.check_index_file_presence_and_format(mock_file_obj)
         assert errors == []
+
+    @patch('sc_pipe_management.wrangler_utils.check_accession_results._get_active_file_objs')
+    def test_check_index_file_presence_and_format_invalidated(self, mock_get_active, mock_igvf_client):
+        """Test check_index_file_presence_and_format for AlignmentFile."""
+        mock_file_obj = Mock()
+        mock_file_obj.type = ['AlignmentFile', 'File', 'Item']
+        mock_file_obj.input_file_for = ['/index-files/test.bai']
+        mock_file_obj.controlled_access = True
+
+        mock_index = Mock()
+        mock_index.type = ['IndexFile', 'File', 'Item']
+        mock_index.file_format = 'bai'
+        mock_index.controlled_access = True
+        mock_index.submitted_file_name = 'IGVFDS123456.bam.bai'
+        mock_index.accession = 'IGVFFI123456'
+        mock_index.upload_status = 'invalidated'
+
+        mock_get_active.return_value = [mock_index]
+
+        checker = qa_run.IndexFileChecker('IGVFDS123456', mock_igvf_client)
+        errors = checker.check_index_file_presence_and_format(mock_file_obj)
+        assert len(errors) > 0
+        assert any("has invalid upload status" in error for error in errors)
+
+    @patch('sc_pipe_management.wrangler_utils.check_accession_results._get_active_file_objs')
+    def test_check_index_file_presence_and_format_wrong_format(self, mock_get_active, mock_igvf_client):
+        """Test check_index_file_presence_and_format for AlignmentFile."""
+        mock_file_obj = Mock()
+        mock_file_obj.type = ['AlignmentFile', 'File', 'Item']
+        mock_file_obj.input_file_for = ['/index-files/test.tbi']
+        mock_file_obj.controlled_access = True
+
+        mock_index = Mock()
+        mock_index.file_format = 'tbi'
+        mock_index.type = ['IndexFile', 'File', 'Item']
+        mock_index.controlled_access = True
+        mock_index.submitted_file_name = 'IGVFDS123456.fragments.tsv.gz.tbi'
+        mock_index.accession = 'IGVFFI123456'
+        mock_index.upload_status = 'validated'
+
+        mock_get_active.return_value = [mock_index]
+
+        checker = qa_run.IndexFileChecker('IGVFDS123456', mock_igvf_client)
+        errors = checker.check_index_file_presence_and_format(mock_file_obj)
+        assert len(errors) > 0
+        assert any("has unexpected file format" in error for error in errors)
+
+    @patch('sc_pipe_management.wrangler_utils.check_accession_results._get_active_file_objs')
+    def test_check_index_file_presence_and_format_no_file(self, mock_get_active, mock_igvf_client):
+        """Test check_index_file_presence_and_format for AlignmentFile."""
+        mock_file_obj = Mock()
+        mock_file_obj.type = ['AlignmentFile', 'File', 'Item']
+        mock_file_obj.input_file_for = ['/index-files/test.tbi']
+        mock_file_obj.controlled_access = True
+
+        mock_get_active.return_value = []
+
+        checker = qa_run.IndexFileChecker('IGVFDS123456', mock_igvf_client)
+        errors = checker.check_index_file_presence_and_format(mock_file_obj)
+        assert len(errors) > 0
+        assert any("missing an index file" in error for error in errors)
 
 
 class TestRNASeqFileChecker:
