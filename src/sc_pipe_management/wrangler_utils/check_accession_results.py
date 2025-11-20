@@ -233,8 +233,8 @@ class IndexFileChecker(BaseFileChecker):
             if file_id.startswith('/index-files/')
         ]
 
-    def _validate_index_file_count(self, file_obj: const.FileObjTypes, active_index_file_objs: list[const.FileObjTypes]) -> list[str]:
-        """Validate that exactly one index file is present and active."""
+    def _check_index_file_count(self, file_obj: const.FileObjTypes, active_index_file_objs: list[const.FileObjTypes]) -> list[str]:
+        """Check that exactly one index file is present and active."""
         errors = []
 
         if not active_index_file_objs:
@@ -287,6 +287,16 @@ class IndexFileChecker(BaseFileChecker):
             return self._check_tbi_index_file(file_obj, index_file_obj)
         return []
 
+    def _check_file_upload_status(self, index_file_obj: const.FileObjTypes) -> list[str]:
+        """Check if index file has validated upload status."""
+        errors = []
+
+        if index_file_obj.upload_status != 'validated':
+            errors.append(
+                f'Index file {index_file_obj.accession} has invalid upload status.')
+
+        return errors
+
     def check_index_file_presence_and_format(self, file_obj: const.FileObjTypes) -> list[str]:
         """Check if index file is present and has correct format."""
         errors = []
@@ -303,16 +313,20 @@ class IndexFileChecker(BaseFileChecker):
             file_ids=index_file_ids, igvf_client_api=self.igvf_client_api)
 
         # Validate count
-        count_errors = self._validate_index_file_count(
+        count_errors = self._check_index_file_count(
             file_obj=file_obj, active_index_file_objs=active_index_file_objs)
         errors.extend(count_errors)
 
         # Check specific index file properties if we have exactly one
         if len(active_index_file_objs) == 1:
             index_file_obj = active_index_file_objs[0]
+            # Type Error checks
             type_errors = self._check_index_file_by_type(
                 file_obj, index_file_obj)
             errors.extend(type_errors)
+            # Upload status check
+            upload_errors = self._check_file_upload_status(index_file_obj)
+            errors.extend(upload_errors)
 
         return errors
 
