@@ -147,8 +147,13 @@ def calc_input_file_sets_single(single_query_res, igvf_client_api) -> list | Non
     # collect a list of inputs if not duped
     curr_output = set()
     curr_output.add(single_query_res.id)
-    if single_query_res.related_multiome_datasets:
-        curr_output.update(single_query_res.related_multiome_datasets)
+    if single_query_res.related_measurement_sets:
+        related_multiome_datasets = set()
+        for mini_series in single_query_res.related_measurement_sets:
+            if mini_series['series_type'] == "multiome":
+                related_multiome_datasets.update(
+                    [item['@id'] for item in mini_series['measurement_sets']])
+        curr_output.update(related_multiome_datasets)
     if single_query_res.barcode_replacement_file:
         brf_obj = igvf_client_api.get_by_id(
             single_query_res.barcode_replacement_file).actual_instance
