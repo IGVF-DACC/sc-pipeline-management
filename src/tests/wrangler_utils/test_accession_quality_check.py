@@ -623,12 +623,15 @@ class TestMainFunction:
         test_output_file = 'src/tests/test_files/test_qa_result.json'
         ref_output_file = 'src/tests/test_files/reference_qa_result.json'
 
-        igvf_endpoint = 'sandbox'
+        igvf_endpoint = 'staging'
         igvf_keys = api_tools.set_up_api_keys(igvf_endpoint=igvf_endpoint)
         real_igvf_client = api_tools.get_igvf_client_auth(
             igvf_keys, igvf_endpoint)
 
-        qa_run.main(list_of_analysis_set_acc=['TSTDS33660419'],
+        # Because Sandbox is shut down permanently, the test had to use
+        # a non-uniformly processed data on staging to generate errors
+        qa_run.main(list_of_analysis_set_acc=['IGVFDS3222WCZH',     # With error (non-uniform)
+                                              'IGVFDS9564JXGL'],    # Without error
                     igvf_client_api=real_igvf_client,
                     output_file_path=test_output_file)
 

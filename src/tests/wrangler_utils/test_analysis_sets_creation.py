@@ -186,8 +186,18 @@ class TestCalcInputFileSets(TestAnalysisSetUtils):
         # Mock query result
         mock_query_res = Mock()
         mock_query_res.id = '/measurement-sets/IGVFDS123456/'
-        mock_query_res.related_multiome_datasets = [
-            '/measurement-sets/IGVFDS789012/']
+        mock_query_res.related_measurement_sets = [
+            {
+                "measurement_sets": [
+                    {
+                        "@id": "/measurement-sets/IGVFDS789012/",
+                        "accession": "IGVFDS789012",
+                        "status": "released"
+                    }
+                ],
+                "series_type": "multiome"
+            }
+        ]
         mock_query_res.barcode_replacement_file = None
 
         # Mock check_is_duped_for_all to return False
@@ -204,8 +214,18 @@ class TestCalcInputFileSets(TestAnalysisSetUtils):
         # Mock query result
         mock_query_res = Mock()
         mock_query_res.id = '/measurement-sets/IGVFDS123456/'
-        mock_query_res.related_multiome_datasets = [
-            '/measurement-sets/IGVFDS789012/']
+        mock_query_res.related_measurement_sets = [
+            {
+                "measurement_sets": [
+                    {
+                        "@id": "/measurement-sets/IGVFDS789012/",
+                        "accession": "IGVFDS789012",
+                        "status": "released"
+                    }
+                ],
+                "series_type": "multiome"
+            }
+        ]
         mock_query_res.barcode_replacement_file = '/tabular-files/IGVFFI111111/'
 
         # Mock barcode replacement file response
@@ -228,7 +248,18 @@ class TestCalcInputFileSets(TestAnalysisSetUtils):
         """Test input file set calculation without related datasets."""
         mock_query_res = Mock()
         mock_query_res.id = '/measurement-sets/IGVFDS123456/'
-        mock_query_res.related_multiome_datasets = None
+        mock_query_res.related_measurement_sets = [
+            {
+                "measurement_sets": [
+                    {
+                        "@id": "/measurement-sets/IGVFDS789012/",
+                        "accession": "IGVFDS789012",
+                        "status": "released"
+                    }
+                ],
+                "series_type": "time_series"
+            }
+        ]
         mock_query_res.barcode_replacement_file = None
 
         with patch.object(utils, 'check_is_duped_for_all', return_value=False):
@@ -479,8 +510,18 @@ class TestIntegrationScenarios(TestAnalysisSetUtils):
         # Mock measurement set query result
         mock_measet = Mock()
         mock_measet.id = '/measurement-sets/IGVFDS123456/'
-        mock_measet.related_multiome_datasets = [
-            '/measurement-sets/IGVFDS789012/']
+        mock_measet.related_measurement_sets = [
+            {
+                "measurement_sets": [
+                    {
+                        "@id": "/measurement-sets/IGVFDS789012/",
+                        "accession": "IGVFDS789012",
+                        "status": "released"
+                    }
+                ],
+                "series_type": "multiome"
+            }
+        ]
         mock_measet.barcode_replacement_file = None
 
         # Mock that it's not duplicated
@@ -518,8 +559,18 @@ class TestIntegrationScenarios(TestAnalysisSetUtils):
         # Mock measurement set query result with barcode replacement file
         mock_measet = Mock()
         mock_measet.id = '/measurement-sets/IGVFDS123456/'
-        mock_measet.related_multiome_datasets = [
-            '/measurement-sets/IGVFDS789012/']
+        mock_measet.related_measurement_sets = [
+            {
+                "measurement_sets": [
+                    {
+                        "@id": "/measurement-sets/IGVFDS789012/",
+                        "accession": "IGVFDS789012",
+                        "status": "released"
+                    }
+                ],
+                "series_type": "multiome"
+            }
+        ]
         mock_measet.barcode_replacement_file = '/tabular-files/IGVFFI111111/'
 
         # Mock barcode replacement file response
@@ -576,8 +627,18 @@ class TestIntegrationScenarios(TestAnalysisSetUtils):
         # Mock measurement set query result
         mock_measet = Mock()
         mock_measet.id = '/measurement-sets/IGVFDS123456/'
-        mock_measet.related_multiome_datasets = [
-            '/measurement-sets/IGVFDS789012/']
+        mock_measet.related_measurement_sets = [
+            {
+                "measurement_sets": [
+                    {
+                        "@id": "/measurement-sets/IGVFDS789012/",
+                        "accession": "IGVFDS789012",
+                        "status": "released"
+                    }
+                ],
+                "series_type": "multiome"
+            }
+        ]
         mock_measet.barcode_replacement_file = None
 
         # Mock that it's not duplicated
@@ -615,8 +676,18 @@ class TestIntegrationScenarios(TestAnalysisSetUtils):
         # Mock measurement set query result
         mock_measet = Mock()
         mock_measet.id = '/measurement-sets/IGVFDS123456/'
-        mock_measet.related_multiome_datasets = [
-            '/measurement-sets/IGVFDS789012/']
+        mock_measet.related_measurement_sets = [
+            {
+                "measurement_sets": [
+                    {
+                        "@id": "/measurement-sets/IGVFDS789012/",
+                        "accession": "IGVFDS789012",
+                        "status": "released"
+                    }
+                ],
+                "series_type": "multiome"
+            }
+        ]
         mock_measet.barcode_replacement_file = None
 
         # Mock that it's not duplicated
