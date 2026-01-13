@@ -43,6 +43,7 @@ See `requirements.txt` for package details.
 
 * **IGVF portal access credentials.** Generate API credentials under the IGVF profiles page after logging into the portal. Store the public API key and secret API key as environmental variables. See [IGVF API credential configration guide](https://github.com/IGVF-DACC/igvf_utils/wiki/Configuration) for more details.
   * This is needed for **all** the scripts in this repo.
+  * A pair of API keys named "IGVF_API_KEY" and "IGVF_SECRET_KEY" is needed for seqspec tools to run properly. This key pair is also used by IGVF utils API client as the default environmental variable keys.
 
 ## The input parameters that the codes will generate
 
