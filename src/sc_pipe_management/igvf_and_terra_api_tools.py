@@ -18,8 +18,7 @@ import requests
 # API keys for IGVF portal (staging uses a snapshot of production)
 API_KEYS_BY_SITES = {
     'prod': {'public': 'IGVF_API_KEY_PROD', 'secret': 'IGVF_SECRET_KEY_PROD'},
-    'sandbox': {'public': 'IGVF_API_KEY_SANDBOX', 'secret': 'IGVF_SECRET_KEY_SANDBOX'},
-    'staging': {'public': 'IGVF_API_KEY_PROD', 'secret': 'IGVF_SECRET_KEY_PROD'}
+    'staging': {'public': 'IGVF_API_KEY_STAGING', 'secret': 'IGVF_SECRET_KEY_STAGING'}
 }
 
 # If somehow the above keys are not set, use the backup keys
@@ -28,7 +27,6 @@ BACKUP_API_KEYS = {'public': 'IGVF_API_KEY', 'secret': 'IGVF_SECRET_KEY'}
 # URLs for IGVF portal endpoints
 SITE_URLS_BY_ENDPOINTS = {
     'prod': 'https://api.data.igvf.org',
-    'sandbox': 'https://api.sandbox.igvf.org',
     'staging': 'https://api.staging.igvf.org'
 }
 
