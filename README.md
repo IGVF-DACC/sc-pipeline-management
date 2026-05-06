@@ -128,3 +128,20 @@ python3 src/sc_pipe_management/wrangler_utils/check_accession_results.py --igvf_
 #### Run option 2: Jupyter notebook
 
 * The src/JupyterNotebook/qa_script.ipynb notebook contains plug-and-use templates to QA posted datasets.
+
+## Devs
+
+### To run test locally with the virtual env
+
+```python
+# Run all tests
+pytest src/tests
+
+# Run a full test script
+pytest src/tests/input_params_generation/test_portal_metadata_parsing.py
+
+# Run a specific test class method
+pytest src/tests/input_params_generation/test_portal_metadata_parsing.py::TestGetSeqFileMetadata
+
+# Run a sub-function inside a specific test class method
+pytest src/tests/input_params_generation/test_portal_metadata_parsing.py::TestGetSeqFileMetadata::test_get_seqfile_metadata
