@@ -20,10 +20,10 @@ The general rule is that if Read1, Read2, and Barcode Index are 3 separate fastq
 
 ```bash
 # Read1 fastq, Read 2 fastq, and Barcode index fastq are 3 separate files
->$ seqspec index -m rna -t kb -s read -i Read1_read-id,Read2_read-id,BarcodeIndex_read-id seqspec.yaml.gz
+>$ seqspec index -m rna -t kb-single -s read -i Read1_read-id,Read2_read-id,BarcodeIndex_read-id seqspec.yaml.gz
 
 # Read1 is one fastq file. Barcode Index is either combined into Read2 fastq or not specified.
->$ seqspec index -m rna -t kb -s read -i Read1_read-id,Read2_read-id seqspec.yaml.gz
+>$ seqspec index -m rna -t kb-single -s read -i Read1_read-id,Read2_read-id seqspec.yaml.gz
 ```
 
 ## Seqspec onlist
