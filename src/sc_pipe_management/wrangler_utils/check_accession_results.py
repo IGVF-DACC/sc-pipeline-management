@@ -231,7 +231,7 @@ class IndexFileChecker(BaseFileChecker):
         input_file_for = getattr(file_obj, 'input_file_for', None) or []
         return [
             file_id for file_id in input_file_for
-            if isinstance(file_id, str) and file_id.startswith('/index-files/')
+            if file_id.startswith('/index-files/')
         ]
 
     def _check_index_file_count(self, file_obj: const.FileObjTypes, active_index_file_objs: list[const.FileObjTypes]) -> list[str]:
