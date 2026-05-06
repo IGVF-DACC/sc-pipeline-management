@@ -651,8 +651,8 @@ if __name__ == "__main__":
 
     group = parser.add_mutually_exclusive_group(required=True)
 
-    parser.add_argument('--igvf_endpoint', '-m', type=str, choices=['sandbox', 'prod', 'staging'], default='prod',
-                        help="""The IGVF endpoint, sandbox, prod, or staging.""")
+    parser.add_argument('--igvf_endpoint', '-m', type=str, choices=['prod', 'staging'], default='prod',
+                        help="""The IGVF endpoint, prod or staging.""")
 
     group.add_argument('--qc_analysis_set_file', '-i', type=str,
                        help="""A file containing a list of analysis set accessions to be checked.""")
@@ -664,7 +664,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Get the IGVF client API, production or sandbox
+    # Get the IGVF client API, production or staging
     igvf_api_keys = api_tools.set_up_api_keys(
         igvf_endpoint=args.igvf_endpoint)
 
