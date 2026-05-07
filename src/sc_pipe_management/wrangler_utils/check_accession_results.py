@@ -376,7 +376,7 @@ class ATACFileChecker(BaseFileChecker):
 
         if len(active_file_objs) > 1:
             errors.append(
-                f'Analysis set {self.analysis_set_acc} has more than {len(active_file_objs)} {file_type} files.')
+                f'Analysis set {self.analysis_set_acc} has more than 1 {file_type} files.')
         elif len(active_file_objs) == 0:
             errors.append(
                 f'Analysis set {self.analysis_set_acc} has no {file_type} file.')
@@ -508,16 +508,16 @@ class QualityCheckAnalysisSet:
         all_active_alignment_file_objs = _get_active_file_objs(
             file_ids=all_alignment_file_ids, igvf_client_api=self.igvf_client_api)
         # Filter to only those with content type 'alignments'
-        active_alignment_file_objs = [file_obj for file_obj in all_active_alignment_file_objs
-                                      if file_obj.content_type == 'alignments']
+        active_alignments_file_objs = [file_obj for file_obj in all_active_alignment_file_objs
+                                       if file_obj.content_type == 'alignments']
 
         # Check file count
         count_errors = self.atac_checker.check_atac_file_count(
-            active_alignment_file_objs, "alignment")
+            active_alignments_file_objs, "alignment")
         all_errors.extend(count_errors)
 
-        if active_alignment_file_objs:
-            alignment_file_obj = active_alignment_file_objs[0]
+        if active_alignments_file_objs:
+            alignment_file_obj = active_alignments_file_objs[0]
 
             # Collect basic file property errors
             basic_errors = self.atac_checker._check_basic_file_properties(
@@ -556,16 +556,16 @@ class QualityCheckAnalysisSet:
         active_tabular_file_objs = _get_active_file_objs(
             file_ids=tabular_file_ids, igvf_client_api=self.igvf_client_api)
         # Filter for those with content type 'fragments'
-        active_fragment_file_objs = [file_obj for file_obj in active_tabular_file_objs
-                                     if file_obj.content_type == 'fragments']
+        active_fragments_file_objs = [file_obj for file_obj in active_tabular_file_objs
+                                      if file_obj.content_type == 'fragments']
 
         # Check file count
         count_errors = self.atac_checker.check_atac_file_count(
-            active_fragment_file_objs, "fragment")
+            active_fragments_file_objs, "fragment")
         all_errors.extend(count_errors)
 
-        if active_fragment_file_objs:
-            fragment_file_obj = active_fragment_file_objs[0]
+        if active_fragments_file_objs:
+            fragment_file_obj = active_fragments_file_objs[0]
 
             # Collect basic file property errors
             basic_errors = self.atac_checker._check_basic_file_properties(
