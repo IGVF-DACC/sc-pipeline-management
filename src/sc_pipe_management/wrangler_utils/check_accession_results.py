@@ -228,8 +228,9 @@ class IndexFileChecker(BaseFileChecker):
 
     def _get_index_file_ids(self, file_obj: const.FileObjTypes) -> list[str]:
         """Extract index file IDs from the file object."""
+        input_file_for = getattr(file_obj, 'input_file_for', None) or []
         return [
-            file_id for file_id in file_obj.input_file_for
+            file_id for file_id in input_file_for
             if file_id.startswith('/index-files/')
         ]
 
@@ -370,12 +371,15 @@ class ATACFileChecker(BaseFileChecker):
     """Checker for ATAC-seq files."""
 
     def check_atac_file_count(self, active_file_objs: list[const.FileObjTypes], file_type: str) -> list[str]:
-        """Check if exactly 1 ATAC file is present."""
+        """Check if exactly 1 ATAC fragments or alignments file is present."""
         errors = []
 
-        if len(active_file_objs) != 1:
+        if len(active_file_objs) > 1:
             errors.append(
-                f'Analysis set {self.analysis_set_acc} has more than 1 {file_type} file.')
+                f'Analysis set {self.analysis_set_acc} has more than 1 {file_type} files.')
+        elif len(active_file_objs) == 0:
+            errors.append(
+                f'Analysis set {self.analysis_set_acc} has no {file_type} file.')
 
         return errors
 
@@ -498,18 +502,22 @@ class QualityCheckAnalysisSet:
         """Check ATAC alignment data for the analysis set."""
         all_errors = []
 
-        alignment_file_ids = [file_id for file_id in self.analysis_set_files
-                              if file_id.startswith('/alignment-files/')]
-        active_alignment_file_objs = _get_active_file_objs(
-            file_ids=alignment_file_ids, igvf_client_api=self.igvf_client_api)
+        # Filter for active AlignmentFile objects
+        all_alignment_file_ids = [file_id for file_id in self.analysis_set_files
+                                  if file_id.startswith('/alignment-files/')]
+        all_active_alignment_file_objs = _get_active_file_objs(
+            file_ids=all_alignment_file_ids, igvf_client_api=self.igvf_client_api)
+        # Filter to only those with content type 'alignments'
+        active_alignments_file_objs = [file_obj for file_obj in all_active_alignment_file_objs
+                                       if file_obj.content_type == 'alignments']
 
         # Check file count
         count_errors = self.atac_checker.check_atac_file_count(
-            active_alignment_file_objs, "alignment")
+            active_alignments_file_objs, "alignment")
         all_errors.extend(count_errors)
 
-        if active_alignment_file_objs:
-            alignment_file_obj = active_alignment_file_objs[0]
+        if active_alignments_file_objs:
+            alignment_file_obj = active_alignments_file_objs[0]
 
             # Collect basic file property errors
             basic_errors = self.atac_checker._check_basic_file_properties(
@@ -542,18 +550,22 @@ class QualityCheckAnalysisSet:
         """Check ATAC fragment data for the analysis set."""
         all_errors = []
 
-        fragment_file_ids = [file_id for file_id in self.analysis_set_files
-                             if file_id.startswith('/tabular-files/')]
-        active_fragment_file_objs = _get_active_file_objs(
-            file_ids=fragment_file_ids, igvf_client_api=self.igvf_client_api)
+        # Get all active TabularFile objects
+        tabular_file_ids = [file_id for file_id in self.analysis_set_files
+                            if file_id.startswith('/tabular-files/')]
+        active_tabular_file_objs = _get_active_file_objs(
+            file_ids=tabular_file_ids, igvf_client_api=self.igvf_client_api)
+        # Filter for those with content type 'fragments'
+        active_fragments_file_objs = [file_obj for file_obj in active_tabular_file_objs
+                                      if file_obj.content_type == 'fragments']
 
         # Check file count
         count_errors = self.atac_checker.check_atac_file_count(
-            active_fragment_file_objs, "fragment")
+            active_fragments_file_objs, "fragment")
         all_errors.extend(count_errors)
 
-        if active_fragment_file_objs:
-            fragment_file_obj = active_fragment_file_objs[0]
+        if active_fragments_file_objs:
+            fragment_file_obj = active_fragments_file_objs[0]
 
             # Collect basic file property errors
             basic_errors = self.atac_checker._check_basic_file_properties(
@@ -650,8 +662,8 @@ if __name__ == "__main__":
 
     group = parser.add_mutually_exclusive_group(required=True)
 
-    parser.add_argument('--igvf_endpoint', '-m', type=str, choices=['sandbox', 'prod', 'staging'], default='prod',
-                        help="""The IGVF endpoint, sandbox, prod, or staging.""")
+    parser.add_argument('--igvf_endpoint', '-m', type=str, choices=['prod', 'staging'], default='prod',
+                        help="""The IGVF endpoint, prod or staging.""")
 
     group.add_argument('--qc_analysis_set_file', '-i', type=str,
                        help="""A file containing a list of analysis set accessions to be checked.""")
@@ -663,7 +675,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Get the IGVF client API, production or sandbox
+    # Get the IGVF client API, production or staging
     igvf_api_keys = api_tools.set_up_api_keys(
         igvf_endpoint=args.igvf_endpoint)
 

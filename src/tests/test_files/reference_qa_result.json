@@ -1,12 +1,27 @@
 {
-    "IGVFDS3222WCZH": {
-        "Error_1": "No pipeline parameters document found for analysis set IGVFDS3222WCZH.",
-        "Error_2": "Analysis set IGVFDS3222WCZH does not have exactly 2 non-deprecated RNA-seq output data.",
-        "Error_3": "MatrixFile IGVFFI4791CJDG has unexpected analysis step version.",
-        "Error_4": "MatrixFile IGVFFI4791CJDG has unexpected reference files: ['/reference-files/IGVFFI9282QLXO/', '/reference-files/IGVFFI9744VSJF/']. Expected one of: ['/reference-files/IGVFFI5078MNED/', '/reference-files/IGVFFI9561BASO/'].",
-        "Error_5": "QC metrics object linked to MatrixFile IGVFFI4791CJDG has no `rnaseq_kb_info` attachment.",
-        "Error_6": "RNA-seq file IGVFFI4791CJDG has unexpected content type for tar format.",
-        "Error_7": "MatrixFile IGVFFI4791CJDG has unexpected file name: igvf_008b/igvf_008b_Subpool_3_total+core.tar.gz."
+    "IGVFDS7679CRNV": {
+        "Error_1": "No pipeline parameters document found for analysis set IGVFDS7679CRNV.",
+        "Error_2": "Analysis set IGVFDS7679CRNV does not have exactly 2 non-deprecated RNA-seq output data.",
+        "Error_3": "MatrixFile IGVFFI5816PJAK has unexpected analysis step version.",
+        "Error_4": "MatrixFile IGVFFI5816PJAK has unexpected reference files: ['/reference-files/IGVFFI9282QLXO/', '/reference-files/IGVFFI9744VSJF/']. Expected one of: ['/reference-files/IGVFFI5078MNED/', '/reference-files/IGVFFI9561BASO/'].",
+        "Error_5": "QC metrics object linked to MatrixFile IGVFFI5816PJAK has no `rnaseq_kb_info` attachment.",
+        "Error_6": "RNA-seq file IGVFFI5816PJAK has unexpected content type for tar format.",
+        "Error_7": "MatrixFile IGVFFI5816PJAK has unexpected file name: igvf_005/igvf_005_Subpool_13_total+core.tar.gz."
+    },
+    "IGVFDS4340KVZI": {
+        "Error_1": "No pipeline parameters document found for analysis set IGVFDS4340KVZI.",
+        "Error_2": "Analysis set IGVFDS4340KVZI does not have exactly 2 non-deprecated RNA-seq output data.",
+        "Error_3": "MatrixFile IGVFFI6053CXKY has unexpected analysis step version.",
+        "Error_4": "MatrixFile IGVFFI6053CXKY has unexpected reference files: ['/reference-files/IGVFFI8311QXYM/', '/reference-files/IGVFFI5429KKCK/']. Expected one of: ['/reference-files/IGVFFI5078MNED/', '/reference-files/IGVFFI9561BASO/'].",
+        "Error_5": "MatrixFile IGVFFI6053CXKY has no quality metrics.",
+        "Error_6": "Analysis set IGVFDS4340KVZI has no alignment file.",
+        "Error_7": "TabularFile IGVFFI0551MWOW has unexpected analysis step version.",
+        "Error_8": "ATAC fragment file IGVFFI0551MWOW has unexpected file format.",
+        "Error_9": "ATAC fragment file IGVFFI0551MWOW has unexpected file format type.",
+        "Error_10": "TabularFile IGVFFI0551MWOW has unexpected file name: /ix/djishnu/Common_Folder/Jingyu_Data/multiome_1st_donor_UPMC_day0_2/outs/atac_fragments.tsv.gz.",
+        "Error_11": "TabularFile IGVFFI0551MWOW has unexpected reference files: ['/reference-files/IGVFFI5429KKCK/', '/reference-files/IGVFFI8311QXYM/']. Expected one of: [['/reference-files/IGVFFI0653VCGH/', '/reference-files/IGVFFI7969JLFC/'], ['/reference-files/IGVFFI5593VLWB/', '/reference-files/IGVFFI9282QLXO/']].",
+        "Error_12": "TabularFile IGVFFI0551MWOW has no quality metrics.",
+        "Error_13": "TabularFile IGVFFI0551MWOW is missing an index file."
     },
     "IGVFDS9564JXGL": "All checks passed."
 }
