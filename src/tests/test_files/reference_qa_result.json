@@ -14,15 +14,14 @@
         "Error_3": "MatrixFile IGVFFI6053CXKY has unexpected analysis step version.",
         "Error_4": "MatrixFile IGVFFI6053CXKY has unexpected reference files: ['/reference-files/IGVFFI8311QXYM/', '/reference-files/IGVFFI5429KKCK/']. Expected one of: ['/reference-files/IGVFFI5078MNED/', '/reference-files/IGVFFI9561BASO/'].",
         "Error_5": "MatrixFile IGVFFI6053CXKY has no quality metrics.",
-        "Error_6": "Analysis set IGVFDS4340KVZI has more than 1 alignment file.",
-        "Error_7": "Analysis set IGVFDS4340KVZI has more than 1 fragment file.",
-        "Error_8": "TabularFile IGVFFI0551MWOW has unexpected analysis step version.",
-        "Error_9": "ATAC fragment file IGVFFI0551MWOW has unexpected file format.",
-        "Error_10": "ATAC fragment file IGVFFI0551MWOW has unexpected file format type.",
-        "Error_11": "TabularFile IGVFFI0551MWOW has unexpected file name: /ix/djishnu/Common_Folder/Jingyu_Data/multiome_1st_donor_UPMC_day0_2/outs/atac_fragments.tsv.gz.",
-        "Error_12": "TabularFile IGVFFI0551MWOW has unexpected reference files: ['/reference-files/IGVFFI5429KKCK/', '/reference-files/IGVFFI8311QXYM/']. Expected one of: [['/reference-files/IGVFFI0653VCGH/', '/reference-files/IGVFFI7969JLFC/'], ['/reference-files/IGVFFI5593VLWB/', '/reference-files/IGVFFI9282QLXO/']].",
-        "Error_13": "TabularFile IGVFFI0551MWOW has no quality metrics.",
-        "Error_14": "TabularFile IGVFFI0551MWOW is missing an index file."
+        "Error_6": "Analysis set IGVFDS4340KVZI has no alignment file.",
+        "Error_7": "TabularFile IGVFFI0551MWOW has unexpected analysis step version.",
+        "Error_8": "ATAC fragment file IGVFFI0551MWOW has unexpected file format.",
+        "Error_9": "ATAC fragment file IGVFFI0551MWOW has unexpected file format type.",
+        "Error_10": "TabularFile IGVFFI0551MWOW has unexpected file name: /ix/djishnu/Common_Folder/Jingyu_Data/multiome_1st_donor_UPMC_day0_2/outs/atac_fragments.tsv.gz.",
+        "Error_11": "TabularFile IGVFFI0551MWOW has unexpected reference files: ['/reference-files/IGVFFI5429KKCK/', '/reference-files/IGVFFI8311QXYM/']. Expected one of: [['/reference-files/IGVFFI0653VCGH/', '/reference-files/IGVFFI7969JLFC/'], ['/reference-files/IGVFFI5593VLWB/', '/reference-files/IGVFFI9282QLXO/']].",
+        "Error_12": "TabularFile IGVFFI0551MWOW has no quality metrics.",
+        "Error_13": "TabularFile IGVFFI0551MWOW is missing an index file."
     },
     "IGVFDS9564JXGL": "All checks passed."
 }
