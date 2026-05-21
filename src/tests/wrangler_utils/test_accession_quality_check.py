@@ -463,7 +463,7 @@ class TestRNASeqFileChecker:
         """Test check_rna_file_format_and_content with h5ad format."""
         mock_file = Mock()
         mock_file.file_format = 'h5ad'
-        mock_file.content_type = 'sparse gene count matrix'
+        mock_file.content_type = 'cell by gene matrix'
         mock_file.submitted_file_name = 'IGVFDS123456.h5ad'
         mock_file.type = ['MatrixFile']
         mock_file.accession = 'IGVFFI123456'

@@ -94,7 +94,7 @@ MATRIX_FILETYPES = {
     'rna_kb_output_folder_tar_gz': FileObjMetadata(
         file_format='tar',
         description='Raw Tarball containing all the matrices, logs, and bus files generated from kb',
-        content_type='kallisto single cell RNAseq output',
+        content_type='kallisto cell by gene matrix',
         file_format_specifications=['buenrostro-bernstein:igvf-sc-pipeline-matrix-tar-specification',
                                     'igvf:igvf-sc-pipeline-rna-tar-mtx-per-file-specification'],
         analysis_step_version=ANALYSIS_STEP_VERSION['rnaseq'],
@@ -103,7 +103,7 @@ MATRIX_FILETYPES = {
     'rna_kb_h5ad': FileObjMetadata(
         file_format='h5ad',
         description='Raw h5ad containing four separated count matrices: Spliced, Unspliced, Ambiguous, and Total',
-        content_type='sparse gene count matrix',
+        content_type='cell by gene matrix',
         file_format_specifications=[
             'buenrostro-bernstein:igvf-sc-pipeline-matrix-h5-specification'],
         analysis_step_version=ANALYSIS_STEP_VERSION['rnaseq'],
