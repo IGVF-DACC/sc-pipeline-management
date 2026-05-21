@@ -27,16 +27,15 @@ BACKUP_API_KEYS = {'public': 'IGVF_API_KEY', 'secret': 'IGVF_SECRET_KEY'}
 # URLs for IGVF portal endpoints
 SITE_URLS_BY_ENDPOINTS = {
     'prod': 'https://api.data.igvf.org',
-    'sandbox': 'https://api.sandbox.igvf.org',
     'staging': 'https://api.staging.igvf.org'
 }
 
 
-def set_up_api_keys(igvf_endpoint: str = 'sandbox') -> dict:
+def set_up_api_keys(igvf_endpoint: str = 'staging') -> dict:
     """Set up API keys for IGVF portal using local env variables. Assumes that the environment variables named with each end site in mind. If not available, it will try to find a generic IGVF API key. If the generic IGVF API key is not set, it will raise an exception.
 
     Args:
-        igvf_endpoint (str, optional): The IGVF endpoint to use. Defaults to 'sandbox'.
+        igvf_endpoint (str, optional): The IGVF endpoint to use. Defaults to 'staging'.
 
     Returns:
         dict: A dictionary containing the public and secret API keys.
@@ -59,12 +58,12 @@ def set_up_api_keys(igvf_endpoint: str = 'sandbox') -> dict:
     return api_keys
 
 
-def get_igvf_client_auth(igvf_api_keys: dict, igvf_endpoint: str = 'sandbox'):
+def get_igvf_client_auth(igvf_api_keys: dict, igvf_endpoint: str = 'staging'):
     """Set up IGVF data portal access and set up IGVF python client api.
 
     Args:
         igvf_api_keys (dict): A dictionary containing the public and secret API keys.
-        igvf_endpoint (str, optional): The IGVF site to use. Defaults to 'sandbox'.
+        igvf_endpoint (str, optional): The IGVF site to use. Defaults to 'staging'.
 
     Returns:
         IgvfApi: An instance of the IgvfApi client.
@@ -78,12 +77,12 @@ def get_igvf_client_auth(igvf_api_keys: dict, igvf_endpoint: str = 'sandbox'):
     return IgvfApi(client)
 
 
-def get_igvf_utils_connection(igvf_api_keys: dict, igvf_utils_mode: str = 'sandbox', submission_mode: bool = False):
+def get_igvf_utils_connection(igvf_api_keys: dict, igvf_utils_mode: str = 'staging', submission_mode: bool = False):
     """Set up IGVF utils connection. Dry run option is not supported because many objects are linked to each other via some metadata properties upon a successful accession. So dry run will crash upon trying to access those properties.
 
     Args:
         igvf_api_keys (dict): A dictionary containing the public and secret API keys.
-        igvf_utils_mode (str, optional): IGVF utils endpoint. Defaults to 'sandbox'.
+        igvf_utils_mode (str, optional): IGVF utils endpoint. Defaults to 'staging'.
         submission_mode (bool, optional): IGVF utils submission mode. Defaults to False, not submitting.
 
     Returns:

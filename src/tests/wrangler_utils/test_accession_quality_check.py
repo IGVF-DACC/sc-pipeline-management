@@ -619,7 +619,7 @@ class TestMainFunction:
                 os.unlink(temp_output_file)
 
     def test_main_function_no_output_file(self):
-        """Test main function with real sandbox cases."""
+        """Test main function with real staging cases."""
         test_output_file = 'src/tests/test_files/test_qa_result.json'
         ref_output_file = 'src/tests/test_files/reference_qa_result.json'
 
