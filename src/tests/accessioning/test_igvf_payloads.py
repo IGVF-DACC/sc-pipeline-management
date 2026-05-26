@@ -154,7 +154,7 @@ class TestMatrixFilePayload:
     @patch('sc_pipe_management.accession.igvf_payloads.const.OUTPUT_SUBMITTER_INFO',
            {'lab': '/labs/test-lab/', 'award': '/awards/test-award/'})
     @patch('sc_pipe_management.accession.igvf_payloads.const.MATRIX_FILETYPES')
-    def matrix_payload(self, mock_genome_info, mock_matrix_types, mock_terra_metadata):
+    def matrix_payload(self, mock_matrix_types, mock_terra_metadata):
         """Create MatrixFilePayload instance for testing."""
         # Mock file metadata
         mock_file_metadata = Mock()
@@ -360,7 +360,7 @@ class TestFragmentFilePayload:
     @patch('sc_pipe_management.accession.igvf_payloads.const.OUTPUT_SUBMITTER_INFO',
            {'lab': '/labs/test-lab/', 'award': '/awards/test-award/'})
     @patch('sc_pipe_management.accession.igvf_payloads.const.TABULAR_FILETYPES')
-    def fragment_payload(self, mock_genome_info, mock_tabular_types, mock_terra_metadata, mock_igvf_api):
+    def fragment_payload(self, mock_tabular_types, mock_terra_metadata, mock_igvf_api):
         """Create FragmentFilePayload instance for testing."""
         # Mock file metadata
         mock_file_metadata = Mock()
