@@ -154,8 +154,7 @@ class TestMatrixFilePayload:
     @patch('sc_pipe_management.accession.igvf_payloads.const.OUTPUT_SUBMITTER_INFO',
            {'lab': '/labs/test-lab/', 'award': '/awards/test-award/'})
     @patch('sc_pipe_management.accession.igvf_payloads.const.MATRIX_FILETYPES')
-    @patch('sc_pipe_management.accession.igvf_payloads.const.GENOME_ASSEMBLY_INFO')
-    def matrix_payload(self, mock_genome_info, mock_matrix_types, mock_terra_metadata):
+    def matrix_payload(self, mock_matrix_types, mock_terra_metadata):
         """Create MatrixFilePayload instance for testing."""
         # Mock file metadata
         mock_file_metadata = Mock()
@@ -168,7 +167,6 @@ class TestMatrixFilePayload:
             '/file-format-specifications/test/']
 
         mock_matrix_types.__getitem__.return_value = mock_file_metadata
-        mock_genome_info.get.return_value = 'GRCh38'
 
         return igvf_payloads.MatrixFilePayload(mock_terra_metadata, 'rna_kb_h5ad')
 
@@ -362,8 +360,7 @@ class TestFragmentFilePayload:
     @patch('sc_pipe_management.accession.igvf_payloads.const.OUTPUT_SUBMITTER_INFO',
            {'lab': '/labs/test-lab/', 'award': '/awards/test-award/'})
     @patch('sc_pipe_management.accession.igvf_payloads.const.TABULAR_FILETYPES')
-    @patch('sc_pipe_management.accession.igvf_payloads.const.GENOME_ASSEMBLY_INFO')
-    def fragment_payload(self, mock_genome_info, mock_tabular_types, mock_terra_metadata, mock_igvf_api):
+    def fragment_payload(self, mock_tabular_types, mock_terra_metadata, mock_igvf_api):
         """Create FragmentFilePayload instance for testing."""
         # Mock file metadata
         mock_file_metadata = Mock()
@@ -375,7 +372,6 @@ class TestFragmentFilePayload:
             '/file-format-specifications/test/']
 
         mock_tabular_types.__getitem__.return_value = mock_file_metadata
-        mock_genome_info.get.return_value = 'GRCh38'
 
         return igvf_payloads.FragmentFilePayload(mock_terra_metadata, mock_igvf_api)
 
@@ -406,7 +402,6 @@ class TestFragmentFilePayload:
             assert payload['file_format_type'] == 'bed3+'
             assert payload['controlled_access'] is False
             assert payload['filtered'] is False
-            assert payload['assembly'] == 'GRCh38'
             assert payload['reference_files'] == ['IGVFFF002BBB']
 
 
