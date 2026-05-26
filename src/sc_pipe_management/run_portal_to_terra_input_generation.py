@@ -42,8 +42,8 @@ def get_parser():
     group = parser.add_mutually_exclusive_group(required=True)
     # IGVF query endoint
     # TODO: consider just defaulting to 'prod' and removing this argument
-    parser.add_argument('--igvf_endpoint', type=str, choices=['sandbox', 'prod', 'staging'],
-                        help="""The IGVF endpoint, sandbox, prod, or staging.""")
+    parser.add_argument('--igvf_endpoint', type=str, choices=['prod', 'staging'],
+                        help="""The IGVF endpoint, prod, or staging.""")
     # Either input an analysis set or a file containing a list of analysis sets
     group.add_argument('--input_analysis_set', type=str,
                        help="""A list of analysis set accessions to be processed.""")
@@ -73,7 +73,7 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
-    # Get the IGVF client API, production or sandbox
+    # Get the IGVF client API, production or staging
     igvf_api_keys = api_tools.set_up_api_keys(
         igvf_endpoint=args.igvf_endpoint)
 

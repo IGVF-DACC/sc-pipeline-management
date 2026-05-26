@@ -350,14 +350,14 @@ class RNASeqFileChecker(BaseFileChecker):
         errors = []
 
         if rna_file_obj.file_format == 'h5ad':
-            if rna_file_obj.content_type != 'sparse gene count matrix':
+            if rna_file_obj.content_type != 'cell by gene matrix':
                 errors.append(
                     f'RNA-seq file {rna_file_obj.accession} has unexpected content type for h5ad format.')
             file_name_errors = self._check_file_name(
                 rna_file_obj, expected_file_substring=f'{self.analysis_set_acc}.h5ad')
             errors.extend(file_name_errors)
         elif rna_file_obj.file_format == 'tar':
-            if rna_file_obj.content_type != 'kallisto single cell RNAseq output':
+            if rna_file_obj.content_type != 'kallisto cell by gene matrix':
                 errors.append(
                     f'RNA-seq file {rna_file_obj.accession} has unexpected content type for tar format.')
             file_name_errors = self._check_file_name(

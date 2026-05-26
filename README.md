@@ -72,7 +72,7 @@ See `requirements.txt` for package details.
     * Fragment index (tbi)
     * A set of QC metrics
   * RNAseq
-    * Sparse gene count matrix (H5AD)
+    * Gene count matrix (H5AD)
     * Kallisto output tarball (tar)
     * A set of QC metrics
 

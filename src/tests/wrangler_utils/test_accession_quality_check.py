@@ -463,7 +463,7 @@ class TestRNASeqFileChecker:
         """Test check_rna_file_format_and_content with h5ad format."""
         mock_file = Mock()
         mock_file.file_format = 'h5ad'
-        mock_file.content_type = 'sparse gene count matrix'
+        mock_file.content_type = 'cell by gene matrix'
         mock_file.submitted_file_name = 'IGVFDS123456.h5ad'
         mock_file.type = ['MatrixFile']
         mock_file.accession = 'IGVFFI123456'
@@ -619,7 +619,7 @@ class TestMainFunction:
                 os.unlink(temp_output_file)
 
     def test_main_function_no_output_file(self):
-        """Test main function with real sandbox cases."""
+        """Test main function with real staging cases."""
         test_output_file = 'src/tests/test_files/test_qa_result.json'
         ref_output_file = 'src/tests/test_files/reference_qa_result.json'
 

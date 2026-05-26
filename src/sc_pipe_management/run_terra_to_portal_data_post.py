@@ -93,8 +93,8 @@ def get_parser():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('--post_endpoint', type=str, choices=['sandbox', 'prod', 'staging'],
-                        help="""The POST endpoint, sandbox, prod, or staging.""")
+    parser.add_argument('--post_endpoint', type=str, choices=['prod', 'staging'],
+                        help="""The POST endpoint, prod, or staging.""")
     parser.add_argument('--terra_namespace', type=str, default='DACC_ANVIL',
                         help="""Terra namespace name for the pipeline platform. Defaults to DACC_ANVIL""")
     parser.add_argument('--terra_workspace', type=str, default='IGVF Single-Cell Data Processing',
