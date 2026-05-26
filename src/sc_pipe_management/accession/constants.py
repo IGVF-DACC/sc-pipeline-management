@@ -12,12 +12,6 @@ OUTPUT_SUBMITTER_INFO = {
 }
 
 
-# Convert Terra table's info to portal enum
-GENOME_ASSEMBLY_INFO = {'Homo sapiens': 'GRCh38',
-                        'Mus musculus': 'GRCm39'
-                        }
-
-
 # AnalysisStepVersion
 ANALYSIS_STEP_VERSION = {
     'atacseq': 'igvf:single-cell-uniform-pipeline-chromap-atacseq-step-v1.1.0',
