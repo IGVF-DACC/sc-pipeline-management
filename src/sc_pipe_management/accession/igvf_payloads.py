@@ -131,9 +131,6 @@ class MatrixFilePayload:
         # The matrix file data class object based on the Terra output name
         self._terra_output_name = terra_output_name
         self.file_obj_metadata = const.MATRIX_FILETYPES[self._terra_output_name]
-        # The genome assembly info
-        self.assembly = const.GENOME_ASSEMBLY_INFO.get(
-            self.terra_metadata.taxa)
 
     @property
     def aliases(self) -> list[str]:
@@ -343,8 +340,6 @@ class FragmentFilePayload:
                                      file_set=self.terra_data_record['analysis_set_acc'],
                                      description=self.file_obj_metadata.description,
                                      filtered=False,
-                                     assembly=const.GENOME_ASSEMBLY_INFO.get(
-                                         self.terra_metadata.taxa),
                                      file_format_specifications=self.file_obj_metadata.file_format_specifications,
                                      _profile='tabular_file'
                                      )
