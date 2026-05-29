@@ -220,8 +220,6 @@ class TestMatrixFilePayload:
             assert payload['file_set'] == 'IGVFDS123ABC'
             assert payload['submitted_file_name'] == 'gs://bucket/file.h5ad'
             assert payload['_profile'] == 'matrix_file'
-            assert payload['principal_dimension'] == 'cell'
-            assert payload['secondary_dimensions'] == ['gene']
             assert payload['filtered'] is False
 
 

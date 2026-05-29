@@ -173,8 +173,6 @@ class MatrixFilePayload:
                                 derived_from=mtx_file_input_files.get_derived_from(),
                                 submitted_file_name=self.submitted_file_name,
                                 file_set=self.terra_metadata.anaset_accession,
-                                principal_dimension='cell',
-                                secondary_dimensions=['gene'],
                                 filtered=False,
                                 reference_files=mtx_file_input_files.reference_files,
                                 description=self.file_obj_metadata.description,
