@@ -18,7 +18,11 @@ ASSAY_NAMES_CONVERSION_REF = {
 }
 
 # Preferred assay titles that will require ATAC-RNA onlist mapping
-ASSAYS_NEED_ONLIST_MAPPING = ['10x multiome', '10x multiome with MULTI-seq']
+ASSAYS_NEED_ONLIST_MAPPING = [
+    '10x multiome',
+    '10x multiome with MULTI-seq',
+    'scMultiome-NT-seq'  # 10x multiome with additional labeling info
+]
 
 # For URL request
 BASE_IGVF_PORTAL_URL = 'https://api.data.igvf.org'
